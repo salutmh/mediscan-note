@@ -1,7 +1,7 @@
 # 브라우저 검증 스크립트
 
 **주의: 이것은 단위 테스트가 아니라 수동 검증 자동화 스크립트다.**
-백엔드 단위 테스트는 `backend/` 의 pytest 241개이고, **프론트 단위 테스트(vitest)는 아직 없다**
+백엔드 단위 테스트는 `backend/` 의 pytest 414개이고, **프론트 단위 테스트(vitest)는 아직 없다**
 (`review_bundle.md` 7절 참고).
 
 헤드리스 Chrome 을 DevTools Protocol(CDP)로 직접 몰아서 실제 화면을 렌더링하고,
@@ -11,6 +11,7 @@
 |---|---|
 | `user-flow.mjs` | 신규 가입 → 케이스 목록 → 틀리게 제출 → 복습노트 적재 → 재도전 성공 → 복습노트에서 제거 → 진행현황 확인 |
 | `consent-and-sns.mjs` | 화면 0: 동의 체크박스(실제 마우스 클릭) + SNS 개발용 예시 로그인 3종 + 이메일 가입 |
+| `slice-navigation.mjs` | 화면 2 slice 탐색: 영상이 실제로 바뀌는가, **slice 를 넘겨도 그리던 ROI 가 유지되는가**, 대표 slice 밖에서 입력이 잠기는가 |
 | `screenshot-all.mjs` | 화면 0~7 전부 촬영 (동의 폼, 판독, 결과 비교, 복습노트, 영상 업로드·분석, 진행현황, 모바일 폭) |
 
 ## 실행
@@ -42,6 +43,7 @@ cd frontend && npm run dev                     # :5173
 ```bash
 node tools/browser-verify/user-flow.mjs ./out/flow 9333
 node tools/browser-verify/consent-and-sns.mjs ./out/consent 9333
+node tools/browser-verify/slice-navigation.mjs ./out/slices 9333
 node tools/browser-verify/screenshot-all.mjs ./out/shots 9333
 ```
 

@@ -121,6 +121,9 @@ function onRoiChange(state) {
 
 async function onSubmit() {
   if (!hasInput.value || locked.value) return
+  // 제출은 "대표 slice 에 대한 내 답"이다. 다른 slice 를 보던 중이었다면 대표로 되돌린다 —
+  // 그래야 아래 결과 오버레이(대표 slice 기준)와 화면이 어긋나지 않는다.
+  goToRepresentative()
   phase.value = 'submitting'
   submitError.value = ''
   try {
@@ -221,11 +224,14 @@ onBeforeRouteUpdate((to) => {
             </strong>
           </div>
 
-          <p v-if="!onRepresentative" class="notice slice-locked">
-            지금은 <strong>slice {{ currentSlice?.slice_index }}</strong> 를 살펴보는 중입니다.
-            표시(ROI) 입력과 채점은 <strong>대표 slice {{ representativeSlice }}</strong> 에서만 합니다.
+          <div v-if="!onRepresentative" class="notice slice-locked">
+            <p>
+              지금은 <strong>slice {{ currentSlice?.slice_index }}</strong> 를 살펴보는 중입니다.
+              표시(ROI) 입력과 채점은 <strong>대표 slice {{ representativeSlice }}</strong> 에서만 합니다
+              — 칠하던 표시는 그대로 남아 있습니다.
+            </p>
             <button class="sm" @click="goToRepresentative">대표 slice로 이동</button>
-          </p>
+          </div>
           <p v-else class="muted">
             병변은 여러 slice 에 걸쳐 있습니다. 좌우로 넘겨 범위를 확인한 뒤
             이 대표 slice 에 표시하세요. 번호는 <strong>원본 volume 인덱스</strong>라 학습 해설의
@@ -378,8 +384,19 @@ onBeforeRouteUpdate((to) => {
 .slice-locked {
   display: flex;
   align-items: center;
-  gap: var(--sp-2);
+  justify-content: space-between;
+  gap: var(--sp-3);
   flex-wrap: wrap;
+}
+
+/* 버튼이 문장 중간에서 줄을 끊지 않도록 문단과 분리한다 */
+.slice-locked p {
+  margin: 0;
+  flex: 1 1 260px;
+}
+
+.slice-locked button {
+  flex: 0 0 auto;
 }
 
 .slices input[type='range'] {
