@@ -53,6 +53,28 @@ class SignupRequest(BaseModel):
         return _validate_password(value)
 
 
+class IssueResetCodeRequest(BaseModel):
+    """운영자가 특정 사용자의 재설정 코드를 발급한다. 이메일로만 지정한다.
+
+    사용자 목록을 조회하는 경로는 만들지 않았다 — 운영자에게 전체 명단을 노출할 이유가 없다.
+    """
+
+    email: str
+
+
+class ResetPasswordRequest(BaseModel):
+    """발급받은 코드로 새 비밀번호를 설정한다."""
+
+    email: str
+    code: str
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def _password_length(cls, value: str) -> str:
+        return _validate_password(value)
+
+
 class ChangePasswordRequest(BaseModel):
     """비밀번호 변경. **현재 비밀번호를 다시 받는다.**
 

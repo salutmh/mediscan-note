@@ -117,7 +117,7 @@ def run_migrations() -> None:
 def init_db() -> None:
     """앱 시작 시 호출 — 마이그레이션 적용 후 케이스 시드."""
     from app import models  # noqa: F401  — 모델이 Base.metadata 에 등록되도록 import
-    from app import token_revocation
+    from app import password_reset, token_revocation
     from app.seed import seed_cases
 
     run_migrations()
@@ -128,3 +128,6 @@ def init_db() -> None:
         purged = token_revocation.purge_expired(db)
         if purged:
             logger.info("만료된 토큰 폐기 기록 %s건 정리", purged)
+        expired_codes = password_reset.purge_expired(db)
+        if expired_codes:
+            logger.info("만료된 비밀번호 재설정 코드 %s건 정리", expired_codes)

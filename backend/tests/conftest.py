@@ -33,7 +33,14 @@ from PIL import Image, ImageDraw  # noqa: E402
 
 from app.db import SessionLocal  # noqa: E402
 from app.main import app  # noqa: E402
-from app.models import Consent, LearningEvent, RevokedToken, Submission, User  # noqa: E402
+from app.models import (  # noqa: E402
+    Consent,
+    LearningEvent,
+    PasswordResetCode,
+    RevokedToken,
+    Submission,
+    User,
+)
 
 # seed.py 의 REFERENCE_SHAPES 와 같은 값 (VS-SEG-202 기준 병변)
 CASE_ID = "VS-SEG-202"
@@ -139,6 +146,7 @@ def _clean_user_data():
     yield
     with SessionLocal() as db:
         db.query(LearningEvent).delete()
+        db.query(PasswordResetCode).delete()
         db.query(RevokedToken).delete()
         db.query(Submission).delete()
         db.query(Consent).delete()

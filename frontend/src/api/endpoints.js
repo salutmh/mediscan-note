@@ -47,6 +47,11 @@ export const analyzeImage = ({ image_base64, region }) => api.post('/analyze', {
 export const changePassword = ({ current_password, new_password }) =>
   api.post('/auth/password', { current_password, new_password })
 
+// 1-4-4. 비밀번호 재설정 — 운영자에게 받은 일회용 코드로. **로그인 없이 호출한다**
+// (비밀번호를 잊은 사람은 로그인할 수 없기 때문이다).
+export const resetPassword = ({ email, code, new_password }) =>
+  api.post('/auth/password/reset', { email, code, new_password }, { auth: false })
+
 // 1-4-1. 회원 탈퇴 — 되돌릴 수 없다. 이메일 계정은 비밀번호 재확인이 필요하다.
 export const deleteAccount = (password) => api.delete('/auth/me', password ? { password } : undefined)
 
@@ -56,6 +61,8 @@ export const deleteAccount = (password) => api.delete('/auth/me', password ? { p
 export const adminListCases = () => api.get('/admin/cases')
 // 학습 지표 — **집계만** 온다 (누가 무엇을 틀렸는지는 나오지 않는다)
 export const adminLearningSummary = () => api.get('/admin/learning-summary')
+// 비밀번호 재설정 코드 발급 — 코드는 **이 응답에만** 있다 (다시 볼 수 없다)
+export const adminIssueResetCode = (email) => api.post('/admin/password-reset', { email })
 export const adminGetCase = (caseId) => api.get(`/admin/cases/${encodeURIComponent(caseId)}`)
 export const adminUpdateCase = (caseId, patch) =>
   api.patch(`/admin/cases/${encodeURIComponent(caseId)}`, patch)

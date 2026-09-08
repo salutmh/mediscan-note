@@ -36,6 +36,8 @@ RULES: dict[str, tuple[int, int]] = {
     "POST /api/auth/signup": (3600, 10),       # 가입 스팸 방지
     "POST /api/auth/social-login": (60, 20),   # provider_token 추측 방지
     "DELETE /api/auth/me": (3600, 5),          # 탈퇴 반복 호출 방지
+    "POST /api/auth/password": (3600, 10),     # 현재 비밀번호 대입 방지
+    "POST /api/auth/password/reset": (3600, 10),  # 재설정 코드 대입 방지
 }
 
 # 테스트·개발에서 한도를 넉넉히 두고 싶을 때 배수로 조정한다.

@@ -45,6 +45,9 @@ class User(Base):
     learning_events: Mapped[list["LearningEvent"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
+    password_reset_codes: Mapped[list["PasswordResetCode"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
 
     __table_args__ = (UniqueConstraint("provider", "provider_subject", name="uq_user_provider_subject"),)
 
@@ -152,6 +155,32 @@ class RevokedToken(Base):
     user_id: Mapped[str | None] = mapped_column(String(32), index=True, default=None)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     revoked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class PasswordResetCode(Base):
+    """운영자가 발급한 일회용 비밀번호 재설정 코드.
+
+    **왜 이 방식인가**
+    메일 발송 수단이 없으면 "비밀번호 찾기"를 만들 수 없다. 그렇다고 재설정 자체를 두지
+    않으면 비밀번호를 잊은 사용자는 계정과 학습 이력을 영구히 잃는다.
+    그래서 운영자가 코드를 발급하고 **본인 확인은 오프라인으로** 한다
+    (학내 Closed Beta 라 조교·담당자가 얼굴을 아는 상황을 전제한다).
+
+    **코드는 해시로만 저장한다.** DB 가 새더라도 그 값으로 비밀번호를 바꿀 수 없어야 한다.
+    코드 자체는 발급 응답에 한 번만 나가고 서버에 남지 않는다.
+    """
+
+    __tablename__ = "password_reset_codes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.user_id"), index=True)
+    code_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    # 누가 발급했는지 남긴다 — 운영 권한이 쓰인 기록이다
+    issued_by: Mapped[str | None] = mapped_column(String(32), default=None)
+
+    user: Mapped[User] = relationship(back_populates="password_reset_codes")
 
 
 class LearningEvent(Base):

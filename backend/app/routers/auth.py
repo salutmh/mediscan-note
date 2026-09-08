@@ -19,12 +19,13 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException
 from sqlalchemy import select
 
-from app import token_revocation
+from app import password_reset, token_revocation
 from app.account import delete_account
 from app.deps import CurrentTokenPayload, CurrentUser, DbSession
 from app.models import Consent, User, utcnow
 from app.schemas import (
     ChangePasswordRequest,
+    ResetPasswordRequest,
     Consents,
     DeleteAccountRequest,
     LoginRequest,
@@ -213,6 +214,35 @@ def change_password(payload: ChangePasswordRequest, user: CurrentUser, db: DbSes
         "other_sessions_signed_out": True,
         "access_token": create_access_token(user.user_id),
         "token_type": "bearer",
+    }
+
+
+@router.post("/password/reset")
+def reset_password(payload: ResetPasswordRequest, db: DbSession):
+    """운영자에게 받은 일회용 코드로 비밀번호를 재설정한다. **로그인 없이 호출한다.**
+
+    비밀번호를 잊으면 계정과 학습 이력을 영구히 잃기 때문에 필요한 경로다.
+    본인 확인은 운영자가 오프라인으로 한다 (app/password_reset.py 참고).
+
+    성공하면 **모든 기기의 로그인을 끊는다** — 계정을 되찾는 상황이므로
+    남의 세션이 살아 있으면 안 된다.
+    """
+    try:
+        user = password_reset.consume(db, payload.email, payload.code)
+    except password_reset.ResetError as exc:
+        # 실패 사유를 구분해 알려주지 않는다 (가입 여부를 코드 대입으로 알아낼 수 없게)
+        db.rollback()
+        raise _error(400, "INVALID_RESET_CODE", str(exc)) from exc
+
+    user.password_hash = hash_password(payload.new_password)
+    user.sessions_valid_from = utcnow().replace(microsecond=0)
+    db.commit()
+
+    return {
+        "password_reset": True,
+        "all_sessions_signed_out": True,
+        # 새 비밀번호로 바로 로그인하게 둔다 (여기서 토큰을 주지 않는다 —
+        # 코드만 가진 사람이 곧장 세션을 얻는 것보다 로그인을 한 번 더 거치는 편이 낫다)
     }
 
 

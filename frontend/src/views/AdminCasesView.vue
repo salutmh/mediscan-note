@@ -15,6 +15,7 @@
 import { onMounted, ref } from 'vue'
 import {
   adminDeleteFindings,
+  adminIssueResetCode,
   adminLearningSummary,
   adminListCases,
   adminSaveFindings,
@@ -161,6 +162,32 @@ async function removeFindings(caseId) {
     notice.value = `${caseId} 소견을 회수했습니다.`
   } catch (e) {
     error.value = e.message
+  }
+}
+
+/**
+ * 비밀번호 재설정 코드 발급.
+ *
+ * 메일 발송 수단이 없어 "비밀번호 찾기"를 만들 수 없다. 운영자가 코드를 발급하고
+ * **본인 확인은 오프라인으로** 한다. 코드는 응답에만 있고 다시 볼 수 없으므로
+ * 그 자리에서 전달해야 한다.
+ */
+const resetEmail = ref('')
+const resetBusy = ref(false)
+const resetResult = ref(null)
+const resetError = ref('')
+
+async function issueResetCode() {
+  resetBusy.value = true
+  resetError.value = ''
+  resetResult.value = null
+  try {
+    resetResult.value = await adminIssueResetCode(resetEmail.value.trim())
+    resetEmail.value = ''
+  } catch (e) {
+    resetError.value = e.message
+  } finally {
+    resetBusy.value = false
   }
 }
 
@@ -345,6 +372,40 @@ onMounted(load)
           </template>
         </tbody>
       </table>
+      <!-- 운영 도구 -->
+      <section class="tools">
+        <div class="summary-head">
+          <h2>비밀번호 재설정 코드 발급</h2>
+          <span class="muted">본인 확인 후 발급하세요 · 코드는 다시 볼 수 없습니다</span>
+        </div>
+
+        <form class="tool-form" @submit.prevent="issueResetCode">
+          <input
+            v-model.trim="resetEmail"
+            type="email"
+            required
+            placeholder="사용자 이메일"
+            aria-label="재설정 코드를 발급할 사용자 이메일"
+          />
+          <button type="submit" :disabled="resetBusy">
+            {{ resetBusy ? '발급 중…' : '코드 발급' }}
+          </button>
+        </form>
+
+        <p v-if="resetError" class="notice error">{{ resetError }}</p>
+
+        <div v-if="resetResult" class="notice ok reset-issued">
+          <p>
+            <strong>{{ resetResult.user_id }}</strong> 의 재설정 코드:
+            <code class="reset-code">{{ resetResult.code }}</code>
+          </p>
+          <p class="muted">
+            24시간 동안 <strong>한 번만</strong> 쓸 수 있습니다.
+            이 화면을 벗어나면 다시 볼 수 없으니 지금 전달하세요.
+            사용자는 로그인 화면의 "비밀번호 재설정"에서 입력합니다.
+          </p>
+        </div>
+      </section>
     </template>
   </section>
 </template>
@@ -415,6 +476,35 @@ onMounted(load)
 /* 재도전에서 점수가 올랐다는 것은 학습이 일어났다는 최소 신호다 */
 .stat-row dd.up {
   color: var(--match-ink);
+}
+
+/* 운영 도구 — 콘텐츠 관리와 성격이 다르므로 아래에 따로 둔다 */
+.tools {
+  margin-top: var(--sp-6);
+  padding: var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+}
+
+.tool-form {
+  display: flex;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+}
+
+.tool-form input {
+  flex: 1 1 240px;
+}
+
+.reset-code {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 2px 8px;
+}
+
+.reset-issued p {
+  margin: 0 0 var(--sp-2);
 }
 
 .admin-table {

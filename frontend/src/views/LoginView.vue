@@ -14,7 +14,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ConsentForm from '../components/ConsentForm.vue'
-import { getConsentVersion, login, signup, socialLogin } from '../api/endpoints'
+import { getConsentVersion, login, resetPassword, signup, socialLogin } from '../api/endpoints'
 import { applyAuthResult } from '../stores/auth'
 
 const router = useRouter()
@@ -138,7 +138,43 @@ function cancelSocial() {
   errorMessage.value = ''
 }
 
+/**
+ * 비밀번호 재설정 — 운영자에게 받은 일회용 코드를 쓴다.
+ *
+ * 메일 발송 수단이 없어 "비밀번호 찾기" 메일을 보낼 수 없다. 그렇다고 재설정을 두지 않으면
+ * 비밀번호를 잊은 사용자가 계정과 학습 이력을 영구히 잃는다.
+ * 본인 확인은 운영자가 오프라인으로 한다.
+ */
+const reset = ref({ code: '', next: '', confirm: '' })
+const resetDone = ref(false)
+
+async function onReset() {
+  if (reset.value.next !== reset.value.confirm) {
+    errorMessage.value = '새 비밀번호가 서로 다릅니다.'
+    return
+  }
+  busy.value = true
+  errorMessage.value = ''
+  try {
+    await resetPassword({
+      email: email.value,
+      code: reset.value.code,
+      new_password: reset.value.next,
+    })
+    resetDone.value = true
+    reset.value = { code: '', next: '', confirm: '' }
+    // 재설정 직후 토큰을 주지 않는다 — 새 비밀번호로 한 번 로그인하게 한다
+    mode.value = 'login'
+    password.value = ''
+  } catch (e) {
+    errorMessage.value = e.message
+  } finally {
+    busy.value = false
+  }
+}
+
 function switchMode(next) {
+  resetDone.value = false
   mode.value = next
   errorMessage.value = ''
 }
@@ -217,9 +253,44 @@ const PROVIDERS = [
         <div class="segmented full">
           <button :class="{ active: mode === 'login' }" @click="switchMode('login')">로그인</button>
           <button :class="{ active: mode === 'signup' }" @click="switchMode('signup')">회원가입</button>
+          <button :class="{ active: mode === 'reset' }" @click="switchMode('reset')">비밀번호 재설정</button>
         </div>
 
-        <form @submit.prevent="mode === 'login' ? onLogin() : onSignup()">
+        <p v-if="resetDone" class="notice ok">
+          비밀번호를 재설정했습니다. 새 비밀번호로 로그인해 주세요.
+        </p>
+
+        <!-- 재설정: 운영자에게 받은 코드로 -->
+        <form v-if="mode === 'reset'" @submit.prevent="onReset">
+          <p class="reset-help">
+            비밀번호를 잊으셨나요? <strong>운영자에게 재설정 코드를 요청</strong>한 뒤
+            아래에 입력하세요. 코드는 발급 후 24시간 동안 한 번만 사용할 수 있습니다.
+          </p>
+          <label class="field">
+            <span>이메일</span>
+            <input v-model.trim="email" type="email" required autocomplete="email" />
+          </label>
+          <label class="field">
+            <span>재설정 코드</span>
+            <input v-model.trim="reset.code" type="text" required placeholder="XXXXX-XXXXX" />
+          </label>
+          <label class="field">
+            <span>새 비밀번호 (8자 이상)</span>
+            <input v-model="reset.next" type="password" required autocomplete="new-password" />
+          </label>
+          <label class="field">
+            <span>새 비밀번호 확인</span>
+            <input v-model="reset.confirm" type="password" required autocomplete="new-password" />
+          </label>
+
+          <p v-if="errorMessage" class="error">{{ errorMessage }}</p>
+
+          <button class="primary lg full" type="submit" :disabled="busy">
+            {{ busy ? '처리 중...' : '비밀번호 재설정' }}
+          </button>
+        </form>
+
+        <form v-if="mode !== 'reset'" @submit.prevent="mode === 'login' ? onLogin() : onSignup()">
           <label class="field">
             <span>이메일</span>
             <input v-model.trim="email" type="email" required autocomplete="email" placeholder="you@example.com" />
@@ -302,6 +373,13 @@ const PROVIDERS = [
   align-items: center;
   gap: var(--sp-2);
   margin-bottom: 6px;
+}
+
+.reset-help {
+  margin: 0 0 var(--sp-3);
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--ink-secondary);
 }
 
 .social-note {

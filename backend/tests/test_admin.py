@@ -60,6 +60,7 @@ ADMIN_ENDPOINTS = [
     ("PUT", f"/api/admin/cases/{CASE_ID}/findings", FINDINGS_PAYLOAD),
     ("DELETE", f"/api/admin/cases/{CASE_ID}/findings", None),
     ("GET", "/api/admin/learning-summary", None),
+    ("POST", "/api/admin/password-reset", {"email": "someone@example.com"}),
 ]
 
 

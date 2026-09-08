@@ -19,11 +19,11 @@
 from fastapi import APIRouter, HTTPException
 from sqlalchemy import func, select
 
-from app import explanations, learning_stats
+from app import explanations, learning_stats, password_reset
 from app.deps import CurrentAdmin, DbSession
 from app.grading import is_gradable
-from app.models import Case, CaseSlice, LearningEvent, Submission
-from app.schemas import AdminCaseUpdate, CaseFindingsInput
+from app.models import Case, CaseSlice, LearningEvent, Submission, User
+from app.schemas import AdminCaseUpdate, CaseFindingsInput, IssueResetCodeRequest
 from app.static_files import absolute_url
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -137,6 +137,33 @@ def update_case(case_id: str, payload: AdminCaseUpdate, admin: CurrentAdmin, db:
     db.commit()
     db.refresh(case)
     return {"updated": changed, **_summary(db, case)}
+
+
+# --------------------------------------------------------- 비밀번호 재설정 코드
+@router.post("/password-reset")
+def issue_password_reset(payload: IssueResetCodeRequest, admin: CurrentAdmin, db: DbSession):
+    """비밀번호를 잊은 사용자에게 줄 **일회용 코드**를 발급한다.
+
+    **본인 확인은 운영자가 오프라인으로 한다.** 학내 Closed Beta 라 조교·담당자가
+    얼굴을 아는 상황을 전제한 방식이다 (메일 발송 수단이 없다).
+
+    코드는 **이 응답에만** 존재한다 — 서버에는 해시만 남고 로그에도 남기지 않는다.
+    다시 볼 수 없으니 그 자리에서 전달해야 한다.
+
+    사용자 목록 조회 경로는 만들지 않았다. 운영자에게 전체 명단을 노출할 이유가 없다.
+    """
+    email = (payload.email or "").strip().lower()
+    user = db.scalar(select(User).where(func.lower(User.email) == email))
+    if user is None:
+        raise _error(404, "USER_NOT_FOUND", "해당 이메일의 사용자를 찾을 수 없습니다.")
+    if not user.password_hash:
+        raise _error(
+            400,
+            "PASSWORD_NOT_SET",
+            "간편 로그인 계정은 비밀번호가 없어 재설정할 수 없습니다.",
+        )
+
+    return password_reset.issue(db, user, issued_by=admin.user_id)
 
 
 # ------------------------------------------------------------------ 학습 지표
