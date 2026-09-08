@@ -30,6 +30,13 @@ class User(Base):
     # 운영자 권한. **웹에서 스스로 올릴 수 있는 경로를 만들지 않는다** —
     # 최초 지정은 CLI(scripts/grant_admin.py)로만 한다.
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    # 이 시각 **이전에 발급된** 토큰을 전부 무효로 본다 ("모든 기기에서 로그아웃").
+    # 비밀번호를 바꾸면 여기를 갱신한다 — 비밀번호를 바꾸는 이유는 대개 "누가 내 계정을
+    # 쓰고 있는 것 같다"이므로, 다른 기기 세션이 살아 있으면 바꾼 의미가 없다.
+    # 개별 토큰 폐기(revoked_tokens)와 목적이 다르다: 이쪽은 한 번에 전부 끊는다.
+    sessions_valid_from: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), default=None
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     consents: Mapped[list["Consent"]] = relationship(back_populates="user", cascade="all, delete-orphan")

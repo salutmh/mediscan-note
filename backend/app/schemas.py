@@ -28,11 +28,44 @@ class Consents(BaseModel):
         return [k for k in REQUIRED_CONSENT_KEYS if not getattr(self, k)]
 
 
+# 비밀번호 최소 길이.
+# 복잡도 규칙(대문자/특수문자 강제)은 두지 않는다 — 사용자가 예측 가능한 패턴으로 우회하게 만들고
+# 실제 강도에는 별 도움이 되지 않는다. 길이를 요구하는 편이 낫다.
+MIN_PASSWORD_LENGTH = 8
+
+
+def _validate_password(value: str) -> str:
+    """가입·변경 양쪽에서 같은 규칙을 쓴다."""
+    if len(value) < MIN_PASSWORD_LENGTH:
+        raise ValueError(f"비밀번호는 {MIN_PASSWORD_LENGTH}자 이상이어야 합니다.")
+    return value
+
+
 class SignupRequest(BaseModel):
     email: str
     password: str
     nickname: str
     consents: Consents
+
+    @field_validator("password")
+    @classmethod
+    def _password_length(cls, value: str) -> str:
+        return _validate_password(value)
+
+
+class ChangePasswordRequest(BaseModel):
+    """비밀번호 변경. **현재 비밀번호를 다시 받는다.**
+
+    남의 기기에 남은 세션으로 비밀번호가 바뀌면 계정을 통째로 빼앗기게 된다.
+    """
+
+    current_password: str
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def _password_length(cls, value: str) -> str:
+        return _validate_password(value)
 
 
 class LoginRequest(BaseModel):

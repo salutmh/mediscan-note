@@ -4,6 +4,7 @@
 api-spec.md 0절: /api/cases/*, /api/wrong-notes/*, /api/analyze 는 로그인 필요, 토큰 없으면 401.
 지금까지는 라우터가 토큰을 아예 보지 않아 누구나 호출할 수 있었는데, 이 의존성으로 실제로 막는다.
 """
+from datetime import datetime, timezone
 from typing import Annotated
 
 from fastapi import Depends, Header, HTTPException
@@ -44,7 +45,26 @@ def current_user(
     user = db.get(User, payload["sub"])
     if user is None:
         raise _unauthorized("USER_NOT_FOUND", "사용자를 찾을 수 없습니다.")
+
+    # 비밀번호를 바꾸는 등으로 "모든 기기 로그아웃"이 일어났으면, 그 이전 토큰은 전부 무효다.
+    # 개별 폐기(revoked_tokens)로는 다른 기기의 토큰까지 끊을 수 없다.
+    if _issued_before_session_reset(user, payload):
+        raise _unauthorized("SESSION_EXPIRED", "보안 설정이 변경되어 다시 로그인해야 합니다.")
+
     return user
+
+
+def _issued_before_session_reset(user: User, payload: dict) -> bool:
+    cutoff = getattr(user, "sessions_valid_from", None)
+    if cutoff is None:
+        return False
+    if cutoff.tzinfo is None:  # SQLite 는 tz 정보를 잃을 수 있다
+        cutoff = cutoff.replace(tzinfo=timezone.utc)
+    try:
+        issued_at = datetime.fromtimestamp(int(payload.get("iat", 0)), tz=timezone.utc)
+    except (TypeError, ValueError, OSError):
+        return True  # iat 를 못 읽는 토큰은 안전한 쪽으로 거부한다
+    return issued_at < cutoff
 
 
 def current_token_payload(

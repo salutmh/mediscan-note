@@ -174,7 +174,7 @@ await evaluate(`
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        email, password: 'pw1234', nickname: '온',
+        email, password: 'pw12345678', nickname: '온',
         consents: { agree_terms: true, agree_privacy: true, agree_sensitive_data: true,
                     agree_ai_notice: true, agree_age14: true, agree_marketing: false },
       }),

@@ -35,7 +35,7 @@ AI 보조 피드백(참고) → 오답 재학습.
 | 화면 5 | 지어내지 않고 `model_unavailable`, 데모는 flag OFF 기본 | `app/routers/analyze.py:74` |
 | 스키마 | Alembic이 기준, 기동 시 자동 upgrade + 레거시 DB 감지 | `app/db.py:47` |
 | 정적 자산 | 요청 주소 기준 절대 URL 생성 | `app/main.py:32` |
-| 테스트 | 백엔드 **417개**(SQLite·PostgreSQL 양쪽) + 프론트 **22개** + E2E 4종 | `backend/tests/`, `frontend/src/**/*.test.js` |
+| 테스트 | 백엔드 **433개**(SQLite·PostgreSQL 양쪽) + 프론트 **22개** + E2E 4종 | `backend/tests/`, `frontend/src/**/*.test.js` |
 
 **이미 해결된 것은 다시 만들지 않는다.** 위 항목은 재구현 대상이 아니다.
 
@@ -60,7 +60,7 @@ AI 보조 피드백(참고) → 오답 재학습.
 | H2 | **`case_findings` 운영 구조 없음** | ~~검토 상태 없음~~ → 학습 필드 확장 + `findings_status`(DB) + 응답 `case_findings_status`. **내용은 전문가 대기(E1)** | ✅ 구조 DONE |
 | H3 | Admin CMS 없음 | ~~CLI 뿐~~ → `/api/admin/*` + 최소 운영 화면. 활성/비활성·난이도·검토상태·소견 등록 | ✅ DONE |
 | H4 | 서버측 토큰 폐기 없음 | ~~클라이언트 삭제만~~ → `POST /api/auth/logout` + `revoked_tokens` 폐기 목록 | ✅ DONE |
-| H5 | 이메일 인증 / 비밀번호 재설정 없음 | 남의 이메일로 가입 가능, 비번 분실 시 계정 영구 상실 | 🔲 미착수 |
+| H5 | 이메일 인증 / 비밀번호 재설정 없음 | **비밀번호 변경은 구현**(`POST /api/auth/password`, 다른 기기 로그아웃 포함) + 최소 8자 정책. 이메일 인증·분실 시 재설정은 메일 발송 수단 필요 | 🟡 부분 |
 | H6 | 채점 임계값 하드코딩 | ~~상수~~ → `app/scoring_config.py` 분리 + 응답에 `validation_status` 노출 | ✅ DONE |
 | H7 | 학습 분석 이벤트 없음 | ~~없음~~ → `learning_events` + `scripts/learning_report.py`. **개인정보 미수집**(이메일·IP·ROI 없음) | ✅ DONE |
 
@@ -98,7 +98,8 @@ AI 보조 피드백(참고) → 오답 재학습.
 | 토큰 서명·만료 | ✅ HMAC-SHA256 + exp |
 | 서버측 토큰 폐기 | ✅ 로그아웃 시 jti 기준 폐기. 다른 기기 세션은 유지. 만료분 자동 정리 |
 | 이메일 인증 | ❌ 미구현 (H5) |
-| 비밀번호 재설정 | ❌ 미구현 (H5) |
+| 비밀번호 변경 | ✅ 현재 비밀번호 확인 + **다른 기기 전체 로그아웃** + 최소 8자 |
+| 비밀번호 **분실** 시 재설정 | ❌ 미구현 — 메일 발송 수단 필요 (BLOCKER-4) |
 | 회원 탈퇴 / 데이터 삭제 | ✅ `DELETE /api/auth/me` + 화면(`/account`). 계정·동의·제출·학습기록 하드 삭제 |
 | 민감정보 로깅 | ✅ 확인 결과 password/token/request body를 로깅하는 코드 없음 |
 | 업로드 영상 미저장 + EXIF 제거 | ✅ 기존 구현 |
@@ -223,4 +224,10 @@ AI 보조 피드백(참고) → 오답 재학습.
   구조였다 (겉보기에는 정상 동작하므로 눈치채기 어렵다).
   `scripts/backup_db.py` 신규 (SQLite 온라인 백업 API / pg_dump, 보관 개수 관리).
   `docs/DEPLOYMENT.md` 신규 — 체크리스트·한계·백업·사고 대응 런북.
+- 2026-09-08: **비밀번호 정책·변경** — 최소 길이 정책이 아예 없어 한 글자로도 가입이 됐다.
+  8자 최소 + `POST /api/auth/password`(현재 비밀번호 확인, **다른 기기 전체 로그아웃**).
+  `users.sessions_valid_from` 으로 "모든 기기 로그아웃"을 구현 — 개별 토큰 폐기로는
+  다른 기기 세션을 끊을 수 없다. 테스트 417 → 433.
+  구현 중 발견: `iat`(초 단위)와 컷오프(마이크로초) 정밀도가 달라 새로 발급한 토큰이
+  즉시 거부됐다 → 컷오프를 초 단위로 내림.
 (이후 Phase 완료 시마다 여기에 추가한다)

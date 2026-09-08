@@ -13,8 +13,8 @@
  */
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { deleteAccount } from '../api/endpoints'
-import { authState, clearSession } from '../stores/auth'
+import { changePassword, deleteAccount } from '../api/endpoints'
+import { authState, clearSession, replaceToken } from '../stores/auth'
 
 const router = useRouter()
 
@@ -31,6 +31,45 @@ const DELETED_LABEL = {
   consents: '동의 이력',
   submissions: '제출·채점 이력',
   learning_events: '학습 기록',
+}
+
+// ---------------------------------------------------------------- 비밀번호
+const pw = ref({ current: '', next: '', confirm: '' })
+const pwBusy = ref(false)
+const pwError = ref('')
+const pwDone = ref(false)
+
+const MIN_PASSWORD_LENGTH = 8
+
+async function submitPassword() {
+  pwError.value = ''
+  pwDone.value = false
+
+  if (pw.value.next.length < MIN_PASSWORD_LENGTH) {
+    pwError.value = `새 비밀번호는 ${MIN_PASSWORD_LENGTH}자 이상이어야 합니다.`
+    return
+  }
+  if (pw.value.next !== pw.value.confirm) {
+    // 서버까지 갈 필요 없는 오타는 여기서 잡는다
+    pwError.value = '새 비밀번호가 서로 다릅니다.'
+    return
+  }
+
+  pwBusy.value = true
+  try {
+    const result = await changePassword({
+      current_password: pw.value.current,
+      new_password: pw.value.next,
+    })
+    // 다른 기기는 끊기고 이 기기만 새 토큰으로 이어진다
+    replaceToken(result.access_token)
+    pwDone.value = true
+    pw.value = { current: '', next: '', confirm: '' }
+  } catch (e) {
+    pwError.value = e.message
+  } finally {
+    pwBusy.value = false
+  }
 }
 
 function cancel() {
@@ -87,6 +126,40 @@ function goHome() {
             <dd>{{ authState.user?.email ?? '간편 로그인 (개발용 예시)' }}</dd>
           </div>
         </dl>
+      </div>
+
+      <!-- 비밀번호 변경 — 이메일 계정만 -->
+      <div v-if="isEmailAccount" class="card">
+        <h2>비밀번호 변경</h2>
+        <p class="muted note">
+          비밀번호를 바꾸면 <strong>다른 기기의 로그인이 모두 해제됩니다.</strong>
+          이 기기에서는 그대로 계속 사용할 수 있습니다.
+        </p>
+
+        <p v-if="pwError" class="notice error">{{ pwError }}</p>
+        <p v-if="pwDone" class="notice ok">
+          비밀번호를 변경했습니다. 다른 기기에서는 다시 로그인해야 합니다.
+        </p>
+
+        <form class="confirm" @submit.prevent="submitPassword">
+          <label>
+            <span>현재 비밀번호</span>
+            <input v-model="pw.current" type="password" required autocomplete="current-password" />
+          </label>
+          <label>
+            <span>새 비밀번호 ({{ MIN_PASSWORD_LENGTH }}자 이상)</span>
+            <input v-model="pw.next" type="password" required autocomplete="new-password" />
+          </label>
+          <label>
+            <span>새 비밀번호 확인</span>
+            <input v-model="pw.confirm" type="password" required autocomplete="new-password" />
+          </label>
+          <div class="actions">
+            <button type="submit" :disabled="pwBusy">
+              {{ pwBusy ? '변경 중…' : '비밀번호 변경' }}
+            </button>
+          </div>
+        </form>
       </div>
 
       <div class="card danger">
@@ -217,6 +290,12 @@ h1 {
 .actions {
   display: flex;
   gap: var(--sp-2);
+}
+
+.note {
+  margin: 0 0 var(--sp-3);
+  font-size: 12.5px;
+  line-height: 1.55;
 }
 
 .card.done ul {

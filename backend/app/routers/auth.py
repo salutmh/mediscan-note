@@ -22,8 +22,9 @@ from sqlalchemy import select
 from app import token_revocation
 from app.account import delete_account
 from app.deps import CurrentTokenPayload, CurrentUser, DbSession
-from app.models import Consent, User
+from app.models import Consent, User, utcnow
 from app.schemas import (
+    ChangePasswordRequest,
     Consents,
     DeleteAccountRequest,
     LoginRequest,
@@ -171,6 +172,47 @@ def logout(payload: CurrentTokenPayload, db: DbSession):
         "logged_out": True,
         # jti 가 없는 옛 토큰은 개별 폐기가 불가능하다. 사실대로 알린다.
         "token_revoked": revoked,
+    }
+
+
+@router.post("/password")
+def change_password(payload: ChangePasswordRequest, user: CurrentUser, db: DbSession):
+    """비밀번호 변경 — **다른 기기의 로그인을 모두 끊고** 새 토큰을 발급한다.
+
+    비밀번호를 바꾸는 이유는 대개 "누가 내 계정을 쓰고 있는 것 같다"이다.
+    다른 기기 세션이 살아 있으면 바꾼 의미가 없으므로 전부 무효화한다.
+    지금 쓰는 이 기기만 새 토큰으로 이어서 쓸 수 있다.
+
+    SNS 계정은 비밀번호가 없으므로 이 경로를 쓸 수 없다.
+    """
+    if not user.password_hash:
+        raise _error(
+            400,
+            "PASSWORD_NOT_SET",
+            "간편 로그인 계정은 비밀번호가 없어 변경할 수 없습니다.",
+        )
+    if not verify_password(payload.current_password, user.password_hash):
+        raise _error(403, "INVALID_CURRENT_PASSWORD", "현재 비밀번호가 올바르지 않습니다.")
+    if payload.current_password == payload.new_password:
+        raise _error(400, "PASSWORD_UNCHANGED", "기존과 다른 비밀번호를 입력해 주세요.")
+
+    user.password_hash = hash_password(payload.new_password)
+    # 이 시각 이전에 발급된 토큰은 전부 무효가 된다 (app/deps.py).
+    #
+    # **초 단위로 내림한다.** 토큰의 iat 는 int(time.time()) 이라 초 단위인데 여기에
+    # 마이크로초가 붙어 있으면, 바로 아래에서 새로 발급하는 토큰(iat = 같은 초)이
+    # 컷오프보다 이르다고 판정돼 즉시 거부된다.
+    # 그 대가로 "같은 초에 발급된 토큰"은 살아남는다 — 1초 미만의 창이고,
+    # 공격자가 하필 그 초에 로그인해 있어야 하므로 감수한다.
+    user.sessions_valid_from = utcnow().replace(microsecond=0)
+    db.commit()
+
+    # 방금 무효화한 범위에 지금 토큰도 들어가므로 새로 발급해 돌려준다
+    return {
+        "password_changed": True,
+        "other_sessions_signed_out": True,
+        "access_token": create_access_token(user.user_id),
+        "token_type": "bearer",
     }
 
 

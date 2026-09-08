@@ -35,6 +35,15 @@ export function applyAuthResult(result) {
   return authState.user
 }
 
+/**
+ * 토큰만 갈아끼운다 (비밀번호 변경 후처럼 세션이 재발급될 때).
+ * 사용자 정보는 그대로 두므로 화면이 로그아웃된 것처럼 깜빡이지 않는다.
+ */
+export function replaceToken(token) {
+  setToken(token)
+  authState.token = token
+}
+
 /** 로컬 상태만 비운다 (401 처리처럼 서버 호출이 무의미한 경우용) */
 export function clearSession() {
   clearToken()

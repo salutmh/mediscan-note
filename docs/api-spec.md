@@ -49,6 +49,10 @@
 | `INVALID_TOKEN` | 401 | 서명 불일치 / 만료 |
 | `USER_NOT_FOUND` | 401 | 토큰의 사용자가 존재하지 않음 |
 | `TOKEN_REVOKED` | 401 | 로그아웃되어 서버가 폐기한 토큰 |
+| `SESSION_EXPIRED` | 401 | 비밀번호 변경 등으로 이전 세션이 모두 무효화됨 |
+| `INVALID_CURRENT_PASSWORD` | 403 | 비밀번호 변경 시 현재 비밀번호 불일치 |
+| `PASSWORD_NOT_SET` | 400 | 간편 로그인 계정이라 비밀번호가 없음 |
+| `PASSWORD_UNCHANGED` | 400 | 새 비밀번호가 기존과 같음 |
 | `CONSENT_REQUIRED` | 400 / 403 | 가입 시 필수 동의 누락 / 민감정보 동의 없이 분석 요청 |
 | `EMAIL_ALREADY_EXISTS` | 409 | 이메일 중복 |
 | `CASE_NOT_FOUND` | 404 | 케이스 없음 |
@@ -181,6 +185,39 @@
 - `token_revoked: false` 는 이 기능 도입 이전에 발급된 `jti` 없는 토큰이라 개별 폐기가
   불가능하다는 뜻이다 (그 토큰은 만료까지 유효하다).
 - 폐기 기록은 토큰이 만료되면 정리된다 (앱 기동 시 `purge_expired`).
+
+### 1-4-2. POST /api/auth/password — 비밀번호 변경
+
+**성공하면 다른 기기의 로그인이 모두 끊긴다.** 비밀번호를 바꾸는 이유는 대개
+"누가 내 계정을 쓰고 있는 것 같다"이므로, 다른 세션이 살아 있으면 바꾼 의미가 없다.
+
+**Request**
+```json
+{ "current_password": "...", "new_password": "..." }
+```
+
+**Response**
+```json
+{
+  "password_changed": true,
+  "other_sessions_signed_out": true,
+  "access_token": "...",
+  "token_type": "bearer"
+}
+```
+
+- **현재 비밀번호를 다시 받는다** — 남의 기기에 남은 세션으로 비밀번호가 바뀌면
+  계정을 통째로 빼앗기게 된다. 틀리면 403 `INVALID_CURRENT_PASSWORD`.
+- 비밀번호는 **8자 이상**(`MIN_PASSWORD_LENGTH`). 가입에도 같은 규칙이 적용된다.
+  복잡도 규칙(대문자·특수문자)은 두지 않는다 — 예측 가능한 패턴으로 우회하게 만들 뿐이다.
+- SNS 계정은 비밀번호가 없어 400 `PASSWORD_NOT_SET`.
+- 지금 쓰는 기기까지 끊기면 곧바로 다시 로그인해야 하므로 **새 토큰을 함께 돌려준다.**
+
+> **동작 방식**: `users.sessions_valid_from` 에 기준 시각을 남기고, 그보다 이르게 발급된
+> 토큰(`iat` 기준)을 전부 401 `SESSION_EXPIRED` 로 거부한다.
+> 개별 토큰 폐기(`revoked_tokens`)와 목적이 다르다 — 이쪽은 **한 번에 전부** 끊는다.
+> `iat` 가 초 단위라 기준 시각도 초 단위로 내림한다. 같은 초에 발급된 토큰은 살아남는
+> 1초 미만의 창이 있다.
 
 ### 1-4-1. DELETE /api/auth/me — 회원 탈퇴
 

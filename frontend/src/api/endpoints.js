@@ -43,6 +43,10 @@ export const retryWrongNote = (caseId, roi) =>
   api.post(`/wrong-notes/${encodeURIComponent(caseId)}/retry`, { roi })
 export const analyzeImage = ({ image_base64, region }) => api.post('/analyze', { image_base64, region })
 
+// 1-4-3. 비밀번호 변경 — 성공하면 **다른 기기 로그인이 전부 끊기고** 새 토큰이 온다.
+export const changePassword = ({ current_password, new_password }) =>
+  api.post('/auth/password', { current_password, new_password })
+
 // 1-4-1. 회원 탈퇴 — 되돌릴 수 없다. 이메일 계정은 비밀번호 재확인이 필요하다.
 export const deleteAccount = (password) => api.delete('/auth/me', password ? { password } : undefined)
 
