@@ -427,8 +427,14 @@ onBeforeRouteUpdate((to) => {
 
 <style scoped>
 .back {
-  display: inline-block;
-  margin-bottom: var(--sp-4);
+  /* 글자만 두면 높이가 22px 이라 손가락으로 누르기 어렵다.
+     여백으로 누를 수 있는 면적을 넓힌다 (보이는 모양은 그대로다). */
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 4px;
+  margin-bottom: var(--sp-3);
+  margin-left: -4px;
   color: var(--ink-muted);
   font-size: 13.5px;
   text-decoration: none;

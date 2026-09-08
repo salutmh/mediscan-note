@@ -57,6 +57,7 @@ node tools/browser-verify/consent-and-sns.mjs ./out/consent 9333
 node tools/browser-verify/slice-navigation.mjs ./out/slices 9333
 node tools/browser-verify/screenshot-all.mjs ./out/shots 9333
 node tools/browser-verify/a11y-audit.mjs ./out/a11y 9333
+node tools/browser-verify/responsive-check.mjs ./out/responsive 9333
 ```
 
 ## 참고
@@ -99,3 +100,23 @@ node tools/browser-verify/a11y-audit.mjs ./out/a11y 9333
    로그인 탭을 두 번 본 꼴이었다. **탭은 눌러서 전환한다.**
 
 둘 다 "통과" 로 보였다는 점이 핵심이다. 점검 도구는 무엇을 봤는지 함께 내야 한다.
+
+
+---
+
+## responsive-check.mjs — 좁은 화면 점검
+
+휴대폰(390) / 태블릿 세로(768) / 태블릿 가로(1024) 폭에서 **기계로 확실히 알 수 있는 깨짐**만 본다:
+가로 스크롤, 화면 밖으로 삐져나온 요소, 누르기 힘든 크기(32px 미만)의 버튼, 판독 캔버스 크기.
+
+"보기 좋은가"는 판단하지 않는다 — 지적이 있으면 스크린샷을 남기니 사람이 본다.
+지적이 있어도 종료코드는 0 이다.
+
+화면 밖 요소는 **조상이 이미 넘쳤으면 자식을 세지 않는다.** 그러지 않으면 원인 하나가
+수십 개 항목으로 불어나 목록이 쓸모없어진다.
+
+### 처음 돌렸을 때 나온 것 (2026-09-09)
+
+레이아웃 자체는 390px 까지 멀쩡했다 — 가로 스크롤도, 화면 밖 요소도 0건이었다.
+실제 문제는 **터치 대상 크기**였고, 그중 판독훈련의 slice 이동 화살표(`‹` `›`)가
+27px 폭이었던 것이 핵심이다. 핵심 조작에서 헛누르면 학습 흐름이 끊긴다.

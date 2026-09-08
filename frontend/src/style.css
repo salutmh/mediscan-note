@@ -271,7 +271,11 @@ button.lg {
 }
 
 button.sm {
-  min-height: 32px;
+  /* 손가락으로 누르는 화면에서 27px 폭은 계속 빗나간다.
+     slice 탐색(‹ ›)이 이 클래스를 쓰는데 판독훈련의 핵심 조작이라,
+     헛누르면 학습 흐름이 끊긴다. 높이만이 아니라 **폭도** 확보한다. */
+  min-height: 36px;
+  min-width: 36px;
   padding: 6px 10px;
   font-size: 13px;
 }

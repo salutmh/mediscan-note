@@ -36,7 +36,7 @@ AI 보조 피드백(참고) → 오답 재학습.
 | 화면 5 | 지어내지 않고 `model_unavailable`, 데모는 flag OFF 기본 | `app/routers/analyze.py:74` |
 | 스키마 | Alembic이 기준, 기동 시 자동 upgrade + 레거시 DB 감지 | `app/db.py:47` |
 | 정적 자산 | 요청 주소 기준 절대 URL 생성 | `app/main.py:32` |
-| 테스트 | 백엔드 **563개**(SQLite·PostgreSQL 양쪽) + 프론트 **59개** + E2E 4종 + 접근성 점검 | `backend/tests/`, `frontend/src/**/*.test.js` |
+| 테스트 | 백엔드 **563개**(SQLite·PostgreSQL 양쪽) + 프론트 **59개** + E2E 4종 + 접근성·좁은화면 점검 | `backend/tests/`, `frontend/src/**/*.test.js` |
 
 **이미 해결된 것은 다시 만들지 않는다.** 위 항목은 재구현 대상이 아니다.
 

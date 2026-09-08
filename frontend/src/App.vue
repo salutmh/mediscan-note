@@ -108,6 +108,9 @@ function initial(nickname) {
   display: flex;
   align-items: center;
   gap: var(--sp-2);
+  /* 상단 바의 두 링크는 모든 화면에 있다. 높이가 28px 이라 좁은 화면에서
+     특히 누르기 어려웠다 — 여백으로 면적만 넓힌다. */
+  min-height: 40px;
   text-decoration: none;
   color: var(--ink);
   flex: 0 0 auto;
@@ -134,10 +137,14 @@ function initial(nickname) {
   display: flex;
   align-items: center;
   gap: var(--sp-2);
+  /* 휴대폰 폭에서는 34x30 까지 줄어들었다 */
+  min-height: 40px;
+  min-width: 40px;
+  justify-content: center;
   text-decoration: none;
   color: inherit;
   border-radius: var(--r-full);
-  padding: 2px 4px;
+  padding: 2px 8px;
 }
 
 .account-link:hover {
