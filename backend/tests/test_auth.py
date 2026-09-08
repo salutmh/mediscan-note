@@ -146,8 +146,15 @@ def test_tampered_payload_is_rejected(client, user_a):
 
 
 def test_token_for_deleted_user_is_rejected(client, user_a):
+    """계정이 사라지면 서명이 멀쩡한 토큰도 401 이어야 한다.
+
+    삭제는 **앱이 실제로 쓰는 경로**(ORM delete -> cascade)로 한다.
+    `db.query(User).delete()` 같은 대량 삭제는 ORM cascade 를 타지 않아서,
+    SQLite 에서는 조용히 지워지지만 PostgreSQL 에서는 FK 제약에 걸린다
+    (배포 DB 가 PostgreSQL 이므로 테스트가 그쪽에서도 돌아야 한다).
+    """
     with SessionLocal() as db:
-        db.query(User).filter(User.user_id == user_a.user_id).delete()
+        db.delete(db.get(User, user_a.user_id))
         db.commit()
     res = user_a.get("/api/auth/me")
     assert res.status_code == 401

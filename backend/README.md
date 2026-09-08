@@ -45,6 +45,39 @@ pytest tests/test_isolation.py -v
 
 ## DB
 
+### PostgreSQL 검증 (배포 전 필수)
+
+개발은 SQLite, 배포는 PostgreSQL 이다. **테스트가 SQLite 에서만 돌면 이식성 문제를
+배포에서 처음 만난다.** 실제로 이 검증을 처음 돌렸을 때 테스트 1건이 깨졌다 —
+SQLite 는 외래키를 기본적으로 강제하지 않아, ORM cascade 를 우회하는 대량 삭제가
+조용히 통과하고 있었다 (PostgreSQL 에서는 FK 위반).
+
+```bash
+# 일회용 컨테이너
+docker run -d --name mediscan-pg-test -e POSTGRES_PASSWORD=testpw   -e POSTGRES_DB=mediscan_test -p 55432:5432 postgres:16-alpine
+
+cd backend
+python -m scripts.verify_postgres   --url postgresql+psycopg2://postgres:testpw@localhost:55432/mediscan_test --with-tests
+
+docker rm -f mediscan-pg-test
+```
+
+확인 항목: 연결 / `upgrade head` / **모델↔스키마 드리프트 없음** / `downgrade base` 후 재 upgrade /
+전체 pytest. `--with-tests` 없이 돌리면 스키마만 빠르게 본다.
+
+테스트만 PostgreSQL 로 돌리려면:
+```bash
+MEDISCAN_TEST_DATABASE_URL=postgresql+psycopg2://... pytest
+```
+
+> ⚠️ 이 스크립트는 **downgrade 로 스키마를 통째로 내렸다 올린다.** 운영 DB 를 가리키지 말 것.
+
+**주의(이식성 함정)**: `db.query(X).delete()` 같은 대량 삭제는 ORM cascade 를 타지 않는다.
+SQLite 에서는 통과하고 PostgreSQL 에서는 FK 위반이 난다. 사용자 삭제는 반드시
+`db.delete(user)`(= `app/account.py` 가 쓰는 경로)를 쓴다.
+
+### 연결 설정
+
 `DATABASE_URL` 환경변수 하나로 로컬과 배포를 모두 커버한다 (`app/db.py`).
 
 | 상황 | 설정 |

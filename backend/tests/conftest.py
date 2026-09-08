@@ -13,7 +13,14 @@ from pathlib import Path
 
 # --- app import 이전에 실행되어야 하는 설정 -----------------------------------
 _TMP_DIR = Path(tempfile.mkdtemp(prefix="mediscan-test-"))
-os.environ["DATABASE_URL"] = f"sqlite:///{(_TMP_DIR / 'test.db').as_posix()}"
+# 기본은 임시 SQLite. **PostgreSQL 로도 그대로 돌려볼 수 있어야 한다** —
+# 배포는 PostgreSQL 인데 테스트가 SQLite 에서만 돌면 이식성 문제를 배포에서 처음 만난다.
+#   MEDISCAN_TEST_DATABASE_URL=postgresql+psycopg2://... pytest
+# (docs/RELEASE_READINESS.md "PostgreSQL 검증" 참고)
+os.environ["DATABASE_URL"] = os.environ.get(
+    "MEDISCAN_TEST_DATABASE_URL",
+    f"sqlite:///{(_TMP_DIR / 'test.db').as_posix()}",
+)
 os.environ["MEDISCAN_SECRET_KEY"] = "test-only-secret-key"
 os.environ["MEDISCAN_TOKEN_TTL"] = "3600"
 # 합성 mock 케이스(VS-SEG-202/115)는 **테스트 픽스처로만** 쓴다. 개발/운영 DB 에는 들어가지 않는다.

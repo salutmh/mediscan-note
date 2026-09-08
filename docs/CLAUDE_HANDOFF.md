@@ -137,6 +137,29 @@
 - 프론트 라우트를 숨기지 않았다. 프론트 숨김은 권한이 아니고, 서버가 403 을 주면
   화면이 "운영자 권한이 필요합니다"를 그대로 보여주는 편이 덜 혼란스럽다.
 
+### 자율 루프 #6 — PostgreSQL 이식성 검증 (DONE)
+
+**왜 골랐나**: "DATABASE_URL 하나로 SQLite↔PostgreSQL 전환"을 표방하면서 **한 번도
+PostgreSQL 에서 돌려본 적이 없었다.** 배포 DB 에서 처음 문제를 만나는 것은 피해야 한다.
+
+**결과**: docker `postgres:16-alpine` 로 전 항목 검증 통과.
+- 마이그레이션 6단계 `upgrade head` / `downgrade base` / 재 upgrade
+- 모델↔스키마 드리프트 없음 (autogenerate 빈 diff)
+- **전체 414 테스트가 PostgreSQL 에서도 통과**
+
+**발견한 이식성 함정 (중요)**
+`db.query(X).delete()` 같은 **대량 삭제는 ORM cascade 를 타지 않는다.**
+SQLite 는 외래키를 기본적으로 강제하지 않아 조용히 통과하지만 PostgreSQL 에서는 FK 위반이다.
+`tests/test_auth.py` 1건이 여기 걸렸다 (앱의 실제 탈퇴 경로는 `db.delete(user)` 라 정상).
+→ **사용자를 지울 때는 반드시 `db.delete(user)`**. `conftest._clean_user_data` 처럼
+대량 삭제를 써야 한다면 자식 테이블부터 명시적으로 지운다.
+
+**재현 방법**: `python -m scripts.verify_postgres --url ... --with-tests`
+(`backend/README.md` "PostgreSQL 검증" 절 참고). 테스트만 바꿔 돌리려면
+`MEDISCAN_TEST_DATABASE_URL=postgresql+psycopg2://... pytest`.
+
+---
+
 ### 자율 루프 #5 — 화면 전수 점검으로 찾은 UI 문제 (DONE)
 
 **방법**: `screenshot-all.mjs` 로 화면 0~7 을 전부 촬영해 눈으로 봤다.
