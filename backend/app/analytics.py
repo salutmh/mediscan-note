@@ -111,3 +111,35 @@ def attempt_number(db: Session, user_id: str, case_id: str) -> int:
         .where(Submission.user_id == user_id, Submission.case_id == case_id)
     )
     return int(previous or 0) + 1
+
+
+def record_once(db: Session, *, user_id: str, event: str, case_id: str) -> LearningEvent | None:
+    """같은 (사용자, 케이스, 이벤트) 는 한 번만 기록한다.
+
+    해설 열람처럼 **"봤는가"만 알면 되는** 이벤트용이다. 화면을 오갈 때마다 쌓으면
+    행 수가 사용자·케이스와 무관하게 늘어나고, 정작 알고 싶은 "몇 명이 봤는가"는
+    같은 사람의 반복 조회에 묻힌다.
+
+    "몇 번 봤는가"가 필요해지면 그때 record() 로 바꾼다 — 지금 필요하지 않은 정밀도를
+    위해 데이터를 더 모으지 않는다.
+    """
+    if not enabled() or event not in ALLOWED_EVENTS:
+        return None
+
+    try:
+        from sqlalchemy import select
+
+        existing = db.scalar(
+            select(LearningEvent.id).where(
+                LearningEvent.user_id == user_id,
+                LearningEvent.case_id == case_id,
+                LearningEvent.event == event,
+            )
+        )
+        if existing is not None:
+            return None
+    except Exception:
+        logger.exception("학습 이벤트 중복 확인 실패 (기록은 건너뜀): event=%s case=%s", event, case_id)
+        return None
+
+    return record(db, user_id=user_id, event=event, case_id=case_id)

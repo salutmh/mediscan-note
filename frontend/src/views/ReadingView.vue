@@ -7,13 +7,20 @@
  * 이 화면은 복습노트 재도전(화면 6)에서도 그대로 재사용한다.
  * 라우트 meta.retry 가 true 면 제출을 POST /api/wrong-notes/{id}/retry 로 보낸다 (응답 형식 동일).
  */
-import { computed, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
 import { onBeforeRouteUpdate, useRoute } from 'vue-router'
 import RoiCanvas from '../components/RoiCanvas.vue'
 import ResultCompare from '../components/ResultCompare.vue'
 import ExplanationPanel from '../components/ExplanationPanel.vue'
 import { ApiError } from '../api/client'
-import { getCase, listCases, listWrongNotes, retryWrongNote, submitRoi } from '../api/endpoints'
+import {
+  getCase,
+  listCases,
+  listWrongNotes,
+  markExplanationViewed,
+  retryWrongNote,
+  submitRoi,
+} from '../api/endpoints'
 import { useActiveTime } from '../useActiveTime'
 import { bodyPartLabel, diseaseLabel } from '../labels'
 
@@ -30,6 +37,44 @@ const roiCanvas = ref(null)
 const hasInput = ref(false)
 
 const activeTime = useActiveTime()
+const explanationPanel = ref(null)
+let explanationObserver = null
+let explanationReported = false
+
+/**
+ * 해설이 **실제로 화면에 보였을 때** 한 번만 알린다.
+ *
+ * 해설 블록은 채점 직후 항상 렌더되지만, 사용자가 거기까지 내려봤는지는 다른 이야기다.
+ * 렌더 시점에 기록하면 "열람률 100%" 라는 쓸모없는 숫자가 나온다. 알고 싶은 것은
+ * "틀린 뒤에 해설을 읽는가" 이고, 그 답이 전문가 소견 작성에 사람 시간을 쓸지를 가른다.
+ *
+ * 관찰용이라 실패해도 조용히 넘어간다 — 학습 흐름에 영향을 주지 않는다.
+ */
+function watchExplanationVisibility() {
+  stopWatchingExplanation()
+  const el = explanationPanel.value?.$el
+  if (!el || explanationReported) return
+  // 지원하지 않는 환경(오래된 브라우저, 테스트 러너)에서는 그냥 기록하지 않는다.
+  if (typeof IntersectionObserver === 'undefined') return
+
+  explanationObserver = new IntersectionObserver(
+    (entries) => {
+      if (!entries.some((e) => e.isIntersecting)) return
+      explanationReported = true
+      stopWatchingExplanation()
+      markExplanationViewed(caseId.value).catch(() => {})
+    },
+    { threshold: 0.3 },
+  )
+  explanationObserver.observe(el)
+}
+
+onBeforeUnmount(stopWatchingExplanation)
+
+function stopWatchingExplanation() {
+  explanationObserver?.disconnect()
+  explanationObserver = null
+}
 const phase = ref('idle') // 'idle' | 'submitting' | 'done'
 const result = ref(null)
 const submitError = ref('')
@@ -85,6 +130,8 @@ function stepSlice(delta) {
 
 async function load() {
   activeTime.reset() // 케이스가 바뀌면 시계도 새로 시작한다
+  explanationReported = false
+  stopWatchingExplanation()
   caseDetail.value = null
   loadError.value = ''
   detailMissing.value = false
@@ -147,6 +194,9 @@ async function onSubmit() {
       : await submitRoi(caseId.value, roi, seconds)
     phase.value = 'done'
     findNextTarget()
+    // 해설 블록이 DOM 에 올라온 뒤에 관찰을 건다
+    await nextTick()
+    watchExplanationVisibility()
   } catch (e) {
     submitError.value = e.message
     phase.value = 'idle'
@@ -365,7 +415,12 @@ onBeforeRouteUpdate((to) => {
         :width="canvasWidth"
         :height="canvasHeight"
       />
-      <ExplanationPanel v-if="result.explanation" class="stack" :explanation="result.explanation" />
+      <ExplanationPanel
+        v-if="result.explanation"
+        ref="explanationPanel"
+        class="stack"
+        :explanation="result.explanation"
+      />
     </template>
   </template>
 </template>

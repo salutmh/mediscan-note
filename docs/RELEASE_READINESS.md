@@ -36,7 +36,7 @@ AI 보조 피드백(참고) → 오답 재학습.
 | 화면 5 | 지어내지 않고 `model_unavailable`, 데모는 flag OFF 기본 | `app/routers/analyze.py:74` |
 | 스키마 | Alembic이 기준, 기동 시 자동 upgrade + 레거시 DB 감지 | `app/db.py:47` |
 | 정적 자산 | 요청 주소 기준 절대 URL 생성 | `app/main.py:32` |
-| 테스트 | 백엔드 **554개**(SQLite·PostgreSQL 양쪽) + 프론트 **59개** + E2E 4종 + 접근성 점검 | `backend/tests/`, `frontend/src/**/*.test.js` |
+| 테스트 | 백엔드 **563개**(SQLite·PostgreSQL 양쪽) + 프론트 **59개** + E2E 4종 + 접근성 점검 | `backend/tests/`, `frontend/src/**/*.test.js` |
 
 **이미 해결된 것은 다시 만들지 않는다.** 위 항목은 재구현 대상이 아니다.
 
@@ -63,7 +63,7 @@ AI 보조 피드백(참고) → 오답 재학습.
 | H4 | 서버측 토큰 폐기 없음 | ~~클라이언트 삭제만~~ → `POST /api/auth/logout` + `revoked_tokens` 폐기 목록 | ✅ DONE |
 | H5 | 이메일 인증 / 비밀번호 재설정 | **변경·재설정 모두 구현.** 재설정은 운영자 발급 일회용 코드 방식(메일 불필요). **이메일 인증만 미구현** — 메일 발송 수단 필요 | 🟡 이메일 인증만 남음 |
 | H6 | 채점 임계값 하드코딩 | ~~상수~~ → `app/scoring_config.py` 분리 + 응답에 `validation_status` 노출 | ✅ DONE |
-| H7 | 학습 분석 이벤트 없음 | ~~없음~~ → `learning_events` + CLI + **운영자 화면 지표**(`GET /api/admin/learning-summary`). 개인정보 미수집, 집계만 노출 | ✅ DONE |
+| H7 | 학습 분석 이벤트 없음 | ~~없음~~ → `learning_events` + CLI + **운영자 화면 지표**(`GET /api/admin/learning-summary`). 개인정보 미수집, 집계만 노출. **소요시간·해설 열람률은 아무도 보내지 않아 비어 있었고, 이제 실제로 채워진다** | ✅ DONE |
 
 ---
 

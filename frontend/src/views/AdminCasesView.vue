@@ -263,6 +263,18 @@ onMounted(load)
                 : Math.round(summary.mean_duration_seconds) + '초' }}
             </dd>
           </div>
+          <!-- 해설을 읽지 않는다면 소견 작성에 사람 시간을 더 쓸 이유가 줄어든다.
+               전문가 검수 우선순위를 정하는 데 쓰는 값이다. -->
+          <div>
+            <dt>해설 열람률</dt>
+            <dd class="tnum">
+              {{ summary.submit_to_explanation_rate == null ? '—'
+                : Math.round(summary.submit_to_explanation_rate * 100) + '%' }}
+              <small v-if="summary.explanations_viewed != null">
+                ({{ summary.explanations_viewed }}건)
+              </small>
+            </dd>
+          </div>
         </dl>
       </section>
 

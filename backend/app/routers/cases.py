@@ -154,6 +154,31 @@ def list_cases(user: CurrentUser, db: DbSession, body_part: str | None = None):
     }
 
 
+@router.post("/{case_id}/explanation-viewed", status_code=200)
+def mark_explanation_viewed(case_id: str, user: CurrentUser, db: DbSession):
+    """이 사용자가 이 케이스의 해설을 열었다고 기록한다.
+
+    **왜 필요한가**: "틀린 뒤에 해설을 실제로 읽는가"는 콘텐츠에 시간을 쓸 가치가
+    있는지를 가르는 지표다. 특히 전문가 소견(case_findings) 작성은 사람 시간이
+    많이 드는 일이라(BLOCKER-2), 아무도 안 읽는다면 우선순위가 달라진다.
+
+    같은 (사용자, 케이스) 는 **한 번만** 쌓인다. 화면을 오갈 때마다 기록하면
+    "몇 명이 봤는가"가 같은 사람의 반복 조회에 묻힌다.
+
+    관찰용이라 실패해도 사용자 흐름을 막지 않는다 — 항상 200 이다.
+    """
+    case = db.get(Case, case_id)
+    if case is None or not case.is_active:
+        raise _not_found(case_id)
+
+    recorded = analytics.record_once(
+        db, user_id=user.user_id, event=analytics.EXPLANATION_VIEWED, case_id=case.case_id
+    )
+    db.commit()
+    # recorded=false 는 실패가 아니라 "이미 기록돼 있다" 이다.
+    return {"recorded": recorded is not None}
+
+
 @router.get("/{case_id}")
 def get_case(case_id: str, user: CurrentUser, db: DbSession):
     case = db.get(Case, case_id)

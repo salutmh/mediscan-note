@@ -44,6 +44,11 @@ export const submitRoi = (caseId, roi, durationSeconds) =>
   })
 
 // --- 이후 화면용 (5·6) — 아직 화면은 안 만들었지만 계약은 미리 고정 ------------
+// 해설이 실제로 화면에 보였을 때 한 번 알린다 (관찰용 — 실패해도 학습 흐름과 무관).
+// 같은 (사용자, 케이스) 는 서버가 한 번만 기록한다.
+export const markExplanationViewed = (caseId) =>
+  api.post(`/cases/${encodeURIComponent(caseId)}/explanation-viewed`)
+
 export const listWrongNotes = () => api.get('/wrong-notes')
 export const retryWrongNote = (caseId, roi, durationSeconds) =>
   api.post(`/wrong-notes/${encodeURIComponent(caseId)}/retry`, {

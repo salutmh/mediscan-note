@@ -46,6 +46,14 @@ def build_report(events: list[LearningEvent]) -> dict:
 
     durations = [e.duration_seconds for e in graded if e.duration_seconds is not None]
 
+    # 해설 열람. "틀린 뒤에 해설을 실제로 읽는가" 는 콘텐츠에 사람 시간을 쓸 가치가
+    # 있는지를 가르는 지표다 (전문가 소견 작성 우선순위 = BLOCKER-2).
+    # 분모는 **제출까지 간 (사용자, 케이스) 쌍** 이다 — 해설은 채점 뒤에 보이므로
+    # 열어보기만 한 사람을 분모에 넣으면 열람률이 실제보다 낮게 나온다.
+    viewed_pairs = {
+        (e.user_id, e.case_id) for e in events if e.event == analytics.EXPLANATION_VIEWED
+    }
+
     per_case: dict = {}
     for event in graded:
         row = per_case.setdefault(
@@ -76,6 +84,10 @@ def build_report(events: list[LearningEvent]) -> dict:
         "improved_pairs": sum(1 for d in improvements if d > 0),
         "worsened_pairs": sum(1 for d in improvements if d < 0),
         "mean_duration_seconds": _mean(durations),
+        "explanations_viewed": len(viewed_pairs),
+        "submit_to_explanation_rate": (
+            round(len(viewed_pairs & graded_pairs) / len(graded_pairs), 4) if graded_pairs else None
+        ),
         "per_case": {
             case_id: {
                 "attempts": row["attempts"],

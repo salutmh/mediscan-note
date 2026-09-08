@@ -55,6 +55,15 @@ def print_report(report: dict) -> None:
         f"(개선 {report['improved_pairs']} / 하락 {report['worsened_pairs']})"
     )
     print(f"평균 소요시간: {report['mean_duration_seconds']}초")
+    rate = report["submit_to_explanation_rate"]
+    print(
+        "해설 열람: "
+        + (
+            f"{report['explanations_viewed']}건 (제출한 케이스의 {rate * 100:.0f}%)"
+            if rate is not None
+            else "아직 제출 기록이 없습니다"
+        )
+    )
     print()
 
     print("케이스별")
