@@ -226,6 +226,11 @@ class Submission(Base):
     reference_mask_url: Mapped[str | None] = mapped_column(String(255), default=None)
     evaluation_method: Mapped[str] = mapped_column(String(30), default="reference_mask")
     is_provisional: Mapped[bool] = mapped_column(Boolean, default=False)
+    # **제출 시점 스냅샷.** 지금은 쓰는 곳만 있고 읽는 곳이 없다 — 죽은 컬럼처럼 보이지만
+    # 의도적으로 남긴다. 전문가가 나중에 case_findings 를 고치면 케이스의 해설은 바뀌는데,
+    # "이 학습자가 답할 당시 무엇을 보고 있었는지" 는 여기 말고는 남지 않는다.
+    # (교육 콘텐츠가 개정되는 제품이므로 이 구분이 필요하다.)
+    # 화면에 노출할 계획이 생기면 여기서 읽어 쓴다. 지우려면 그 이력을 버린다는 뜻이다.
     explanation: Mapped[dict | None] = mapped_column(JSON, default=None)
     submitted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
 

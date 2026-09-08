@@ -82,8 +82,9 @@ AI 보조 피드백(참고) → 오답 재학습.
 | # | 항목 |
 |---|---|
 | ~~L1~~ | ~~`explanations.py` docstring stale~~ → Phase 4에서 수정 완료 |
-| L2 | `cases.reference_shape` 레거시 컬럼 (근사 채점 전용) |
-| L3 | `frontend/public/icons.svg` — Vite 템플릿 잔재, 어디서도 참조되지 않음 |
+| ~~L2~~ | ~~`cases.reference_shape` 레거시 컬럼~~ → **죽은 코드가 아니다.** mock 케이스에는 기준 마스크가 없어서, 실제 의료영상 없이 채점 화면을 확인하려면 이 경로가 필요하다. production 에서는 기동이 막히므로(M2) 그대로 둔다 |
+| ~~L3~~ | ~~`frontend/public/icons.svg`~~ → 삭제함 (참조 0건 확인) |
+| L5 | `Submission.explanation` 은 쓰기만 하고 읽는 곳이 없다. **의도된 스냅샷**이라 지우지 않는다(전문가가 소견을 개정해도 학습자가 답할 당시 본 내용이 남아야 한다). 다만 아직 어디에도 노출되지 않는다 |
 | L4 | **키보드만으로 ROI 를 그릴 수 없다.** 포인터 자유곡선 입력이라 대체 입력 수단이 필요하다. `tools/browser-verify/a11y-audit.mjs` 는 통과하지만 그 점검은 이 항목을 보지 않는다 |
 
 ---
