@@ -293,6 +293,32 @@
 > `total_slices` 는 원본 volume 의 전체 slice 수다 (등록된 slice 수가 아니다).
 > slice 별 자산은 `case_slices` 에 있으며 2.5D 확장 시 쓴다 (현재 API 로는 내려주지 않는다).
 
+**slice 목록 (v0.6)** — 응답에 다음이 추가된다.
+
+```json
+{
+  "representative_slice": 35,
+  "slices": [
+    { "slice_index": 27, "image_url": "http://localhost:8010/static/cases/VS-SEG-202/slices/slice_027.png" },
+    { "slice_index": 28, "image_url": "..." }
+  ]
+}
+```
+
+> ⚠️ **slice 항목에는 마스크 관련 정보를 절대 넣지 않는다.**
+> 어느 slice 에 기준 마스크가 있는지는 곧 **정답 위치**다. `has_mask` 같은 불리언 하나만 있어도
+> 학습자는 병변이 몇 번 slice 에 있는지 즉시 알게 되고, "찾는" 훈련이 아니라
+> "표시된 곳을 칠하는" 작업이 된다. 기준 마스크는 **채점 결과에서만** 공개된다
+> (`tests/test_case_slices_api.py` 가 이를 고정한다).
+>
+> - `slice_index` 는 **원본 volume 인덱스를 그대로** 쓴다 (0부터 다시 매기지 않는다).
+>   그래야 해설의 slice 번호와 같은 값이 된다.
+> - 목록은 볼륨 전체가 아니라 **병변 주변 등록 범위**만 담는다 (예: 120장 중 18장).
+> - `representative_slice` 는 최상위에만 둔다 — ROI 를 어디에 그려야 하는지 알려주는 값이고,
+>   항목마다 표시하면 "병변이 가장 큰 slice"를 목록에서 바로 읽을 수 있다.
+> - slice 가 없는 단일 영상 케이스는 `slices: []` 다.
+
+
 ### 2-3. POST /api/cases/{case_id}/submit
 
 사용자가 클릭/브러시로 표시한 ROI 제출 → 채점 결과 반환
@@ -751,8 +777,10 @@ WrongNote 는 테이블 없이 `backend/app/repository.py` 에서 계산한다. 
 
 ### 화면 2 — 판독 훈련 (핵심 화면)
 - 구성: MRI 이미지 뷰어 + 브러시/지우개 ROI 입력 도구 + `제출` 버튼
-- 현재는 **대표 slice 1장**만 보여준다. slice 이동 UI 는 `case_slices` 가 준비돼 있으므로
-  API 에 slice 목록을 추가하면 붙일 수 있다 (MVP 범위 밖).
+- **slice 탐색 가능** (v0.6): 등록된 slice 를 좌우로 넘겨 병변 범위를 확인할 수 있다.
+  **ROI 입력·채점은 대표 slice 에서만** 한다 (채점 기준이 대표 slice 기준으로 고정돼 있다).
+  다른 slice 에서는 캔버스가 잠기고 "대표 slice로 이동" 버튼이 나온다.
+  slice 를 넘겨도 **그리던 ROI 는 유지된다**.
 - 상태: 제출 전(입력 가능) → 제출 중(로딩) → 결과 표시(입력 잠금)
 - 연동 API: `GET /api/cases/{id}`, `POST /api/cases/{id}/submit`
 

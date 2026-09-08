@@ -11,7 +11,7 @@ from sqlalchemy import select
 from app import analytics, explanations
 from app.deps import CurrentUser, DbSession
 from app.grading import InvalidRoi, NotGradable, evaluate_submission, is_gradable
-from app.models import Case, Submission
+from app.models import Case, CaseSlice, Submission
 from app.repository import has_matched_case_ids, needs_review_case_ids
 from app.static_files import absolute_url
 
@@ -130,7 +130,33 @@ def get_case(case_id: str, user: CurrentUser, db: DbSession):
         "image_url": absolute_url(case.image_url),
         "image_meta": case.image_meta or {},
         "gradable": is_gradable(case),
+        "representative_slice": case.representative_slice,
+        "slices": _slice_list(db, case),
     }
+
+
+def _slice_list(db, case: Case) -> list[dict]:
+    """학습자에게 내려보내는 slice 목록.
+
+    ==========================================================================
+    **마스크 정보를 절대 포함하지 않는다.**
+    ==========================================================================
+    어느 slice 에 기준 마스크가 있는지는 곧 **정답 위치**다. `has_mask` 같은 불리언
+    하나만 있어도 학습자는 병변이 몇 번 slice 에 있는지 바로 알게 되고, 그러면
+    "찾는" 훈련이 아니라 "표시된 곳을 칠하는" 작업이 된다.
+
+    그래서 여기서는 slice_index 와 image_url 만 준다. 기준 마스크는 채점 결과
+    (화면 3 오버레이)에서만 공개된다.
+    """
+    rows = db.scalars(
+        select(CaseSlice)
+        .where(CaseSlice.case_id == case.case_id)
+        .order_by(CaseSlice.slice_index)
+    ).all()
+    return [
+        {"slice_index": row.slice_index, "image_url": absolute_url(row.image_url)}
+        for row in rows
+    ]
 
 
 @router.post("/{case_id}/submit")

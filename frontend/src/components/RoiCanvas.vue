@@ -14,6 +14,14 @@ import { computed, onMounted, ref, watch } from 'vue'
 
 const props = defineProps({
   imageUrl: { type: String, default: null },
+  /**
+   * 배경 영상이 바뀔 때 그린 ROI 를 지울지.
+   *
+   * 화면 5(업로드 분석)는 **다른 영상으로 교체**하는 것이라 이전 입력을 지워야 한다(true).
+   * 화면 2(판독 훈련)는 같은 케이스의 **다른 slice 를 넘겨보는 것**이라 지우면 안 된다 —
+   * 범위를 확인하러 옆 slice 에 다녀왔더니 칠하던 게 사라지면 작업을 다시 해야 한다.
+   */
+  clearOnImageChange: { type: Boolean, default: true },
   width: { type: Number, default: 512 },
   height: { type: Number, default: 512 },
   disabled: { type: Boolean, default: false },
@@ -68,8 +76,17 @@ onMounted(() => {
   if (!props.tools.includes(tool.value)) tool.value = props.tools[0]
   initCanvases()
 })
-// 이미지가 바뀌면(업로드 교체 등) 캔버스 크기를 다시 잡고 입력을 비운다.
-watch(() => [props.width, props.height, props.imageUrl], initCanvases)
+// 캔버스 버퍼 크기가 달라지면 반드시 다시 잡아야 한다 (입력도 함께 비워진다).
+watch(() => [props.width, props.height], initCanvases)
+
+// 배경 영상만 바뀐 경우. 배경은 <img> 로 그리므로 캔버스를 건드릴 필요가 없다 —
+// clearOnImageChange 가 true 일 때만(업로드 교체) 입력을 비운다.
+watch(
+  () => props.imageUrl,
+  () => {
+    if (props.clearOnImageChange) initCanvases()
+  },
+)
 
 /** 화면 좌표 -> 원본 픽셀 좌표 */
 function toImageCoords(event) {

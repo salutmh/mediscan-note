@@ -24,7 +24,6 @@ const isRetry = computed(() => route.meta.retry === true)
 const caseDetail = ref(null)
 const loadError = ref('')
 const detailMissing = ref(false) // 케이스 상세를 찾지 못해 기본 캔버스로 진행하는 상태
-const slice = ref(0)
 
 const roiCanvas = ref(null)
 const hasInput = ref(false)
@@ -37,10 +36,50 @@ const submittedMaskDataUrl = ref(null)
 const locked = computed(() => phase.value !== 'idle')
 // 기준 마스크가 없는 케이스는 채점할 수 없다 (api-spec v0.4) — 제출 자체를 막는다
 const gradable = computed(() => caseDetail.value?.gradable !== false)
-const meta = computed(() => caseDetail.value?.image_meta ?? {})
+const meta = computed(() => meta_(caseDetail.value))
+function meta_(detail) {
+  return detail?.image_meta ?? {}
+}
 const canvasWidth = computed(() => meta.value.width ?? 512)
 const canvasHeight = computed(() => meta.value.height ?? 512)
-const hasSlices = computed(() => (meta.value.total_slices ?? 1) > 1)
+
+/**
+ * slice 탐색 (v0.6)
+ *
+ * 병변은 여러 slice 에 걸쳐 있다. 한 장만 보여주면 "찾는" 훈련이 아니라
+ * "주어진 그림에서 밝은 덩어리 칠하기"가 된다. 그래서 등록된 slice 를 넘겨볼 수 있게 한다.
+ *
+ * **ROI 입력과 채점은 대표 slice 에서만 한다.** 채점 기준(전문가 GT)이 대표 slice 기준으로
+ * 고정돼 있기 때문이다. 다른 slice 에서는 캔버스를 잠그고 무엇을 해야 하는지 알려준다.
+ * (slice 별 채점은 채점 계약을 바꾸는 일이라 별도 설계가 필요하다 — CLAUDE_HANDOFF 참고)
+ *
+ * 서버는 **어느 slice 에 마스크가 있는지 알려주지 않는다.** 그게 곧 정답 위치다.
+ */
+const slices = computed(() => caseDetail.value?.slices ?? [])
+const hasSlices = computed(() => slices.value.length > 1)
+const sliceCursor = ref(0) // slices 배열의 인덱스 (원본 slice_index 가 아니다)
+
+const currentSlice = computed(() => slices.value[sliceCursor.value] ?? null)
+const representativeSlice = computed(
+  () => caseDetail.value?.representative_slice ?? meta.value.slice_index ?? null,
+)
+const onRepresentative = computed(
+  () => !hasSlices.value || currentSlice.value?.slice_index === representativeSlice.value,
+)
+/** 지금 화면에 그릴 영상. slice 를 넘기면 그 slice 이미지로 바뀐다. */
+const viewerImageUrl = computed(
+  () => currentSlice.value?.image_url ?? caseDetail.value?.image_url ?? null,
+)
+
+function goToRepresentative() {
+  const index = slices.value.findIndex((s) => s.slice_index === representativeSlice.value)
+  if (index >= 0) sliceCursor.value = index
+}
+
+function stepSlice(delta) {
+  const next = sliceCursor.value + delta
+  if (next >= 0 && next < slices.value.length) sliceCursor.value = next
+}
 
 async function load() {
   caseDetail.value = null
@@ -50,7 +89,8 @@ async function load() {
   try {
     const data = await getCase(caseId.value)
     caseDetail.value = data
-    slice.value = data.image_meta?.slice_index ?? 0
+    // 처음에는 대표 slice 를 보여준다 (여기서만 ROI 를 그릴 수 있다)
+    goToRepresentative()
   } catch (e) {
     if (e instanceof ApiError && e.status === 404) {
       // 등록되지 않은 case_id (예: 삭제된 케이스의 오래된 링크). 흐름이 막히지 않게 안내만 띄운다.
@@ -142,24 +182,55 @@ onBeforeRouteUpdate((to) => {
       <div class="viewer-col">
         <RoiCanvas
           ref="roiCanvas"
-          :image-url="caseDetail.image_url"
+          :image-url="viewerImageUrl"
           :width="canvasWidth"
           :height="canvasHeight"
-          :disabled="locked"
+          :disabled="locked || !onRepresentative"
+          :clear-on-image-change="false"
           @change="onRoiChange"
         />
 
         <div v-if="hasSlices" class="slices card">
-          <label>
-            <span class="muted">슬라이스</span>
-            <input type="range" min="0" :max="(meta.total_slices ?? 1) - 1" v-model.number="slice" />
-            <strong class="tnum">slice {{ slice }} / 총 {{ meta.total_slices }}장</strong>
-          </label>
-          <p class="muted">
-            숫자는 <strong>원본 volume 인덱스(0부터)</strong>라 학습 해설의 slice 번호와 같습니다.
-            아직 표시 숫자만 바뀝니다 — 화면에 보이는 것은 대표 slice
-            {{ meta.slice_index }} 한 장이고, GET /api/cases/{id} 가 image_url 한 장만 반환합니다
-            (slice별 이미지는 case_slices 에 등록되어 있습니다).
+          <div class="slice-bar">
+            <button
+              class="sm"
+              :disabled="sliceCursor === 0"
+              aria-label="이전 슬라이스"
+              @click="stepSlice(-1)"
+            >
+              ‹
+            </button>
+            <input
+              type="range"
+              min="0"
+              :max="slices.length - 1"
+              v-model.number="sliceCursor"
+              aria-label="슬라이스 이동"
+            />
+            <button
+              class="sm"
+              :disabled="sliceCursor === slices.length - 1"
+              aria-label="다음 슬라이스"
+              @click="stepSlice(1)"
+            >
+              ›
+            </button>
+            <strong class="tnum slice-label">
+              slice {{ currentSlice?.slice_index }}
+              <span v-if="onRepresentative" class="rep-tag">대표</span>
+            </strong>
+          </div>
+
+          <p v-if="!onRepresentative" class="notice slice-locked">
+            지금은 <strong>slice {{ currentSlice?.slice_index }}</strong> 를 살펴보는 중입니다.
+            표시(ROI) 입력과 채점은 <strong>대표 slice {{ representativeSlice }}</strong> 에서만 합니다.
+            <button class="sm" @click="goToRepresentative">대표 slice로 이동</button>
+          </p>
+          <p v-else class="muted">
+            병변은 여러 slice 에 걸쳐 있습니다. 좌우로 넘겨 범위를 확인한 뒤
+            이 대표 slice 에 표시하세요. 번호는 <strong>원본 volume 인덱스</strong>라 학습 해설의
+            slice 번호와 같습니다 (이 케이스는 병변 주변
+            {{ slices.length }}장이 등록되어 있습니다 / 원본 {{ meta.total_slices }}장).
           </p>
         </div>
       </div>
@@ -274,11 +345,41 @@ onBeforeRouteUpdate((to) => {
   padding: var(--sp-4);
 }
 
-.slices label {
+.slice-bar {
   display: flex;
   align-items: center;
   gap: var(--sp-3);
   font-size: 13.5px;
+}
+
+.slice-bar button {
+  padding: 2px 10px;
+  font-size: 16px;
+  line-height: 1.2;
+}
+
+.slice-label {
+  min-width: 96px;
+  text-align: right;
+}
+
+/* 대표 slice 에서만 ROI 를 그릴 수 있다는 것을 한눈에 */
+.rep-tag {
+  margin-left: 4px;
+  padding: 1px 6px;
+  border-radius: var(--r-full);
+  background: var(--match-bg);
+  border: 1px solid var(--match-line);
+  color: var(--match-ink);
+  font-size: 10.5px;
+  font-weight: 700;
+}
+
+.slice-locked {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
 }
 
 .slices input[type='range'] {

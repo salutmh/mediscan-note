@@ -35,7 +35,7 @@ AI 보조 피드백(참고) → 오답 재학습.
 | 화면 5 | 지어내지 않고 `model_unavailable`, 데모는 flag OFF 기본 | `app/routers/analyze.py:74` |
 | 스키마 | Alembic이 기준, 기동 시 자동 upgrade + 레거시 DB 감지 | `app/db.py:47` |
 | 정적 자산 | 요청 주소 기준 절대 URL 생성 | `app/main.py:32` |
-| 테스트 | **405개 통과** (24개 파일) | `backend/tests/` |
+| 테스트 | **414개 통과** (25개 파일) | `backend/tests/` |
 
 **이미 해결된 것은 다시 만들지 않는다.** 위 항목은 재구현 대상이 아니다.
 
@@ -201,4 +201,9 @@ AI 보조 피드백(참고) → 오답 재학습.
   교차 엔드포인트 불변조건을 `tests/test_case_visibility.py` 로 고정. 테스트 396 → 405.
   부수 수정: 테스트 정리 픽스처가 learning_events/revoked_tokens 를 비우지 않아
   테스트 간 데이터가 누적되고 있었다 (대량 delete 는 ORM cascade 를 타지 않는다).
+- 2026-09-08: **화면 2 slice 탐색 구현** — 동작하지 않던 슬라이더를 실제 뷰어로 교체.
+  `GET /api/cases/{id}` 가 `slices` + `representative_slice` 를 내려보낸다.
+  **마스크 정보는 노출하지 않는다**(정답 위치이므로). ROI·채점은 대표 slice 고정.
+  부수 버그 수정: `RoiCanvas` 가 imageUrl 변경 시 그린 ROI 를 지워, slice 를 넘겨보고
+  돌아오면 작업이 사라졌다 → `clearOnImageChange` 로 분리. 테스트 405 → 414.
 (이후 Phase 완료 시마다 여기에 추가한다)

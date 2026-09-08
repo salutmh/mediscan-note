@@ -81,6 +81,17 @@ class CaseSummary(BaseModel):
     gradable: bool = True
 
 
+class CaseSliceInfo(BaseModel):
+    """학습자에게 보이는 slice 1장.
+
+    **마스크 정보가 없다.** 어느 slice 에 기준 마스크가 있는지는 곧 정답 위치이므로
+    채점 전에는 어떤 형태로도 내려보내지 않는다 (routers/cases.py `_slice_list` 참고).
+    """
+
+    slice_index: int
+    image_url: str
+
+
 class CaseDetail(BaseModel):
     case_id: str
     body_part: str
@@ -88,6 +99,10 @@ class CaseDetail(BaseModel):
     image_url: Optional[str] = None
     image_meta: dict
     gradable: bool = True
+    # 화면·채점에 쓰는 대표 slice (병변 면적이 가장 큰 slice)
+    representative_slice: Optional[int] = None
+    # 병변 주변 slice 목록. 볼륨 전체가 아니라 **등록된 범위**만 들어 있다.
+    slices: list[CaseSliceInfo] = []
 
 
 ContentLevel = Literal["dataset_verified", "literature_based", "expert_reviewed"]
