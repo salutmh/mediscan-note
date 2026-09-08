@@ -10,7 +10,9 @@
 
 ## 현재 상태 (2026.09 기준)
 
-- **기준 커밋 `9383c15`** — MVP 구현 완료, 발표 준비 중. pytest 241 통과 / VS-SEG 6케이스 verify 통과
+- **Closed Beta 준비 단계.** MVP 구현을 마치고 제품 완성도를 올리는 중이다.
+  현재 상태와 다음 작업은 **`docs/CLAUDE_HANDOFF.md` 를 먼저 읽는다** (매 작업마다 갱신된다).
+  배포는 `docs/DEPLOYMENT.md`, 준비 상태는 `docs/RELEASE_READINESS.md`.
 - 팀 구성: 팀원 5명이 부위별로 모델을 각자 담당 (뇌MRI/뇌CT/흉부X-ray/복부CT/무릎)
 - 이 리포는 **서비스(백엔드+프론트) 전용**. 모델 학습·실험 코드는 별도 폴더에서 진행하고, 검증이 끝난 모델만
   `models/<부위>/inference.py` 형태의 가벼운 추론 wrapper로 이 리포에 들어온다. 체크포인트(.pth 등)와
@@ -46,8 +48,13 @@
     모델을 바꾸면 반드시 `alembic revision --autogenerate` 로 마이그레이션을 만든다.
   - 실제 케이스 등록: `python -m scripts.import_cases <manifest>` — 영상·기준마스크·해설을 함께 등록.
     실제 데이터 파일은 커밋하지 않는다 (`backend/data/`, `app/static/cases/` gitignore).
-  - 테스트: pytest **241개**. `cd backend && pytest`.
-    브라우저 E2E 3종은 `tools/browser-verify/` (단위 테스트 아님).
+  - 테스트: 백엔드 pytest **417개** (`cd backend && pytest`) — **SQLite·PostgreSQL 양쪽에서 통과**.
+    프론트 vitest **22개** (`cd frontend && npm test`). 브라우저 E2E 4종은 `tools/browser-verify/`.
+  - 보안: production 에서 `MEDISCAN_SECRET_KEY`/`MEDISCAN_CORS_ORIGINS`/`DATABASE_URL` 이
+    없으면 **기동이 실패한다**. 인증 엔드포인트 rate limit, 로그아웃 시 서버측 토큰 폐기,
+    회원 탈퇴(화면 포함)까지 구현됐다.
+  - 운영: `/admin/cases` 최소 CMS (활성·비활성 / 난이도 / 전문가 소견). 최초 운영자는
+    `scripts/grant_admin.py` 로만 지정한다. 백업은 `scripts/backup_db.py`.
   - 로컬 개발 포트: backend **:8010**, frontend **:5173**. 영상 URL 은 요청 주소 기준으로 생성된다.
 - **실데이터 = 뇌 MRI 전정신경초종(VS-SEG)**. 흉부 X-ray 합성 케이스(CXR-000x)는 파이프라인 검증용
   fixture 였고 **서비스에서 제거**했다 (지금은 테스트 안에서만 만들어 쓴다).
@@ -130,7 +137,7 @@ medscannote/
     alembic/            마이그레이션 — **스키마의 기준은 create_all 이 아니라 마이그레이션이다**
     scripts/            실데이터 파이프라인 CLI (export / 검수 / 자산생성 / 등록 / 점검 / 삭제)
     data/               실데이터 작업 폴더 (gitignore, manifest.example.json 만 커밋)
-  frontend/           Vue 3 + Vite. 화면 0~7 구현 완료
+  frontend/           Vue 3 + Vite. 화면 0~7 + 계정(/account)·운영자(/admin/cases). vitest 22개
   models/
     brain_mri_vs/      전정신경초종 추론 wrapper (inference.py) — **연결됨**(volume 입력,
                        미리 계산한 sidecar 를 참고 정보로만 서비스)

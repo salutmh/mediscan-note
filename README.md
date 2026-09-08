@@ -19,8 +19,17 @@
   기준 마스크가 없는 케이스는 채점하지 않고 422로 거부하며 제출 이력도 남기지 않는다.
 - **일치 / 부분 일치 / 불일치 판정** (`match` / `partial_match` / `mismatch`).
   우리는 의료인이 아니므로 "정답/오답" 같은 확정적 의학 판단으로 읽히는 표현을 쓰지 않는다.
+- **slice 탐색** — 병변 주변 slice 를 넘겨보며 범위를 확인할 수 있다.
+  ROI 입력·채점은 대표 slice 에서만 하고, **어느 slice 에 기준 마스크가 있는지는 알려주지 않는다**
+  (그게 곧 정답 위치다).
+- **공간 피드백** — 점수만 주지 않고 "왜 틀렸는지"를 문장으로 돌려준다
+  (덮은 비율·넘친 정도·중심 거리). **geometry 로 확인되는 것만** 말하고,
+  영상 소견은 전문가가 쓴 `case_findings` 에서만 나온다.
 - **복습노트 · 재도전 · 진행현황** — 학습 상태를 `has_matched`(학습완료) /
   `needs_review`(복습필요) 두 축으로 분리해 관리한다 (두 값은 배타적이지 않다).
+  채점이 끝나면 다음에 무엇을 할지(다음 케이스 / 남은 복습)를 바로 제시한다.
+- **운영자 콘텐츠 관리** — `/admin/cases` 에서 케이스 활성·비활성, 난이도,
+  전문가 소견 등록·회수. 기준 마스크(GT)는 화면에서 바꿀 수 없다.
 - **AI prediction은 채점과 완전히 분리된 참고 정보** — 모델 예측은 `ai_prediction` 필드로만 나가고
   학습자 판정에 일절 관여하지 않는다. 모델이 병변을 전혀 찾지 못한 케이스(VS-SEG-204)에서도
   사용자가 기준대로 칠하면 정상적으로 `match` 가 나온다.
@@ -76,8 +85,10 @@ npm run dev
 ```
 
 - 환경변수는 `backend/.env.example`, `frontend/.env.example` 를 복사해서 채운다.
-  **배포 시 `MEDISCAN_SECRET_KEY` 주입은 필수다** (미설정이면 개발용 고정 키로 기동되며 경고가 뜬다).
 - 첫 실행 시 Alembic 마이그레이션이 자동 적용된다. `DATABASE_URL` 미설정이면 로컬 SQLite를 쓴다.
+- **배포는 `docs/DEPLOYMENT.md` 를 따른다.** `MEDISCAN_ENV=production` 이면
+  `MEDISCAN_SECRET_KEY` / `MEDISCAN_CORS_ORIGINS` / `DATABASE_URL` 이 없을 때 **기동이 실패한다** —
+  잘못 설정된 채 조용히 뜨는 것이 더 위험하기 때문이다.
 - 기본 상태에서는 케이스가 비어 있다. 실제 케이스는 `scripts/import_cases.py` 로만 등록한다
   (데이터가 필요하므로 clone 직후에는 목록이 비어 있는 것이 정상이다).
 
@@ -85,11 +96,13 @@ npm run dev
 
 | 검증 | 결과 |
 |---|---|
-| `cd backend && pytest` | **241 passed** |
-| `cd backend && python -m scripts.verify_cases` | **VS-SEG 6케이스 통과** (등록 상태 + 오래된 예측 sidecar 점검) |
+| `cd backend && pytest` | **417 passed** |
+| 같은 스위트를 PostgreSQL 로 | **417 passed** (`scripts/verify_postgres.py`) |
+| `cd frontend && npm test` | **22 passed** (vitest) |
 | `cd frontend && npm run build` | **통과** |
+| `cd backend && python -m scripts.verify_cases` | **VS-SEG 6케이스 통과** (등록 상태 + 오래된 예측 sidecar 점검) |
 
-브라우저 E2E 스크립트 3종은 `tools/browser-verify/` 에 있다 (단위 테스트가 아닌 수동 검증 자동화).
+브라우저 E2E 스크립트 4종은 `tools/browser-verify/` 에 있다 (단위 테스트가 아닌 실제 Chrome 검증).
 
 ## 저장소 구조
 
@@ -99,12 +112,17 @@ mediscan-note/
 │   ├── app/          라우터 / 채점(grading) / 해설 조립 / 예측 sidecar 로더
 │   ├── alembic/      마이그레이션 — 스키마의 기준
 │   ├── scripts/      실데이터 파이프라인 CLI (export → 검수 → 자산생성 → 등록 → 점검)
-│   └── tests/        pytest 241개
-├── frontend/         Vue 3 + Vite. 화면 0~7
+│   └── tests/        pytest 417개
+├── frontend/         Vue 3 + Vite. 화면 0~7 + 계정·운영자 화면 (vitest 22개)
 ├── models/           부위별 추론 wrapper (+ 새 부위용 _template)
-├── docs/api-spec.md  API 명세 v0.4 — 프론트·백엔드의 유일한 접점
+├── tools/            브라우저 E2E 검증 스크립트
+├── docs/
+│   ├── api-spec.md          API 명세 — 프론트·백엔드의 유일한 접점
+│   ├── DEPLOYMENT.md        배포 런북 (체크리스트·백업·사고 대응)
+│   ├── CONTENT_GUIDELINES.md 콘텐츠 규칙 (AI가 생성 가능·불가한 것)
+│   ├── RELEASE_READINESS.md Closed Beta 준비 상태
+│   └── CLAUDE_HANDOFF.md    작업 인수인계
 ├── CLAUDE.md         프로젝트 브리프 (작업 맥락)
-├── docs/DEPLOYMENT.md 배포 런북 (체크리스트·백업·사고 대응)
 └── review_bundle.md  코드리뷰용 상세 문서 (구현 현황·알려진 리스크)
 ```
 
@@ -115,4 +133,8 @@ mediscan-note/
 2. **화면 5용 단일 이미지 2D 모델** — 확보 전까지 `model_unavailable` 을 유지한다.
 3. **다른 부위 모델 확장** — 뇌CT / 흉부X-ray / 복부CT / 무릎.
    `models/_template/` 을 복사하고 같은 응답 스키마를 지키면 백엔드 수정이 필요 없다.
-4. **배포 하드닝** — `MEDISCAN_SECRET_KEY` 주입, CORS 좁히기, PostgreSQL 전환 검증, SNS 실인증 연동.
+4. **케이스 확장** — 현재 6케이스는 우측 5 / 좌측 1 로 편향돼 있고, AI 미검출 1건은 가장 작은 병변이다.
+   `scripts/analyze_case_candidates.py` 로 후보를 보고 **좌측·소형 병변을 우선** 확보한다.
+5. **남은 배포 항목** — 비밀번호 재설정·이메일 인증(메일 발송 수단 필요), 접속기록 보관 범위,
+   SNS 실인증 연동. 나머지 하드닝(시크릿·CORS·DB 강제, rate limit, 토큰 폐기, 백업, PostgreSQL 검증)은
+   완료됐다 — `docs/RELEASE_READINESS.md` 참고.
