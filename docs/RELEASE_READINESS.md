@@ -35,7 +35,7 @@ AI 보조 피드백(참고) → 오답 재학습.
 | 화면 5 | 지어내지 않고 `model_unavailable`, 데모는 flag OFF 기본 | `app/routers/analyze.py:74` |
 | 스키마 | Alembic이 기준, 기동 시 자동 upgrade + 레거시 DB 감지 | `app/db.py:47` |
 | 정적 자산 | 요청 주소 기준 절대 URL 생성 | `app/main.py:32` |
-| 테스트 | 백엔드 **475개**(SQLite·PostgreSQL 양쪽) + 프론트 **40개** + E2E 4종 | `backend/tests/`, `frontend/src/**/*.test.js` |
+| 테스트 | 백엔드 **544개**(SQLite·PostgreSQL 양쪽) + 프론트 **48개** + E2E 4종 | `backend/tests/`, `frontend/src/**/*.test.js` |
 
 **이미 해결된 것은 다시 만들지 않는다.** 위 항목은 재구현 대상이 아니다.
 
@@ -75,7 +75,7 @@ AI 보조 피드백(참고) → 오답 재학습.
 | ~~M3~~ | ~~난이도 메타데이터 없음~~ → `cases.difficulty` 추가 (Phase 5). **자동 판정하지 않고 전문가 검토 대상**(E2) |
 | ~~M4~~ | ~~모델 평가 도구 없음~~ → `scripts/evaluate_model.py` (검출률·크기 구간별·버전 비교, Phase 7) |
 | M5 | 예측 sidecar 수동 재계산 |
-| M6 | 동시성/부하 미검증. ~~PostgreSQL 실검증 없음~~ → **검증 완료**(scripts/verify_postgres.py, 414 테스트 통과) |
+| M6 | ~~동시성 미검증~~ → **경쟁 조건 2건을 재현해서 고쳤다**(`tests/test_concurrency.py`): 로그아웃 더블클릭 시 IntegrityError → 500, 재설정 코드가 두 번 사용 가능. ~~PostgreSQL 실검증 없음~~ → **검증 완료**(scripts/verify_postgres.py, 544 테스트 통과). **부하 테스트는 여전히 미실시** — Closed Beta 규모에서는 우선순위가 낮다 |
 
 ## 6. Low
 

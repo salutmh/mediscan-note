@@ -107,10 +107,20 @@ def consume(db: Session, email: str, code: str) -> User:
 
     user = db.get(User, row.user_id)
     if user is None or (user.email or "").strip().lower() != (email or "").strip().lower():
-        # 코드는 맞지만 이메일이 다르다 = 남의 코드를 들고 온 경우
+        # 코드는 맞지만 이메일이 다르다 = 남의 코드를 들고 온 경우.
+        # 이때는 코드를 소비하지 않는다 (남의 코드를 태워 없앨 수 있으면 안 된다).
         raise ResetError("재설정 코드가 올바르지 않거나 만료되었습니다.")
 
-    db.delete(row)  # 일회용
+    # **일회용을 여기서 실제로 보장한다.**
+    # 위의 SELECT 와 이 지점 사이에 다른 요청이 같은 코드를 쓸 수 있다. ORM 의
+    # db.delete(row) 는 "내가 읽은 행을 지운다" 라서 두 요청이 나란히 통과했고,
+    # 코드 하나로 비밀번호가 두 번 바뀌었다. 조건부 DELETE 의 rowcount 로 소유권을
+    # 주장한다 — 행 잠금 덕분에 두 번째 요청은 첫 번째가 커밋된 뒤 0건을 보게 된다.
+    claimed = db.execute(
+        delete(PasswordResetCode).where(PasswordResetCode.code_hash == row.code_hash)
+    ).rowcount
+    if not claimed:
+        raise ResetError("재설정 코드가 올바르지 않거나 만료되었습니다.")
     return user
 
 

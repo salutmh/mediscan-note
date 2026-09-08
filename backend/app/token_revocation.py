@@ -21,6 +21,7 @@ import logging
 from datetime import datetime, timezone
 
 from sqlalchemy import delete, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models import RevokedToken
@@ -58,7 +59,16 @@ def revoke(db: Session, payload: dict) -> bool:
             expires_at=_expiry_from_payload(payload),
         )
     )
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        # 같은 토큰으로 로그아웃이 동시에 두 번 들어온 경우(더블클릭, 느린 응답 재시도).
+        # 위의 is_revoked 검사와 여기 사이에 다른 요청이 먼저 넣었다.
+        # jti 가 기본키라 두 번째 INSERT 가 터진다 — 예전에는 이게 그대로 500 이 됐다.
+        # 원하는 결과("이 토큰은 폐기됐다")는 이미 이뤄졌으므로 성공으로 본다.
+        db.rollback()
+        logger.info("동시 로그아웃 — 이미 폐기된 토큰: user=%s", payload.get("sub"))
+        return True
     return True
 
 
