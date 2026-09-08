@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from app import config, inference, logging_config, model_predictions
+from app import config, inference, logging_config, model_predictions, scoring_config
 from app.cors import cors_kwargs, describe as describe_cors
 from app.db import DATABASE_URL, init_db
 from app.rate_limit import RateLimitMiddleware
@@ -23,6 +23,9 @@ async def lifespan(app: FastAPI):
     # 합성 케이스를 이미 넣어버리기 때문이다.
     config.assert_dev_only_flags_off()
     _warn_dev_only_flags()
+    # 채점 임계값이 서로 모순되지 않는지. 잘못되면 등급 하나가 통째로 사라질 수 있는데
+    # 응답 형태는 정상이라 눈치채기 어렵다 — 첫 제출이 아니라 기동 때 막는다.
+    scoring_config.assert_valid()
     # 테이블 생성 + 케이스 시드 (없을 때만). DB 는 DATABASE_URL 로 결정된다 — db.py 참고.
     ensure_dirs()
     init_db()

@@ -16,10 +16,20 @@
 환경변수로도 덮을 수 있게 해 둔 이유: 사용자 테스트에서 여러 값을 시험해 보기 위함이다.
 운영 기본값을 바꾸려면 환경변수가 아니라 이 파일의 기본값을 고친다.
 
+**잘못된 값은 조용히 무시하지 않고 오류로 막는다.** 예전에는 범위를 벗어나거나 읽을 수 없는
+값을 기본값으로 되돌렸는데, 그러면 `MEDISCAN_MATCH_DICE=75`(75%를 의도) 같은 입력이
+조용히 0.60 으로 채점되고 운영자는 0.75 인 줄 안다. 채점 기준이 의도와 다른데 서버는
+겉보기에 정상인 상태가 가장 나쁘다.
+
 변경 이력
 - 2026-09-08: 최초 분리. 값은 기존과 동일(0.60 / 0.15) — 이번 작업에서 의미를 바꾸지 않았다.
+- 2026-09-09: 잘못된 환경변수를 조용히 무시하던 것을 오류로 바꿨다. partial > match 순서
+  뒤집힘도 막는다 (뒤집히면 partial_match 판정이 통째로 도달 불가능해진다).
+  **기본값은 그대로 0.60 / 0.15** — 판정 의미는 바꾸지 않았다.
 """
 import os
+
+from app.config import ConfigError
 
 # Dice 기준 판정 임계값
 DEFAULT_MATCH_DICE = 0.60
@@ -29,23 +39,53 @@ DEFAULT_PARTIAL_DICE = 0.15
 VALIDATION_STATUS = "not_yet_educationally_validated"
 
 
+MATCH_ENV = "MEDISCAN_MATCH_DICE"
+PARTIAL_ENV = "MEDISCAN_PARTIAL_DICE"
+
+
 def _float_env(name: str, default: float) -> float:
+    """Dice 임계값을 읽는다. 값이 이상하면 기본값으로 되돌리지 않고 **막는다**."""
     raw = os.getenv(name, "").strip()
     if not raw:
         return default
     try:
         value = float(raw)
     except ValueError:
-        return default
-    return value if 0.0 <= value <= 1.0 else default
+        raise ConfigError(
+            f"{name} 를 숫자로 읽을 수 없습니다: {raw!r}. "
+            f"Dice 임계값은 0.0~1.0 사이의 소수입니다 (예: {default})."
+        ) from None
+    if not 0.0 <= value <= 1.0:
+        raise ConfigError(
+            f"{name} 가 범위를 벗어났습니다: {value}. "
+            f"Dice 임계값은 0.0~1.0 입니다 — 백분율이 아니라 비율로 적습니다 "
+            f"(75% 는 75 가 아니라 0.75)."
+        )
+    return value
 
 
 def match_dice() -> float:
-    return _float_env("MEDISCAN_MATCH_DICE", DEFAULT_MATCH_DICE)
+    return _float_env(MATCH_ENV, DEFAULT_MATCH_DICE)
 
 
 def partial_dice() -> float:
-    return _float_env("MEDISCAN_PARTIAL_DICE", DEFAULT_PARTIAL_DICE)
+    return _float_env(PARTIAL_ENV, DEFAULT_PARTIAL_DICE)
+
+
+def assert_valid() -> None:
+    """기동 시점 점검. 채점이 처음 일어나는 순간이 아니라 뜰 때 막는다.
+
+    순서가 뒤집히면(partial > match) `partial_match` 판정이 도달 불가능해지고,
+    부분적으로 맞게 그린 학습자가 전부 `mismatch` 를 받는다. 등급 하나가 통째로
+    사라져도 응답 형태는 정상이라 눈치채기 어렵다.
+    """
+    match, partial = match_dice(), partial_dice()
+    if partial > match:
+        raise ConfigError(
+            f"{PARTIAL_ENV}({partial}) 가 {MATCH_ENV}({match}) 보다 큽니다. "
+            "이 상태에서는 partial_match 판정이 나올 수 없어 부분 일치가 전부 "
+            "mismatch 로 채점됩니다. partial <= match 여야 합니다."
+        )
 
 
 def thresholds() -> dict:

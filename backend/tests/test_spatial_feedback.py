@@ -12,6 +12,7 @@ import numpy as np
 import pytest
 
 from app import feedback, scoring_config
+from app.config import ConfigError
 from app.grading import _grade_from_dice
 
 
@@ -195,9 +196,47 @@ def test_thresholds_can_be_overridden_for_user_testing(monkeypatch):
     assert _grade_from_dice(0.80) == "match"
 
 
-def test_invalid_threshold_env_falls_back_to_default(monkeypatch):
-    """오타가 조용히 채점 기준을 무너뜨리면 안 된다."""
+def test_invalid_threshold_env_is_rejected_not_silently_ignored(monkeypatch):
+    """오타가 조용히 채점 기준을 무너뜨리면 안 된다.
+
+    예전에는 기본값으로 되돌렸는데, 그게 바로 "조용히" 다.
+    `MEDISCAN_MATCH_DICE=75`(75%를 의도) 를 넣으면 범위 밖이라 0.60 으로 채점되고
+    운영자는 0.75 인 줄 안다. 되돌리지 말고 막는다.
+    """
     monkeypatch.setenv("MEDISCAN_MATCH_DICE", "매치")
-    assert scoring_config.match_dice() == scoring_config.DEFAULT_MATCH_DICE
-    monkeypatch.setenv("MEDISCAN_MATCH_DICE", "1.5")  # 범위 밖
-    assert scoring_config.match_dice() == scoring_config.DEFAULT_MATCH_DICE
+    with pytest.raises(ConfigError):
+        scoring_config.match_dice()
+
+    monkeypatch.setenv("MEDISCAN_MATCH_DICE", "75")  # 0.75 를 의도한 백분율 오입력
+    with pytest.raises(ConfigError) as exc:
+        scoring_config.match_dice()
+    assert "0.75" in str(exc.value), "무엇을 적어야 하는지 알려줘야 한다"
+
+
+def test_reversed_thresholds_are_rejected(monkeypatch):
+    """partial > match 면 partial_match 판정이 통째로 도달 불가능해진다.
+
+    응답 형태는 멀쩡해서 등급 하나가 사라진 것을 알아채기 어렵다.
+    부분적으로 맞게 그린 학습자가 전부 mismatch 를 받게 된다.
+    """
+    monkeypatch.setenv("MEDISCAN_MATCH_DICE", "0.60")
+    monkeypatch.setenv("MEDISCAN_PARTIAL_DICE", "0.80")
+
+    # 실제로 등급이 사라지는지 먼저 확인한다 (가드가 막는 것이 진짜 문제인지)
+    grades = {_grade_from_dice(d) for d in (0.05, 0.3, 0.5, 0.7, 0.95)}
+    assert "partial_match" not in grades
+
+    with pytest.raises(ConfigError):
+        scoring_config.assert_valid()
+
+
+def test_equal_thresholds_are_allowed(monkeypatch):
+    # partial == match 는 "부분 일치를 쓰지 않는다"는 뜻이라 모순이 아니다.
+    monkeypatch.setenv("MEDISCAN_MATCH_DICE", "0.60")
+    monkeypatch.setenv("MEDISCAN_PARTIAL_DICE", "0.60")
+    scoring_config.assert_valid()
+
+
+def test_default_thresholds_are_self_consistent():
+    # 기본값이 스스로 모순이면 아무도 기동하지 못한다.
+    scoring_config.assert_valid()
