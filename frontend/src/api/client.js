@@ -37,6 +37,19 @@ export function setUnauthorizedHandler(fn) {
   onUnauthorized = fn
 }
 
+const NETWORK_MESSAGE =
+  '서버에 연결하지 못했습니다. 인터넷 연결을 확인한 뒤 다시 시도해 주세요.'
+
+// 개발 빌드에서만 원인을 덧붙인다. 배포 빌드에서는 붙지 않는다.
+function devHint(text) {
+  return import.meta.env.DEV ? ` (개발 정보: ${text})` : ''
+}
+
+function retryAfterMessage(seconds) {
+  const wait = seconds >= 60 ? `${Math.ceil(seconds / 60)}분` : `${Math.ceil(seconds)}초`
+  return `요청이 너무 잦습니다. ${wait} 후에 다시 시도해 주세요.`
+}
+
 function extractCode(data, status) {
   if (data && typeof data === 'object') {
     if (typeof data.code === 'string') return data.code // api-spec.md 공통 에러 포맷
@@ -61,7 +74,12 @@ function extractMessage(data, status) {
     // 422 (pydantic validation) 는 detail 이 배열로 온다
     if (Array.isArray(d) && d.length && d[0]?.msg) return d.map((e) => e.msg).join(', ')
   }
-  return `요청이 실패했습니다 (HTTP ${status}).`
+  // 서버가 설명을 주지 않은 경우. 사용자가 무엇을 할 수 있는지로 갈라서 말한다 —
+  // "HTTP 500" 만 보여주면 다시 시도해도 되는지조차 알 수 없다.
+  if (status >= 500) {
+    return `서버에 일시적인 문제가 발생했습니다. 잠시 후 다시 시도해 주세요.${devHint(`HTTP ${status}`)}`
+  }
+  return `요청을 처리하지 못했습니다.${devHint(`HTTP ${status}`)}`
 }
 
 export async function apiFetch(path, { method = 'GET', body, auth = true, headers = {} } = {}) {
@@ -79,11 +97,10 @@ export async function apiFetch(path, { method = 'GET', body, auth = true, header
       body: body === undefined ? undefined : JSON.stringify(body),
     })
   } catch {
-    throw new ApiError(
-      0,
-      'NETWORK_ERROR',
-      `백엔드(${BASE})에 연결할 수 없습니다. backend 폴더에서 uvicorn app.main:app --reload 가 실행 중인지 확인하세요.`,
-    )
+    // 이 메시지는 **모든 화면의 모든 요청**이 실패할 때 나온다. 예전에는 여기에
+    // "backend 폴더에서 uvicorn ... 이 실행 중인지 확인하세요" 가 들어 있어서,
+    // 학습자에게 실행 방법을 안내하고 있었다. 개발자용 힌트는 개발 빌드에만 붙인다.
+    throw new ApiError(0, 'NETWORK_ERROR', NETWORK_MESSAGE + devHint(`서버(${BASE})에 연결 실패`))
   }
 
   const text = await res.text()
@@ -101,7 +118,14 @@ export async function apiFetch(path, { method = 'GET', body, auth = true, header
       clearToken()
       onUnauthorized?.()
     }
-    throw new ApiError(res.status, extractCode(data, res.status), extractMessage(data, res.status))
+    const code = extractCode(data, res.status)
+    let message = extractMessage(data, res.status)
+    // 서버는 몇 초 뒤에 풀리는지 알고 있다. "잠시 후" 대신 그 값을 그대로 알려준다.
+    if (res.status === 429) {
+      const seconds = Number(res.headers.get('Retry-After'))
+      if (Number.isFinite(seconds) && seconds > 0) message = retryAfterMessage(seconds)
+    }
+    throw new ApiError(res.status, code, message)
   }
   return data
 }
