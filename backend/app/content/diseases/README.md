@@ -30,4 +30,6 @@
 
 ## 현재 상태 (2026-09)
 
-작성된 콘텐츠 없음. VS-SEG 6케이스는 `content_levels: ["dataset_verified"]` 로 동작한다.
+`vestibular_schwannoma.json` 1건 작성 완료. VS-SEG 6케이스는
+`content_levels: ["dataset_verified", "literature_based"]` 로 동작한다.
+(케이스별 소견 `case_findings` 는 전문가 검토 전이라 아직 `null` 이다.)

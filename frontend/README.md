@@ -29,7 +29,7 @@ src/
     ExplanationPanel.vue 화면 4 — explanation 표시
   views/
     LoginView.vue      화면 0 — 로그인 / 회원가입 / SNS 간편가입 + 필수 동의
-    CaseListView.vue   화면 1 — 케이스 목록 (부위 필터 + solved 뱃지)
+    CaseListView.vue   화면 1 — 케이스 목록 (부위 필터 + 학습완료/복습필요/미시도 뱃지)
     ReadingView.vue    화면 2 — 판독 훈련 + 제출 후 화면 3·4. 복습노트 재도전에도 재사용
     WrongNotesView.vue 화면 6 — 복습노트 목록 + 재도전 링크 (파일·라우트명은 API 계약대로 wrong-notes 유지)
     AnalyzeView.vue    화면 5 — 내 영상 업로드 AI 분석 (disclaimer 상단 고정)
@@ -67,5 +67,5 @@ public/            (케이스 영상·마스크는 백엔드가 서빙한다 —
   `brush_mask` 로 고정했다.
 - 화면 5의 `region` 은 스펙(2-6) 그대로 `{ type, points }` 만 보낸다. 모델이 마스크를 필요로 하면
   2-3처럼 `region.mask_png_base64` 를 스펙에 추가해야 한다.
-- 화면 7의 "부위별 일치율"은 제출 이력이 필요해서 지금은 `solved` 기준 해결률만 계산한다.
+- 화면 7의 "부위별 일치율"은 제출 이력이 필요해서 지금은 `has_matched` 기준 학습완료율만 계산한다.
   집계 엔드포인트가 정해지면 이 화면만 교체하면 된다.

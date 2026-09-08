@@ -10,7 +10,7 @@
 
 ## 현재 상태 (2026.09 기준)
 
-- 기획서 완료, 발표 준비 중
+- **기준 커밋 `9383c15`** — MVP 구현 완료, 발표 준비 중. pytest 241 통과 / VS-SEG 6케이스 verify 통과
 - 팀 구성: 팀원 5명이 부위별로 모델을 각자 담당 (뇌MRI/뇌CT/흉부X-ray/복부CT/무릎)
 - 이 리포는 **서비스(백엔드+프론트) 전용**. 모델 학습·실험 코드는 별도 폴더에서 진행하고, 검증이 끝난 모델만
   `models/<부위>/inference.py` 형태의 가벼운 추론 wrapper로 이 리포에 들어온다. 체크포인트(.pth 등)와
@@ -22,7 +22,8 @@
 - 프론트/백엔드 진행 상황:
   - 백엔드: 화면 0~7 이 쓰는 엔드포인트 전부 동작. **DB 연동 완료** (SQLAlchemy, `DATABASE_URL` 로
     로컬 SQLite ↔ PostgreSQL 전환). 비밀번호 해싱(scrypt) + 서명·만료 있는 토큰 + 401/403 강제,
-    사용자별 `solved`·복습노트·제출 이력 저장까지 완료. 자세한 내용은 `backend/README.md`.
+    사용자별 학습 상태(`has_matched`/`needs_review`)·복습노트·제출 이력 저장까지 완료.
+    자세한 내용은 `backend/README.md`.
   - 프론트: Vue 3 + Vite. 화면 0~7 전부 구현, 디자인 토큰(Pretendard, 밝은 임상 톤 + 다크 뷰어) 적용.
     자세한 내용은 `frontend/README.md`.
   - 채점(API 계약 **v0.4**): **전문가 검수 reference mask 기준 Dice/IoU** 로만 평가한다.
@@ -45,7 +46,9 @@
     모델을 바꾸면 반드시 `alembic revision --autogenerate` 로 마이그레이션을 만든다.
   - 실제 케이스 등록: `python -m scripts.import_cases <manifest>` — 영상·기준마스크·해설을 함께 등록.
     실제 데이터 파일은 커밋하지 않는다 (`backend/data/`, `app/static/cases/` gitignore).
-  - 테스트: pytest 220개. `cd backend && pytest`
+  - 테스트: pytest **241개**. `cd backend && pytest`.
+    브라우저 E2E 3종은 `tools/browser-verify/` (단위 테스트 아님).
+  - 로컬 개발 포트: backend **:8010**, frontend **:5173**. 영상 URL 은 요청 주소 기준으로 생성된다.
 - **실데이터 = 뇌 MRI 전정신경초종(VS-SEG)**. 흉부 X-ray 합성 케이스(CXR-000x)는 파이프라인 검증용
   fixture 였고 **서비스에서 제거**했다 (지금은 테스트 안에서만 만들어 쓴다).
   - 등록 완료 6케이스: VS-SEG-202/203/207/211/212(검출 양호) + 204(모델 미검출).
@@ -69,9 +72,12 @@
     **오래된(stale) 예측을 실패로 잡는다.**
   - `MEDISCAN_VS_SEG_ROOT` — 학습 리포 경로. Desktop 기본값은 **로컬 개발용**이며,
     **서비스 런타임은 학습 리포에 의존하지 않는다** (미리 계산된 sidecar 만 읽는다).
-  - **남은 것**: 케이스별 영상 소견 전문가 검토(`case_findings`),
-    화면 5 용 단일 이미지 2D 모델,
-    다른 부위 팀원들이 `models/_template/` 복사해서 추가
+  - **남은 것은 이 네 가지뿐이다**:
+    1. 케이스별 영상 소견 전문가 검토(`case_findings`) — 지금은 null, 검토자·검토일 없이는 등록하지 않는다
+    2. 화면 5 용 단일 이미지 2D 모델 (확보 전까지 `model_unavailable` 유지)
+    3. 다른 부위 확장 — 팀원들이 `models/_template/` 복사해서 추가
+    4. 배포 하드닝 — `MEDISCAN_SECRET_KEY` 주입, CORS 좁히기, PostgreSQL 전환 검증,
+       SNS provider_token 실검증 (현재는 **개발용 예시 로그인**이지 실제 OAuth 가 아니다)
 
 ## 기술 스택
 
@@ -116,7 +122,7 @@ medscannote/
       model_predictions.py 미리 계산된 모델 예측 sidecar 로더
       explanations.py   해설 3층 조립 (case_facts / disease_info / case_findings)
       disease_content.py 질환 문헌 콘텐츠 로더
-      content/diseases/ 질환별 문헌 학습정보 JSON (**git 커밋 대상**, 현재 미작성)
+      content/diseases/ 질환별 문헌 학습정보 JSON (**git 커밋 대상**, 전정신경초종 1건 작성 완료)
       routers/          엔드포인트별 라우터
       static/cases/     실제 케이스 영상·기준 마스크 (gitignore)
       mock_data/        *.json — **테스트 픽스처 전용** 합성 데이터.
@@ -126,7 +132,8 @@ medscannote/
     data/               실데이터 작업 폴더 (gitignore, manifest.example.json 만 커밋)
   frontend/           Vue 3 + Vite. 화면 0~7 구현 완료
   models/
-    brain_mri_vs/      전정신경초종 추론 wrapper (inference.py) — **아직 서비스에 미연결**
+    brain_mri_vs/      전정신경초종 추론 wrapper (inference.py) — **연결됨**(volume 입력,
+                       미리 계산한 sidecar 를 참고 정보로만 서비스)
     _template/         새 부위 추가용 템플릿
     <다른 부위>/        팀원들이 검증 끝나면 같은 패턴으로 추가
   docs/
@@ -138,7 +145,9 @@ medscannote/
 의료영상(민감정보)을 다루는 서비스라, 가입 시 이용약관·개인정보·민감정보 처리·AI 분석 성격 고지·연령 확인
 5개 필수 동의 + 마케팅 수신(선택) 1개를 반드시 받는다. 동의 없이는 계정이 생성되지 않도록 백엔드에서
 강제 검증한다 (`backend/app/routers/auth.py`의 `missing_required()` 체크 참고). 간편가입은 SNS(카카오/구글/네이버)
-+ 이메일 로그인을 함께 지원하고, SNS 최초 가입도 동의 화면을 반드시 거치게 한다. 자세한 내용은
++ 이메일 로그인을 함께 지원하고, SNS 최초 가입도 동의 화면을 반드시 거치게 한다.
+**SNS 는 현재 개발용 예시 로그인이다** — `provider_token` 을 각 사 서버에 검증하지 않으므로
+실제 OAuth 가 아니며, 실서비스 전에 반드시 실검증을 붙여야 한다. 자세한 내용은
 `docs/api-spec.md` 1장 참고.
 
 ## 시작 순서 (권장)
@@ -148,11 +157,13 @@ medscannote/
    이후 모든 API가 로그인 토큰을 요구하므로 화면 0을 가장 먼저 붙여야 다음 화면들을 mock으로도 자연스럽게 이어갈 수 있음.
    그다음 화면 1~4(케이스 목록 → 판독 → 결과비교 → 해설) 순서로 mock API 연결
 3. ~~PostgreSQL 스키마 설계 및 backend DB 연동~~ → **완료** (SQLAlchemy + Alembic 마이그레이션 + 인증)
-4. ~~실제 채점 연결~~ → **완료**. `models/brain_mri_vs/inference.py` 배관 완성 +
-   마스크 Dice 채점 동작. 체크포인트(.pth)만 넣으면 모델 추론으로 자동 전환된다 ← **남은 것은 이것뿐**
-5. ~~복습노트(화면 6), 사용자 영상 AI 분석(화면 5)~~ → **완료**
+4. ~~실제 채점 연결~~ → **완료**. 전문가 검수 reference mask 기준 Dice/IoU 채점 동작.
+   뇌 MRI 모델도 재현 검증 후 연결됐지만 **참고 정보 전용**이다 (채점에 관여하지 않는다)
+5. ~~복습노트(화면 6)~~ → **완료**. 화면 5(사용자 영상 분석)는 **업로드·검증까지만** 완료이고
+   분석은 단일 이미지 2D 모델 확보 전까지 `model_unavailable` 이다
 6. 다른 부위 모델은 `models/_template/inference.py` 를 복사해서 추가 —
    백엔드 코드 수정 불필요 (`models/README.md` 참고)
+7. 배포 하드닝 (시크릿 주입 / CORS / PostgreSQL / SNS 실검증) — `review_bundle.md` 8~9절 참고
 
 ## 참고 문서
 

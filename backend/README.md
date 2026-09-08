@@ -40,7 +40,7 @@ pytest tests/test_isolation.py -v
 | `tests/test_explanation_content.py` | 해설 3층 구조, content_levels 파생, 질환 문헌 콘텐츠 로더 |
 | `tests/test_ai_prediction.py` | 미리 계산된 예측 sidecar, **AI 실패(204)와 채점 독립성**, volume 모델 2D 호출 차단 |
 
-현재 220개. 테스트가 실제로 회귀를 잡는지 변이(mutation)로 확인했다 — 채점 기준을 AI 예측으로
+현재 **241개**. 테스트가 실제로 회귀를 잡는지 변이(mutation)로 확인했다 — 채점 기준을 AI 예측으로
 바꾸거나, fill 보정을 되살리거나, 사용자 격리를 없애면 해당 테스트가 실패한다.
 
 ## DB
@@ -167,8 +167,9 @@ manifest 형식은 `data/manifest.example.json` 참고. 케이스 하나에 영�
 - v0.3 의 평평한 키(`key_findings`, `review_status`, `medical_terms`, `reference`)가 남아 있으면
   **등록이 실패한다** — 조용히 무시되면 옛 해설이 사라진 줄 모른다.
 
-현재 VS-SEG 6케이스는 `content_levels: ["dataset_verified"]` 로 서비스된다
-(문헌 콘텐츠 미작성, 케이스별 소견 미검토).
+현재 VS-SEG 6케이스는 `content_levels: ["dataset_verified", "literature_based"]` 로 서비스된다
+— 데이터에서 계산한 사실과 질환 문헌 학습정보(`content/diseases/vestibular_schwannoma.json`)는 있고,
+**케이스별 소견(`case_findings`)만 비어 있다**(전문가 검토 전이라 `null`).
 
 ### 질환 문헌 학습정보 (`app/content/diseases/`)
 
