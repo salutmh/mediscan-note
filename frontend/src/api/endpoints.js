@@ -35,12 +35,21 @@ export const listCases = (bodyPart) =>
 export const getCase = (caseId) => api.get(`/cases/${encodeURIComponent(caseId)}`)
 
 // 2-3. ROI 제출 -> 채점 결과
-export const submitRoi = (caseId, roi) => api.post(`/cases/${encodeURIComponent(caseId)}/submit`, { roi })
+// duration_seconds 는 **선택**이다. 서버는 없으면 없는 대로 채점한다
+// (운영자 화면의 "평균 소요 시간"이 비어 있을 뿐이다).
+export const submitRoi = (caseId, roi, durationSeconds) =>
+  api.post(`/cases/${encodeURIComponent(caseId)}/submit`, {
+    roi,
+    ...(durationSeconds == null ? {} : { duration_seconds: durationSeconds }),
+  })
 
 // --- 이후 화면용 (5·6) — 아직 화면은 안 만들었지만 계약은 미리 고정 ------------
 export const listWrongNotes = () => api.get('/wrong-notes')
-export const retryWrongNote = (caseId, roi) =>
-  api.post(`/wrong-notes/${encodeURIComponent(caseId)}/retry`, { roi })
+export const retryWrongNote = (caseId, roi, durationSeconds) =>
+  api.post(`/wrong-notes/${encodeURIComponent(caseId)}/retry`, {
+    roi,
+    ...(durationSeconds == null ? {} : { duration_seconds: durationSeconds }),
+  })
 export const analyzeImage = ({ image_base64, region }) => api.post('/analyze', { image_base64, region })
 // 2-6-1. 업로드 분석이 지금 가능한지 **미리** 확인 — 사용자가 헛수고하지 않게 한다
 export const analyzeAvailability = () => api.get('/analyze/availability')

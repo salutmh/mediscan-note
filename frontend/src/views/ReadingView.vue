@@ -14,6 +14,7 @@ import ResultCompare from '../components/ResultCompare.vue'
 import ExplanationPanel from '../components/ExplanationPanel.vue'
 import { ApiError } from '../api/client'
 import { getCase, listCases, listWrongNotes, retryWrongNote, submitRoi } from '../api/endpoints'
+import { useActiveTime } from '../useActiveTime'
 import { bodyPartLabel, diseaseLabel } from '../labels'
 
 const route = useRoute()
@@ -28,6 +29,7 @@ const detailMissing = ref(false) // 케이스 상세를 찾지 못해 기본 캔
 const roiCanvas = ref(null)
 const hasInput = ref(false)
 
+const activeTime = useActiveTime()
 const phase = ref('idle') // 'idle' | 'submitting' | 'done'
 const result = ref(null)
 const submitError = ref('')
@@ -82,6 +84,7 @@ function stepSlice(delta) {
 }
 
 async function load() {
+  activeTime.reset() // 케이스가 바뀌면 시계도 새로 시작한다
   caseDetail.value = null
   loadError.value = ''
   detailMissing.value = false
@@ -136,7 +139,12 @@ async function onSubmit() {
     }
     // 결과 비교 화면에서 내 ROI 를 그대로 겹쳐 보여주기 위해 제출한 마스크를 붙잡아 둔다.
     submittedMaskDataUrl.value = roiCanvas.value.getMaskDataUrl()
-    result.value = isRetry.value ? await retryWrongNote(caseId.value, roi) : await submitRoi(caseId.value, roi)
+    // 이 케이스를 보고 있던 시간. 운영자 화면의 "평균 소요 시간"이 이 값으로 채워진다
+    // (지금까지는 아무도 보내지 않아 항상 비어 있었다).
+    const seconds = activeTime.elapsedSeconds()
+    result.value = isRetry.value
+      ? await retryWrongNote(caseId.value, roi, seconds)
+      : await submitRoi(caseId.value, roi, seconds)
     phase.value = 'done'
     findNextTarget()
   } catch (e) {
@@ -148,6 +156,7 @@ async function onSubmit() {
 function retry() {
   resetSubmission()
   roiCanvas.value?.clear()
+  activeTime.reset() // 재도전은 새로운 시도다 — 앞선 시도의 시간을 얹지 않는다
 }
 
 /**
