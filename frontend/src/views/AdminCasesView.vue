@@ -1,0 +1,389 @@
+<script setup>
+/**
+ * 운영자 화면 — 최소 콘텐츠 관리 (docs/api-spec.md 2-A)
+ *
+ * 목적은 "개발자가 DB·CLI 를 직접 만지지 않고 콘텐츠를 다룰 수 있게" 하는 것이다.
+ * 거대한 CMS 를 만들지 않는다. 여기서 다루는 것은 **운영 메타데이터와 전문가 소견**뿐이다.
+ *
+ * 여기서 못 하는 것 (의도적):
+ *   - 영상·마스크 업로드      등록은 4단계 파이프라인을 거친다 (사람이 검수하는 지점을 없애지 않는다)
+ *   - 기준 마스크(GT) 수정    채점 기준을 화면에서 고치는 경로를 만들지 않는다
+ *   - 케이스 삭제             제출 이력까지 지우는 파괴적 작업이라 CLI 에 둔다. 여기서는 숨김만
+ *
+ * 권한 차단은 **서버가** 한다 (403 ADMIN_REQUIRED). 이 화면의 숨김은 UX 일 뿐이다.
+ */
+import { onMounted, ref } from 'vue'
+import {
+  adminDeleteFindings,
+  adminListCases,
+  adminSaveFindings,
+  adminUpdateCase,
+} from '../api/endpoints'
+
+const cases = ref([])
+const loading = ref(true)
+const error = ref('')
+const notice = ref('')
+const forbidden = ref(false)
+
+// 소견 편집 중인 케이스 (한 번에 하나만)
+const editing = ref(null)
+const form = ref(null)
+const saving = ref(false)
+
+const DIFFICULTIES = [
+  { value: '', label: '미지정' },
+  { value: 'easy', label: '쉬움' },
+  { value: 'medium', label: '보통' },
+  { value: 'hard', label: '어려움' },
+]
+const STATUS_LABEL = {
+  needs_expert_review: '검토 전',
+  in_review: '검토 중',
+  approved: '검토 완료',
+}
+
+async function load() {
+  loading.value = true
+  error.value = ''
+  try {
+    cases.value = (await adminListCases()).cases
+  } catch (e) {
+    if (e.status === 403) forbidden.value = true
+    else error.value = e.message
+  } finally {
+    loading.value = false
+  }
+}
+
+/** 서버 응답으로 해당 행만 교체한다 (전체 재조회보다 깜빡임이 적다) */
+function replaceRow(updated) {
+  const i = cases.value.findIndex((c) => c.case_id === updated.case_id)
+  if (i >= 0) cases.value[i] = { ...cases.value[i], ...updated }
+}
+
+async function patchCase(caseId, patch, message) {
+  error.value = ''
+  notice.value = ''
+  try {
+    replaceRow(await adminUpdateCase(caseId, patch))
+    notice.value = message
+  } catch (e) {
+    error.value = e.message
+  }
+}
+
+const toggleActive = (c) =>
+  patchCase(
+    c.case_id,
+    { is_active: !c.is_active },
+    c.is_active ? `${c.case_id} 을(를) 숨겼습니다.` : `${c.case_id} 을(를) 다시 노출했습니다.`,
+  )
+
+const changeDifficulty = (c, value) =>
+  patchCase(c.case_id, { difficulty: value }, `${c.case_id} 난이도를 변경했습니다.`)
+
+const changeStatus = (c, value) =>
+  patchCase(c.case_id, { findings_status: value }, `${c.case_id} 검토 상태를 변경했습니다.`)
+
+// ---------------------------------------------------------------- 소견 편집
+function startEditing(c) {
+  editing.value = c.case_id
+  notice.value = ''
+  error.value = ''
+  // 새로 쓰는 폼만 제공한다. 기존 소견을 불러와 수정하려면 상세 조회가 필요한데,
+  // 지금 필요한 것은 "없는 소견을 채우는 것"이라 최소 형태로 둔다.
+  form.value = {
+    findings: '',
+    reviewer: '',
+    reviewed_at: new Date().toISOString().slice(0, 10),
+    lesion_location: '',
+    reference_region_note: '',
+    learning_points: '',
+    common_mistakes: '',
+  }
+}
+
+function cancelEditing() {
+  editing.value = null
+  form.value = null
+}
+
+/** 줄바꿈으로 나눈 뒤 빈 줄은 버린다 — 빈 항목을 만들어 넣지 않는다 */
+const toList = (text) =>
+  text
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+
+async function saveFindings(caseId) {
+  saving.value = true
+  error.value = ''
+  try {
+    const payload = {
+      findings: form.value.findings,
+      reviewer: form.value.reviewer,
+      reviewed_at: form.value.reviewed_at,
+      lesion_location: form.value.lesion_location || null,
+      reference_region_note: form.value.reference_region_note || null,
+      learning_points: toList(form.value.learning_points),
+      common_mistakes: toList(form.value.common_mistakes),
+    }
+    await adminSaveFindings(caseId, payload)
+    cancelEditing()
+    await load()
+    notice.value = `${caseId} 소견을 등록했습니다.`
+  } catch (e) {
+    error.value = e.message
+  } finally {
+    saving.value = false
+  }
+}
+
+async function removeFindings(caseId) {
+  error.value = ''
+  try {
+    await adminDeleteFindings(caseId)
+    await load()
+    notice.value = `${caseId} 소견을 회수했습니다.`
+  } catch (e) {
+    error.value = e.message
+  }
+}
+
+onMounted(load)
+</script>
+
+<template>
+  <section class="page">
+    <header class="page-head">
+      <h1>콘텐츠 관리</h1>
+      <p class="muted">
+        운영 메타데이터와 전문가 소견만 다룹니다. 영상·기준 마스크 등록은 파이프라인
+        (<code>scripts/import_cases.py</code>)을 거칩니다.
+      </p>
+    </header>
+
+    <p v-if="forbidden" class="notice error">
+      운영자 권한이 필요합니다. 권한은 서버에서만 부여할 수 있습니다
+      (<code>python -m scripts.grant_admin --email &lt;이메일&gt;</code>).
+    </p>
+
+    <template v-else>
+      <p v-if="error" class="notice error">{{ error }}</p>
+      <p v-if="notice" class="notice ok">{{ notice }}</p>
+      <p v-if="loading" class="muted">불러오는 중…</p>
+
+      <table v-else class="admin-table">
+        <thead>
+          <tr>
+            <th>케이스</th>
+            <th>상태</th>
+            <th>난이도</th>
+            <th>검토 상태</th>
+            <th>제출</th>
+            <th>소견</th>
+          </tr>
+        </thead>
+        <tbody>
+          <template v-for="c in cases" :key="c.case_id">
+            <tr :class="{ inactive: !c.is_active }">
+              <td>
+                <strong>{{ c.case_id }}</strong>
+                <div class="sub muted">{{ c.body_part }} · {{ c.disease }}</div>
+                <div v-if="!c.gradable" class="sub warn">기준 마스크 없음 (채점 불가)</div>
+              </td>
+              <td>
+                <button class="sm" @click="toggleActive(c)">
+                  {{ c.is_active ? '노출 중' : '숨김' }}
+                </button>
+              </td>
+              <td>
+                <select
+                  :value="c.difficulty ?? ''"
+                  @change="changeDifficulty(c, $event.target.value)"
+                >
+                  <option v-for="d in DIFFICULTIES" :key="d.value" :value="d.value">
+                    {{ d.label }}
+                  </option>
+                </select>
+              </td>
+              <td>
+                <select
+                  :value="c.case_findings_status"
+                  :disabled="c.has_case_findings"
+                  @change="changeStatus(c, $event.target.value)"
+                >
+                  <option v-for="(label, value) in STATUS_LABEL" :key="value" :value="value">
+                    {{ label }}
+                  </option>
+                </select>
+              </td>
+              <td class="tnum">{{ c.submission_count }}</td>
+              <td>
+                <button v-if="!c.has_case_findings" class="sm" @click="startEditing(c)">
+                  소견 등록
+                </button>
+                <button v-else class="sm ghost" @click="removeFindings(c.case_id)">회수</button>
+              </td>
+            </tr>
+
+            <tr v-if="editing === c.case_id" class="editor-row">
+              <td colspan="6">
+                <form class="editor" @submit.prevent="saveFindings(c.case_id)">
+                  <p class="editor-note">
+                    <strong>전문가가 작성한 내용만 입력하세요.</strong>
+                    검토자와 검토일은 필수입니다 — 누가 언제 본 내용인지 남지 않는 소견은
+                    등록되지 않습니다.
+                  </p>
+                  <label>
+                    <span>영상 소견 <em>*</em></span>
+                    <textarea v-model="form.findings" rows="3" required></textarea>
+                  </label>
+                  <div class="grid2">
+                    <label>
+                      <span>검토자 <em>*</em></span>
+                      <input v-model="form.reviewer" required />
+                    </label>
+                    <label>
+                      <span>검토일 <em>*</em></span>
+                      <input v-model="form.reviewed_at" type="date" required />
+                    </label>
+                  </div>
+                  <label>
+                    <span>병변 위치</span>
+                    <input v-model="form.lesion_location" />
+                  </label>
+                  <label>
+                    <span>기준 영역 설명</span>
+                    <input v-model="form.reference_region_note" />
+                  </label>
+                  <div class="grid2">
+                    <label>
+                      <span>확인할 점 (한 줄에 하나)</span>
+                      <textarea v-model="form.learning_points" rows="3"></textarea>
+                    </label>
+                    <label>
+                      <span>자주 놓치는 부분 (한 줄에 하나)</span>
+                      <textarea v-model="form.common_mistakes" rows="3"></textarea>
+                    </label>
+                  </div>
+                  <div class="editor-actions">
+                    <button type="submit" :disabled="saving">
+                      {{ saving ? '저장 중…' : '등록' }}
+                    </button>
+                    <button type="button" class="ghost" @click="cancelEditing">취소</button>
+                  </div>
+                </form>
+              </td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+    </template>
+  </section>
+</template>
+
+<style scoped>
+.page {
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: var(--sp-6) var(--sp-4);
+}
+
+.page-head h1 {
+  margin: 0 0 var(--sp-1);
+  font-size: 22px;
+}
+
+.page-head p {
+  margin: 0 0 var(--sp-5);
+  font-size: 13px;
+}
+
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+}
+
+.admin-table th,
+.admin-table td {
+  padding: var(--sp-3);
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.admin-table th {
+  font-size: 12px;
+  color: var(--ink-muted);
+  font-weight: 700;
+}
+
+tr.inactive {
+  opacity: 0.55;
+}
+
+.sub {
+  font-size: 11.5px;
+  margin-top: 2px;
+}
+
+.warn {
+  color: var(--mismatch-ink);
+}
+
+button.sm {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+.editor-row td {
+  background: var(--surface-sunken);
+}
+
+.editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.editor-note {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--ink-secondary);
+}
+
+.editor label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-secondary);
+}
+
+.editor em {
+  color: var(--mismatch-ink);
+  font-style: normal;
+}
+
+.grid2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sp-3);
+}
+
+.editor-actions {
+  display: flex;
+  gap: var(--sp-2);
+}
+
+@media (max-width: 720px) {
+  .grid2 {
+    grid-template-columns: 1fr;
+  }
+}
+</style>

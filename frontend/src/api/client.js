@@ -109,6 +109,10 @@ export async function apiFetch(path, { method = 'GET', body, auth = true, header
 export const api = {
   get: (path, opts) => apiFetch(path, { ...opts, method: 'GET' }),
   post: (path, body, opts) => apiFetch(path, { ...opts, method: 'POST', body }),
+  patch: (path, body, opts) => apiFetch(path, { ...opts, method: 'PATCH', body }),
+  put: (path, body, opts) => apiFetch(path, { ...opts, method: 'PUT', body }),
+  // 본문 없는 DELETE 도 있어서 body 는 선택이다 (회원 탈퇴는 비밀번호를 함께 보낸다)
+  delete: (path, body, opts) => apiFetch(path, { ...opts, method: 'DELETE', body }),
 }
 
 export { BASE as API_BASE }

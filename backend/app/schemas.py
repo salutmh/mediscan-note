@@ -2,8 +2,9 @@
 docs/api-spec.md 의 응답 스키마와 1:1로 대응하는 pydantic 모델.
 스키마를 바꿀 때는 이 파일과 api-spec.md를 함께 갱신한다.
 """
+from datetime import date
 from typing import Literal, Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 
 REQUIRED_CONSENT_KEYS = [
@@ -190,6 +191,74 @@ class ScoringThresholds(BaseModel):
     match_dice: float
     partial_dice: float
     validation_status: str
+
+
+class AdminCaseUpdate(BaseModel):
+    """운영자가 바꿀 수 있는 것 — **운영 메타데이터뿐이다.**
+
+    영상·기준 마스크·해설 본문은 여기 없다. 전문가 GT 를 화면에서 고치는 경로를
+    만들지 않기 위해서다 (docs/CONTENT_GUIDELINES.md 2절).
+    """
+
+    is_active: Optional[bool] = None
+    difficulty: Optional[str] = None       # easy | medium | hard | "" (미지정으로 되돌림)
+    findings_status: Optional[str] = None  # needs_expert_review | in_review | approved
+
+
+class CaseFindingsInput(BaseModel):
+    """전문가 소견 입력. `reviewer` / `reviewed_at` 이 **필수**다.
+
+    누가 언제 본 내용인지 남지 않는 소견은 등록하지 않는다.
+    (필드가 채워졌다는 것만으로 검토를 보증하지는 않는다 — 출처를 필수화하는 장치다.)
+    """
+
+    findings: str
+    reviewer: str
+    reviewed_at: str  # YYYY-MM-DD
+    lesion_location: Optional[str] = None
+    reference_region_note: Optional[str] = None
+    learning_points: list[str] = []
+    common_mistakes: list[str] = []
+    medical_terms: list[MedicalTerm] = []
+    references: list[Reference] = []
+    content_version: Optional[str] = None
+
+    @field_validator("findings", "reviewer", "reviewed_at")
+    @classmethod
+    def _not_blank(cls, value: str) -> str:
+        text = value.strip()
+        if not text:
+            raise ValueError("필수 항목은 비워 둘 수 없습니다.")
+        return text
+
+    @field_validator("reviewed_at")
+    @classmethod
+    def _iso_date(cls, value: str) -> str:
+        try:
+            date.fromisoformat(value)
+        except ValueError as exc:
+            raise ValueError("reviewed_at 은 YYYY-MM-DD 형식이어야 합니다.") from exc
+        return value
+
+    def to_block(self) -> dict:
+        """DB(cases.explanation.case_findings)에 저장할 형태.
+
+        `source` 는 입력값을 믿지 않고 항상 서버가 채운다.
+        빈 항목은 빈 채로 둔다 — 등록 과정에서 내용을 만들어 넣지 않는다.
+        """
+        return {
+            "source": "expert_reviewed",
+            "findings": self.findings,
+            "lesion_location": (self.lesion_location or "").strip() or None,
+            "reference_region_note": (self.reference_region_note or "").strip() or None,
+            "learning_points": [p.strip() for p in self.learning_points if p.strip()],
+            "common_mistakes": [m.strip() for m in self.common_mistakes if m.strip()],
+            "medical_terms": [t.model_dump() for t in self.medical_terms],
+            "references": [r.model_dump() for r in self.references],
+            "reviewer": self.reviewer,
+            "reviewed_at": self.reviewed_at,
+            "content_version": (self.content_version or "").strip() or None,
+        }
 
 
 class Evaluation(BaseModel):

@@ -61,6 +61,11 @@
 | `INVALID_REGION` | 422 | region 형식·좌표 오류 |
 | `PASSWORD_CONFIRMATION_REQUIRED` | 403 | 회원 탈퇴 시 비밀번호 재확인 실패 |
 | `RATE_LIMITED` | 429 | 인증 엔드포인트 요청 수 제한 초과 (`Retry-After` 헤더 참고) |
+| `ADMIN_REQUIRED` | 403 | 운영자 권한 없이 `/api/admin/*` 호출 |
+| `FINDINGS_REQUIRED` | 422 | 소견 내용 없이 `approved` 로 표시하려 함 |
+| `FINDINGS_NOT_FOUND` | 404 | 회수할 소견이 없음 |
+| `INVALID_DIFFICULTY` / `INVALID_FINDINGS_STATUS` | 422 | 허용되지 않은 값 |
+| `NO_CHANGES` | 400 | PATCH 에 변경할 항목이 없음 |
 
 ---
 
@@ -604,6 +609,85 @@
    검사일시, 기관명, 장비 일련번호 등을 제거해야 한다. 픽셀만 지우는 것으로는 부족하고,
    영상 내부에 새겨진(burned-in) 텍스트도 확인해야 한다.
 3. 다중 프레임/시리즈 처리 정책 (슬라이스 선택 UI 포함)
+
+---
+
+## 2-A. 운영자 API (`/api/admin`)
+
+> **일반 사용자는 접근할 수 없다.** 권한 없이 호출하면 로그인 상태여도 **403 `ADMIN_REQUIRED`** 다.
+> 관리자 여부는 DB(`users.is_admin`)만 본다 — 토큰에 담으면 권한을 회수해도 만료까지 남는다.
+> **최초 관리자 지정은 CLI 전용**이다: `python -m scripts.grant_admin --email <이메일>`.
+> 웹에서 스스로 승격하는 경로는 만들지 않는다.
+
+### 여기서 **하지 않는** 것 (의도적)
+
+| 안 하는 것 | 이유 |
+|---|---|
+| 영상·마스크 업로드 | 등록은 4단계 파이프라인(DICOM→npy→육안 검수→PNG→import_cases)을 거친다. 사람이 확인하는 지점을 없애면 검수 안 된 GT 가 들어온다 |
+| 기준 마스크(GT) 수정 | 채점 기준을 화면에서 고치는 경로를 만들지 않는다 |
+| `case_facts` 수정 | 데이터에서 계산된 사실이라 사람이 타이핑하지 않는다 |
+| 케이스 삭제 | 제출 이력까지 지우는 파괴적 작업이라 CLI(`scripts/remove_cases.py`)에 둔다. 화면에서는 **비활성(숨김)**만 가능 |
+
+### 2-A-1. GET /api/admin/cases
+
+운영 목록. `?include_inactive=false` 로 활성만 볼 수 있다(기본은 비활성 포함 — 숨긴 것을 다시 찾아야 하므로).
+
+```json
+{
+  "cases": [
+    {
+      "case_id": "VS-SEG-202", "body_part": "brain_mri", "disease": "vestibular_schwannoma",
+      "is_active": true, "difficulty": null, "gradable": true,
+      "volume_id": "VS-SEG-202/T1", "representative_slice": 35,
+      "slice_count": 16, "submission_count": 12,
+      "content_levels": ["dataset_verified", "literature_based"],
+      "case_findings_status": "needs_expert_review", "has_case_findings": false
+    }
+  ]
+}
+```
+
+### 2-A-2. GET /api/admin/cases/{case_id}
+위 요약 + `explanation` 전체.
+
+### 2-A-3. PATCH /api/admin/cases/{case_id}
+
+운영 메타데이터만 바꾼다. 셋 다 선택이며, 하나도 없으면 400 `NO_CHANGES`.
+
+```json
+{ "is_active": false, "difficulty": "hard", "findings_status": "in_review" }
+```
+
+| 필드 | 값 | 비고 |
+|---|---|---|
+| `is_active` | bool | false 면 학습자 목록·상세·제출에서 **404**. 제출 이력은 남는다 |
+| `difficulty` | `easy`/`medium`/`hard`/`""` | `""` 는 미지정으로 되돌림. **자동 판정하지 않는다**(전문가 검토 대상) |
+| `findings_status` | `needs_expert_review`/`in_review`/`approved` | |
+
+> **소견 내용 없이 `approved` 로 올릴 수 없다** — 422 `FINDINGS_REQUIRED`.
+> 상태만 올려서 "검토된 것처럼" 보이게 하는 경로를 막는다.
+
+### 2-A-4. PUT /api/admin/cases/{case_id}/findings
+
+전문가 소견 등록/수정. 성공하면 `findings_status` 가 자동으로 `approved` 가 된다.
+
+```json
+{
+  "findings": "...", "reviewer": "검토자명", "reviewed_at": "2026-09-08",
+  "lesion_location": "...", "reference_region_note": "...",
+  "learning_points": ["..."], "common_mistakes": ["..."],
+  "medical_terms": [], "references": [], "content_version": "vs-202-2026-09-08"
+}
+```
+
+- `findings` / `reviewer` / `reviewed_at` **필수** (공백만 있으면 422, 날짜는 `YYYY-MM-DD`).
+- `source` 는 입력값을 믿지 않고 항상 서버가 `expert_reviewed` 로 채운다.
+- 빈 항목은 빈 채로 저장된다 — 등록 과정에서 내용을 만들어 넣지 않는다.
+
+### 2-A-5. DELETE /api/admin/cases/{case_id}/findings
+
+잘못 등록한 소견 회수. `findings_status` 가 `needs_expert_review` 로 돌아간다.
+등록된 소견이 없으면 404 `FINDINGS_NOT_FOUND`.
 
 ---
 

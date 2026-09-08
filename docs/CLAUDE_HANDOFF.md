@@ -12,9 +12,9 @@
 | 최종 갱신 | 2026-09-08 |
 | 시작 커밋 | `ef56005` (docs: add public project README) |
 | 현재 브랜치 | `main` (origin/main과 동기) |
-| 현재 Phase | **Phase 5 — 최소 Admin CMS** |
-| STATUS | `NOT_STARTED` (Phase 4까지 DONE) |
-| 마지막 전체 테스트 | **307 passed** (Phase 4 완료 시점) |
+| 현재 Phase | **Phase 6 — 콘텐츠 확장 준비** |
+| STATUS | `NOT_STARTED` (Phase 5까지 DONE) |
+| 마지막 전체 테스트 | **339 passed** (Phase 5 완료 시점) |
 
 ---
 
@@ -42,8 +42,8 @@
 | 2 | Production Security Hardening (SECRET_KEY/CORS/rate limit/탈퇴/로깅) | **DONE** |
 | 3 | 학습 피드백 엔진 (spatial feedback + threshold config) | **DONE** |
 | 4 | `case_findings` 운영 구조 | **DONE** (구조만 — 내용은 전문가 대기) |
-| 5 | 최소 Admin CMS | **NEXT** |
-| 6 | 콘텐츠 확장 준비 (케이스 후보 분석 도구) | NOT_STARTED |
+| 5 | 최소 Admin CMS | **DONE** |
+| 6 | 콘텐츠 확장 준비 (케이스 후보 분석 도구) | **NEXT** |
 | 7 | 모델 평가 개선 | NOT_STARTED |
 | 8 | 사용자 테스트 이벤트 로그 | NOT_STARTED |
 
@@ -116,17 +116,38 @@
   `verify_cases.py` / `remove_cases.py` 에 `run_migrations()` 를 추가해 `import_cases` 와 맞췄다.
   **앞으로 DB 를 읽는 스크립트를 만들면 같은 처리를 넣을 것.**
 
+### Phase 5 — 최소 Admin CMS (DONE)
+
+| 항목 | 구현 | 파일 |
+|---|---|---|
+| 권한 | `users.is_admin` + `current_admin` 의존성(403 `ADMIN_REQUIRED`). **토큰에 담지 않고 DB 만 본다** — 담으면 권한 회수 후에도 만료까지 관리자로 남는다 | `app/deps.py` |
+| 최초 지정 | CLI 전용 `python -m scripts.grant_admin --email <이메일>`. 웹 승격 경로 없음 | `scripts/grant_admin.py` |
+| 운영 API | 목록/상세/PATCH(활성·난이도·검토상태) / PUT·DELETE 소견 | `app/routers/admin.py` |
+| 케이스 숨김 | `cases.is_active`. 학습자 목록·상세·제출에서 404. **삭제가 아니라 숨김** — 제출 이력은 남는다 | `app/routers/cases.py` |
+| 난이도 | `cases.difficulty` (easy/medium/hard/null). **자동 판정하지 않는다** | `app/models.py` |
+| 화면 | 표 하나짜리 최소 운영 화면 `/admin/cases` | `frontend/src/views/AdminCasesView.vue` |
+
+**설계 메모 (다음 세션이 알아야 할 것)**
+- **admin API 로 GT(기준 마스크)·case_facts·영상을 바꿀 수 없다.** 의도적이다.
+  `test_admin_cannot_change_reference_mask` / `test_admin_cannot_overwrite_case_facts_via_findings` 가 고정한다.
+- **소견 없이 `approved` 로 올릴 수 없다** (422 `FINDINGS_REQUIRED`). 상태만 올려
+  "검토된 것처럼" 보이게 하는 경로를 막는다.
+- 권한 격리 테스트는 `ADMIN_ENDPOINTS` 목록을 parametrize 한다.
+  **admin 엔드포인트를 추가하면 이 목록에도 추가할 것** — 그래야 비로그인/일반 사용자 차단이 자동 검증된다.
+- 프론트 라우트를 숨기지 않았다. 프론트 숨김은 권한이 아니고, 서버가 403 을 주면
+  화면이 "운영자 권한이 필요합니다"를 그대로 보여주는 편이 덜 혼란스럽다.
+
 ---
 
 ## 4. 현재 진행 중인 작업
 
-없음 — Phase 4 까지 완료·커밋됨. Phase 5 부터 시작하면 된다.
+없음 — Phase 5 까지 완료·커밋됨. Phase 6 부터 시작하면 된다.
 
 ---
 
 ## 5. 아직 하지 않은 작업
 
-- Phase 5 ~ Phase 8
+- Phase 6 ~ Phase 8
 - Phase 2 범위 밖으로 남긴 것: H4 서버측 토큰 폐기, H5 이메일 인증·비밀번호 재설정
 - **프론트 탈퇴 UI 미구현** (API 만 완성). Closed Beta 전에 화면이 필요하다.
 
@@ -146,7 +167,9 @@
 
 ## 7. Migration 여부
 
-**Phase 4에서 1건 추가**: `e81bbce560b5` (cases.findings_status) — **추가 전용, 데이터 파괴 없음**.
+마이그레이션 2건 추가 (**둘 다 추가 전용, 데이터 파괴 없음**):
+- `e81bbce560b5` cases.findings_status (Phase 4)
+- `e93378ca7e48` users.is_admin, cases.is_active, cases.difficulty (Phase 5)
 스키마 변경 시 반드시:
 ```
 cd backend && alembic revision --autogenerate -m "<설명>"
@@ -159,6 +182,8 @@ cd backend && alembic revision --autogenerate -m "<설명>"
 
 | 시점 | 명령 | 결과 |
 |---|---|---|
+| Phase 5 | `cd backend && pytest` | **339 passed** |
+| Phase 5 | `verify_cases` / `npm run build` | 6케이스 통과 / 통과 |
 | Phase 4 | `cd backend && pytest` | **307 passed** |
 | Phase 4 | `verify_cases` / `npm run build` | 6케이스 통과 / 통과 |
 | Phase 3 | `cd backend && pytest` | **292 passed** |
@@ -187,16 +212,18 @@ cd backend && alembic revision --autogenerate -m "<설명>"
 
 ## 13. NEXT STEP — 다음 세션이 가장 먼저 할 일
 
-> **Phase 5 — 최소 Admin CMS**부터 시작한다. 거대한 CMS 를 만들지 않는다.
-> - [x] Phase 1~4 완료. 다시 만들지 말 것.
-> - [ ] 관리자 권한: `users.is_admin` 컬럼 + 추가 전용 마이그레이션 + `require_admin` 의존성.
->       **일반 사용자는 절대 접근 불가**여야 하고, 이를 테스트로 고정할 것
-> - [ ] `/api/admin/cases` 목록·상세·수정(활성/비활성, difficulty, findings_status)
-> - [ ] `case_findings` 입력/수정 엔드포인트 — `reviewer`/`reviewed_at` 없으면 거부
-> - [ ] 케이스 활성/비활성: `cases.is_active` 추가 후 `GET /api/cases` 가 비활성을 숨기도록
->       (기존 학습 흐름·제출 이력은 건드리지 않는다)
-> - [ ] 최초 관리자 지정 방법은 **CLI 스크립트**로 (웹에서 스스로 승격하는 경로를 만들지 않는다)
-> - [ ] 관리자 화면은 최소한으로. 우선순위는 API + 권한 격리 테스트
+> **Phase 6 — 콘텐츠 확장 준비**부터 시작한다.
+> - [x] Phase 1~5 완료. 다시 만들지 말 것.
+> - [ ] `scripts/analyze_case_candidates.py`: VS-SEG export 에서 케이스 후보를 뽑아
+>       **객관적 metadata 만** 계산 — left/right, lesion voxel/area, small/large,
+>       AI 검출 성공·실패, GT/prediction 불일치, case-level Dice
+> - [ ] **의료적 난이도를 자동 확정하지 않는다.** size·model performance 같은 계산값만 내고
+>       difficulty 는 전문가 검토 대상으로 남긴다 (CONTENT_GUIDELINES 6절)
+> - [ ] 출력은 사람이 검토할 수 있는 표/JSON. **DB 를 자동으로 바꾸지 않는다**
+> - [ ] 이어서 Phase 7(모델 평가: mean Dice / 검출률 / FN / lesion size별 / 버전 비교),
+>       Phase 8(학습 이벤트 로그 — 개인정보 최소 수집)
+> - [ ] 남은 High: H4 서버측 토큰 폐기, H5 이메일 인증·비밀번호 재설정,
+>       **프론트 탈퇴 UI**(API 만 있고 화면이 없다)
 
 ---
 

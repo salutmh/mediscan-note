@@ -9,7 +9,7 @@ from app.cors import cors_kwargs, describe as describe_cors
 from app.db import DATABASE_URL, init_db
 from app.rate_limit import RateLimitMiddleware
 from app.static_files import STATIC_DIR, STATIC_URL_PREFIX, ensure_dirs, set_request_base
-from app.routers import analyze, auth, cases, consents, wrong_notes
+from app.routers import admin, analyze, auth, cases, consents, wrong_notes
 
 
 @asynccontextmanager
@@ -54,6 +54,7 @@ app.include_router(consents.router)
 app.include_router(cases.router)
 app.include_router(wrong_notes.router)
 app.include_router(analyze.router)
+app.include_router(admin.router)
 
 
 @app.get("/health")

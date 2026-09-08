@@ -41,5 +41,21 @@ def current_user(
     return user
 
 
+def current_admin(user: Annotated[User, Depends(current_user)]) -> User:
+    """운영자 전용 엔드포인트 가드.
+
+    권한이 없으면 **403** 이다(401 아님) — 로그인은 되어 있으나 권한이 없는 상태이므로.
+    관리자 여부는 DB 의 users.is_admin 만 본다. 토큰에 담지 않는 이유는,
+    담으면 권한을 회수해도 기존 토큰이 만료될 때까지 관리자로 남기 때문이다.
+    """
+    if not user.is_admin:
+        raise HTTPException(
+            status_code=403,
+            detail={"error": True, "code": "ADMIN_REQUIRED", "message": "운영자 권한이 필요합니다."},
+        )
+    return user
+
+
 CurrentUser = Annotated[User, Depends(current_user)]
+CurrentAdmin = Annotated[User, Depends(current_admin)]
 DbSession = Annotated[Session, Depends(get_db)]

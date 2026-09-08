@@ -38,3 +38,18 @@ export const listWrongNotes = () => api.get('/wrong-notes')
 export const retryWrongNote = (caseId, roi) =>
   api.post(`/wrong-notes/${encodeURIComponent(caseId)}/retry`, { roi })
 export const analyzeImage = ({ image_base64, region }) => api.post('/analyze', { image_base64, region })
+
+// 1-4-1. 회원 탈퇴 — 되돌릴 수 없다. 이메일 계정은 비밀번호 재확인이 필요하다.
+export const deleteAccount = (password) => api.delete('/auth/me', password ? { password } : undefined)
+
+// --- 운영자 API (/api/admin) ------------------------------------------------
+// 일반 사용자가 호출하면 403 ADMIN_REQUIRED 가 온다. 화면에서도 숨기지만,
+// 실제 차단은 서버가 한다 (프론트 숨김은 UX 이지 권한이 아니다).
+export const adminListCases = () => api.get('/admin/cases')
+export const adminGetCase = (caseId) => api.get(`/admin/cases/${encodeURIComponent(caseId)}`)
+export const adminUpdateCase = (caseId, patch) =>
+  api.patch(`/admin/cases/${encodeURIComponent(caseId)}`, patch)
+export const adminSaveFindings = (caseId, findings) =>
+  api.put(`/admin/cases/${encodeURIComponent(caseId)}/findings`, findings)
+export const adminDeleteFindings = (caseId) =>
+  api.delete(`/admin/cases/${encodeURIComponent(caseId)}/findings`)

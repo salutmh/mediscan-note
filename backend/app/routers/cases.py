@@ -71,7 +71,9 @@ def grade_and_store(case: Case, roi: dict, user, db) -> dict:
 
 @router.get("")
 def list_cases(user: CurrentUser, db: DbSession, body_part: str | None = None):
-    stmt = select(Case).order_by(Case.case_id)
+    # 비활성 케이스는 학습자에게 보이지 않는다 (운영자가 숨긴 것).
+    # 숨김일 뿐 삭제가 아니라서 이미 쌓인 제출 이력은 그대로 남는다.
+    stmt = select(Case).where(Case.is_active.is_(True)).order_by(Case.case_id)
     if body_part:
         stmt = stmt.where(Case.body_part == body_part)
     cases = db.scalars(stmt).all()
@@ -97,7 +99,9 @@ def list_cases(user: CurrentUser, db: DbSession, body_part: str | None = None):
 @router.get("/{case_id}")
 def get_case(case_id: str, user: CurrentUser, db: DbSession):
     case = db.get(Case, case_id)
-    if case is None:
+    # 숨긴 케이스는 직접 URL 로 들어와도 열리지 않아야 한다.
+    # 존재를 알려줄 이유가 없으므로 404 로 통일한다.
+    if case is None or not case.is_active:
         raise _not_found(case_id)
     return {
         "case_id": case.case_id,
@@ -112,6 +116,6 @@ def get_case(case_id: str, user: CurrentUser, db: DbSession):
 @router.post("/{case_id}/submit")
 def submit_case(case_id: str, payload: dict, user: CurrentUser, db: DbSession):
     case = db.get(Case, case_id)
-    if case is None:
+    if case is None or not case.is_active:
         raise _not_found(case_id)
     return grade_and_store(case, _extract_roi(payload), user, db)

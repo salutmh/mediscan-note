@@ -27,6 +27,9 @@ class User(Base):
     nickname: Mapped[str] = mapped_column(String(60))
     provider: Mapped[str | None] = mapped_column(String(20), default=None)  # kakao | google | naver
     provider_subject: Mapped[str | None] = mapped_column(String(255), default=None)
+    # 운영자 권한. **웹에서 스스로 올릴 수 있는 경로를 만들지 않는다** —
+    # 최초 지정은 CLI(scripts/grant_admin.py)로만 한다.
+    is_admin: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     consents: Mapped[list["Consent"]] = relationship(back_populates="user", cascade="all, delete-orphan")
@@ -86,6 +89,12 @@ class Case(Base):
     findings_status: Mapped[str] = mapped_column(
         String(30), default="needs_expert_review", server_default="needs_expert_review"
     )
+    # 학습자에게 노출할지 여부. 비활성 케이스는 목록·상세에서 숨긴다.
+    # **삭제가 아니라 숨김이다** — 이미 쌓인 제출 이력은 그대로 남는다.
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
+    # 난이도. **전문가 검토 대상**이라 자동으로 채우지 않는다 (CONTENT_GUIDELINES 참고).
+    # easy | medium | hard | null(미지정)
+    difficulty: Mapped[str | None] = mapped_column(String(10), default=None)
 
     submissions: Mapped[list["Submission"]] = relationship(back_populates="case")
     slices: Mapped[list["CaseSlice"]] = relationship(
