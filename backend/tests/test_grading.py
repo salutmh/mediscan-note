@@ -81,7 +81,14 @@ def test_response_uses_reference_mask_contract(user_a):
 
     assert body["case_id"] == CASE_ID
     assert body["reference_mask_url"].endswith("_mask.png")
-    assert body["evaluation"] == {"method": "reference_mask", "is_provisional": False}
+    assert body["evaluation"]["method"] == "reference_mask"
+    assert body["evaluation"]["is_provisional"] is False
+    # v0.5: 어떤 임계값으로 판정했는지와 그 검증 상태를 함께 내려보낸다.
+    # (0.60/0.15 가 확정된 의학 기준처럼 읽히면 안 되므로 상태를 응답에 남긴다)
+    thresholds = body["evaluation"]["thresholds"]
+    assert thresholds["validation_status"] == "not_yet_educationally_validated"
+    assert set(thresholds) == {"match_dice", "partial_dice", "validation_status"}
+    assert set(body["evaluation"]) == {"method", "is_provisional", "thresholds"}
     assert body["ai_prediction"] is None  # 체크포인트가 없으므로 참고 정보도 없다
     assert "ai_mask_url" not in body, "v0.2 필드가 남아 있으면 안 된다"
     assert "model_version" not in body, "채점 응답의 최상위 model_version 은 v0.3 에서 제거됐다"
@@ -267,4 +274,7 @@ def test_approx_grading_is_marked_provisional_when_enabled(
     res = user_a.post(f"/api/cases/{case_without_reference}/submit", json={"roi": roi_match})
     assert res.status_code == 200
     body = res.json()
-    assert body["evaluation"] == {"method": "coordinate_approx", "is_provisional": True}
+    assert body["evaluation"]["method"] == "coordinate_approx"
+    assert body["evaluation"]["is_provisional"] is True
+    # 좌표 근사에는 마스크가 없어 geometry 피드백을 만들 수 없다 — 지어내지 않고 null 이다
+    assert body["spatial_feedback"] is None

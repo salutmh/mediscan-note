@@ -12,9 +12,9 @@
 | 최종 갱신 | 2026-09-08 |
 | 시작 커밋 | `ef56005` (docs: add public project README) |
 | 현재 브랜치 | `main` (origin/main과 동기) |
-| 현재 Phase | **Phase 3 — 학습 피드백 엔진** |
-| STATUS | `IN_PROGRESS` |
-| 마지막 전체 테스트 | **270 passed** (Phase 2 완료 시점) |
+| 현재 Phase | **Phase 4 — case_findings 운영 구조** |
+| STATUS | `NOT_STARTED` (Phase 3까지 DONE) |
+| 마지막 전체 테스트 | **292 passed** (Phase 3 완료 시점) |
 
 ---
 
@@ -40,8 +40,8 @@
 |---|---|---|
 | 1 | repository 전체 점검 → `docs/RELEASE_READINESS.md` | **DONE** |
 | 2 | Production Security Hardening (SECRET_KEY/CORS/rate limit/탈퇴/로깅) | **DONE** |
-| 3 | 학습 피드백 엔진 (spatial feedback + threshold config) | **IN_PROGRESS** |
-| 4 | `case_findings` 운영 구조 | NOT_STARTED |
+| 3 | 학습 피드백 엔진 (spatial feedback + threshold config) | **DONE** |
+| 4 | `case_findings` 운영 구조 | **NEXT** |
 | 5 | 최소 Admin CMS | NOT_STARTED |
 | 6 | 콘텐츠 확장 준비 (케이스 후보 분석 도구) | NOT_STARTED |
 | 7 | 모델 평가 개선 | NOT_STARTED |
@@ -76,20 +76,36 @@
   이게 없으면 앞 테스트의 로그인 시도가 뒤 테스트 한도를 깎아 **순서 의존 실패**가 난다.
 - 탈퇴 삭제 범위는 `app/account.py::delete_account` **한 함수**에 모여 있다 (BLOCKER-3 대비).
 
+### Phase 3 — 학습 피드백 엔진 (DONE)
+
+| 항목 | 구현 | 파일 |
+|---|---|---|
+| H1 spatial feedback | 겹침·면적·중심에서 gt_coverage(recall) / user_precision / area_ratio / over·under_segmentation / centroid distance(정규화 포함) 계산 → 교육 문구 생성 | `app/feedback.py`(신규) |
+| H6 임계값 config | `MATCH_DICE`/`PARTIAL_DICE` 를 `scoring_config` 로 분리. 응답 `evaluation.thresholds` 에 값 + `validation_status` 노출 | `app/scoring_config.py`(신규) |
+| 계약 | `EvaluationResult.spatial_feedback` 추가(계약 v0.5), api-spec.md 2-3 동시 갱신 | `app/schemas.py`, `docs/api-spec.md` |
+| 화면 | 화면 3에 "표시한 영역 분석" 블록. 서버 문구를 그대로 쓰고 프론트는 색만 나눈다 | `frontend/src/components/ResultCompare.vue` |
+
+**설계 메모 (다음 세션이 알아야 할 것)**
+- **`spatial_feedback` 은 채점에 관여하지 않는다.** grade 는 여전히 Dice 임계값만 본다.
+  테스트 `test_feedback_does_not_change_grade` 가 이를 고정한다.
+- **의료 어휘 금지가 테스트로 강제된다** (`test_messages_never_contain_medical_claims`).
+  문구를 추가할 때 "내이도/조영/종괴/진단..." 류 단어가 들어가면 실패한다. 이건 의도된 가드다.
+- 중심 거리는 **기준 마스크 등가반지름으로 정규화**한다. 작은 병변의 10px 와 큰 병변의 10px 는
+  학습적으로 다른 이야기이기 때문이다.
+- 좌표 근사 채점(개발 전용)에는 마스크가 없어 `spatial_feedback: null` 이다. 지어내지 않는다.
+- 프론트는 서버 문구를 **그대로** 출력한다. 화면에서 의료적 해석을 덧붙이지 않기 위함이다.
+
 ---
 
 ## 4. 현재 진행 중인 작업
 
-**Phase 3 — 학습 피드백 엔진**
-- 목표: 사용자가 "왜 틀렸는지" 알 수 있게 geometry 기반 spatial feedback 추가.
-- 절대 규칙: **geometry 로 알 수 있는 것만** 자동 생성. 내이도 침범·조영증강·종괴 성상 등
-  의료 소견은 절대 추론하지 않는다 (그건 `case_findings` 자리).
+없음 — Phase 3 까지 완료·커밋됨. Phase 4 부터 시작하면 된다.
 
 ---
 
 ## 5. 아직 하지 않은 작업
 
-- Phase 3(진행 중) ~ Phase 8
+- Phase 4 ~ Phase 8
 - Phase 2 범위 밖으로 남긴 것: H4 서버측 토큰 폐기, H5 이메일 인증·비밀번호 재설정
 - **프론트 탈퇴 UI 미구현** (API 만 완성). Closed Beta 전에 화면이 필요하다.
 
@@ -121,6 +137,9 @@ cd backend && alembic revision --autogenerate -m "<설명>"
 
 | 시점 | 명령 | 결과 |
 |---|---|---|
+| Phase 3 | `cd backend && pytest` | **292 passed** |
+| Phase 3 | `cd frontend && npm run build` | 통과 |
+| Phase 3 | `cd backend && python -m scripts.verify_cases` | 6케이스 통과 |
 | Phase 2 | `cd backend && pytest` | **270 passed** |
 | Phase 1 | `cd backend && pytest` | **241 passed** |
 | Phase 1 | `cd backend && python -m scripts.verify_cases` | 6케이스 통과 |
@@ -144,15 +163,17 @@ cd backend && alembic revision --autogenerate -m "<설명>"
 
 ## 13. NEXT STEP — 다음 세션이 가장 먼저 할 일
 
-> **Phase 3 — 학습 피드백 엔진**을 이어서 진행한다.
-> - [x] Phase 2 완료 (C1~C4). 다시 만들지 말 것.
-> - [ ] `app/feedback.py` 신설: GT coverage(recall) / user precision / centroid distance /
->       over·under-segmentation 계산. **기존 `masks.dice_iou` 와 `grading.evaluate_submission`
->       의 동작을 바꾸지 않고 값만 추가한다.**
-> - [ ] 채점 임계값을 `app/scoring_config.py` 로 분리 (`not yet educationally validated` 명시)
-> - [ ] 응답에 `spatial_feedback` 추가 (`EvaluationResult` 스키마 + api-spec.md 동시 갱신)
-> - [ ] 프론트 `ResultCompare.vue` 에 교육적 문구로 표시
-> - [ ] 회귀 확인: `pytest tests/test_grading.py tests/test_ai_prediction.py` 가 그대로 통과해야 한다
+> **Phase 4 — `case_findings` 운영 구조**부터 시작한다.
+> - [x] Phase 1~3 완료. 다시 만들지 말 것 (`app/feedback.py`, `app/scoring_config.py`,
+>       `app/config.py`, `app/cors.py`, `app/rate_limit.py`, `app/account.py` 는 이미 있다).
+> - [ ] `CaseFindings` 스키마 확장: 학습 포인트 / 자주 놓치는 부분 / 정답 영역 설명 /
+>       `review_status`(`needs_expert_review` 등) / `content_version` 필드 추가
+> - [ ] **의료 내용을 채우지 않는다.** 구조만 만들고 6케이스는 `needs_expert_review` 상태로 둔다
+> - [ ] `import_cases.py` 가 새 필드를 받도록 확장 (기존 manifest 는 그대로 동작해야 함)
+> - [ ] 스키마 변경이 DB 컬럼을 건드리면 `alembic revision --autogenerate` 필수.
+>       기존 데이터를 지우는 마이그레이션은 만들지 말고 BLOCKER 로 남길 것
+> - [ ] `docs/CONTENT_GUIDELINES.md` 작성 (GT 사용 원칙 / case_findings 작성 규칙 /
+>       AI가 생성 가능한 것과 불가능한 것)
 
 ---
 

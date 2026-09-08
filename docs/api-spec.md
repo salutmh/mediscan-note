@@ -295,7 +295,32 @@
   "reference_mask_url": "http://localhost:8010/static/cases/VS-SEG-202/slices/mask_035.png",
   "evaluation": {
     "method": "reference_mask",
-    "is_provisional": false
+    "is_provisional": false,
+    "thresholds": {
+      "match_dice": 0.6,
+      "partial_dice": 0.15,
+      "validation_status": "not_yet_educationally_validated"
+    }
+  },
+
+  "spatial_feedback": {
+    "source": "geometry",
+    "primary_message": "표시한 영역의 중심 위치는 기준과 일치합니다.",
+    "items": [
+      { "code": "POSITION_ON_TARGET", "message": "표시한 영역의 중심 위치는 기준과 일치합니다." },
+      { "code": "SLIGHTLY_UNDER_SEGMENTED", "message": "기준 영역의 일부를 놓쳤습니다. 경계를 조금 더 확인해 보세요." }
+    ],
+    "metrics": {
+      "gt_coverage": 0.7412,
+      "user_precision": 0.9013,
+      "area_ratio": 0.8224,
+      "over_segmentation_ratio": 0.0812,
+      "under_segmentation_ratio": 0.2588,
+      "centroid_distance_px": 3.4,
+      "centroid_distance_normalized": 0.1552,
+      "user_area_px": 1266,
+      "reference_area_px": 1539
+    }
   },
   "ai_prediction": null,
   "explanation": {
@@ -327,6 +352,34 @@
   }
 }
 ```
+
+> **공간 피드백 `spatial_feedback` (v0.5)** — "왜 틀렸는지"를 알려주기 위한 블록이다.
+>
+> **geometry 로 확인되는 것만 담는다.** 두 마스크의 겹침·면적·중심 거리에서 계산된 사실뿐이고,
+> 내이도 침범·조영증강·종괴 성상 같은 **영상 소견은 절대 들어오지 않는다** — 그건 전문가가 쓴
+> `explanation.case_findings` 자리다. 그래서 블록이 `source: "geometry"` 를 들고 다닌다.
+>
+> - **채점(`grade`)에 관여하지 않는다.** grade 는 기존대로 Dice 임계값으로만 정해진다.
+> - 좌표 근사 채점(개발 전용)에는 마스크가 없어 값을 만들 수 없다 → `null`. 지어내지 않는다.
+> - `metrics` 는 원시 수치이고, 화면에는 `items[].message` 를 쓴다. 수치를 그대로 노출할지는 화면 선택.
+>
+> | 지표 | 뜻 |
+> |---|---|
+> | `gt_coverage` | 기준 영역 중 사용자가 덮은 비율 (recall) — 얼마나 놓쳤는가 |
+> | `user_precision` | 사용자가 칠한 것 중 기준 안에 든 비율 — 얼마나 넘쳤는가 |
+> | `area_ratio` | 사용자 면적 / 기준 면적 |
+> | `over_segmentation_ratio` / `under_segmentation_ratio` | 기준 면적 대비 넘친 양 / 놓친 양 |
+> | `centroid_distance_px` | 두 중심 사이 거리(픽셀) |
+> | `centroid_distance_normalized` | 위 거리를 기준 마스크 등가반지름으로 나눈 값 (병변 크기와 무관하게 비교) |
+>
+> `code` 값: `POSITION_ON_TARGET` / `POSITION_NEAR` / `POSITION_FAR` / `POSITION_OFF_TARGET` /
+> `UNDER_SEGMENTED` / `SLIGHTLY_UNDER_SEGMENTED` / `OVER_SEGMENTED` / `SLIGHTLY_OVER_SEGMENTED` /
+> `SMALL_AREA` / `WELL_MATCHED` / `POSITION_UNKNOWN`
+>
+> **`evaluation.thresholds`** — 어떤 임계값으로 판정했는지와 그 **검증 상태**를 함께 내려보낸다.
+> `validation_status: "not_yet_educationally_validated"` 는 0.60/0.15 가 아직 교육적으로
+> 검증된 기준이 아니라는 뜻이다. 화면에서 확정된 의학 기준처럼 보이게 만들지 않는다.
+> 값은 `backend/app/scoring_config.py` 한 곳에서 관리한다.
 
 > **해설 3층 구조 (v0.4)** — 우리는 의료인이 아니므로 **검증되지 않은 의학 내용을 지어내지 않는다.**
 > 그래서 해설을 출처가 다른 3개 블록으로 나누고, 각 블록이 자기 `source` 를 들고 다닌다.

@@ -18,14 +18,17 @@ import math
 import os
 from pathlib import Path
 
-from app import explanations, inference, masks, model_predictions
+from app import explanations, feedback, inference, masks, model_predictions, scoring_config
 from app.static_files import resolve_local_path
 
 logger = logging.getLogger(__name__)
 
-# 판정 임계값 (Dice 기준) — 팀 논의로 조정 가능
-MATCH_DICE = 0.60
-PARTIAL_DICE = 0.15
+# 판정 임계값은 app/scoring_config.py 가 기준이다.
+# **교육적으로 검증된 값이 아니다** — 근거 없이 코드에 박아두면 확정된 기준처럼 읽히므로
+# 상태(not_yet_educationally_validated)와 함께 한 곳에 모아뒀다.
+# 아래 두 이름은 기존 코드/테스트 호환을 위해 남긴 기본값이다. 판정은 항상 함수를 통해 한다.
+MATCH_DICE = scoring_config.DEFAULT_MATCH_DICE
+PARTIAL_DICE = scoring_config.DEFAULT_PARTIAL_DICE
 
 METHOD_REFERENCE = "reference_mask"
 METHOD_APPROX = "coordinate_approx"
@@ -45,9 +48,9 @@ class InvalidRoi(Exception):
 
 
 def _grade_from_dice(dice: float) -> str:
-    if dice >= MATCH_DICE:
+    if dice >= scoring_config.match_dice():
         return "match"
-    if dice >= PARTIAL_DICE:
+    if dice >= scoring_config.partial_dice():
         return "partial_match"
     return "mismatch"
 
@@ -180,7 +183,14 @@ def _grade_by_points(case, roi: dict) -> dict:
         "iou": round(iou, 4),
         "location_score": score,
         "reference_mask_url": case.reference_mask_url,
-        "evaluation": {"method": METHOD_APPROX, "is_provisional": True},
+        "evaluation": {
+            "method": METHOD_APPROX,
+            "is_provisional": True,
+            "thresholds": scoring_config.thresholds(),
+        },
+        # 좌표 근사 경로에는 마스크가 없어 geometry 피드백을 만들 수 없다.
+        # 없는 것을 지어내지 않고 null 로 둔다 (개발 전용 경로라 화면에도 안 나온다).
+        "spatial_feedback": None,
         "ai_prediction": None,
         "explanation": explanations.build(case),
     }
@@ -222,7 +232,15 @@ def evaluate_submission(case, roi: dict) -> dict:
         "iou": round(iou, 4),
         "location_score": score,
         "reference_mask_url": case.reference_mask_url,
-        "evaluation": {"method": METHOD_REFERENCE, "is_provisional": False},
+        "evaluation": {
+            "method": METHOD_REFERENCE,
+            "is_provisional": False,
+            # 어떤 임계값으로 판정했는지와 그 값의 검증 상태를 함께 내려보낸다.
+            # 화면에서 "확정된 의학 기준"으로 읽히면 안 되기 때문이다.
+            "thresholds": scoring_config.thresholds(),
+        },
+        # geometry 로만 만든 학습 피드백. 채점에 관여하지 않고 설명에만 쓰인다.
+        "spatial_feedback": feedback.build(user_mask, reference),
         "ai_prediction": ai_prediction(case, reference),
         "explanation": explanations.build(case),
     }

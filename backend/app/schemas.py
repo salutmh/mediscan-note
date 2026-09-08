@@ -163,11 +163,57 @@ class Explanation(BaseModel):
     case_findings: Optional[CaseFindings] = None
 
 
+class ScoringThresholds(BaseModel):
+    """판정에 쓰인 임계값과 그 **검증 상태**.
+
+    `validation_status`를 함께 내려보내는 이유: 0.60/0.15 는 교육적으로 검증된 값이 아니다.
+    검증된 의학 기준처럼 화면에 표시되면 안 되므로 상태를 응답에 남긴다.
+    """
+
+    match_dice: float
+    partial_dice: float
+    validation_status: str
+
+
 class Evaluation(BaseModel):
     """어떤 방식으로 채점했는지. coordinate_approx 는 개발 전용이며 is_provisional=True 로 나간다."""
 
     method: Literal["reference_mask", "coordinate_approx"]
     is_provisional: bool = False
+    thresholds: Optional[ScoringThresholds] = None
+
+
+class SpatialFeedbackMetrics(BaseModel):
+    """두 마스크의 겹침·면적·중심에서 계산된 값. **전부 geometry 다.**"""
+
+    gt_coverage: Optional[float] = None            # 기준 영역 중 덮은 비율 (recall)
+    user_precision: Optional[float] = None         # 칠한 것 중 기준 안 비율 (precision)
+    area_ratio: Optional[float] = None             # 사용자 면적 / 기준 면적
+    over_segmentation_ratio: Optional[float] = None
+    under_segmentation_ratio: Optional[float] = None
+    centroid_distance_px: Optional[float] = None
+    centroid_distance_normalized: Optional[float] = None
+    user_area_px: int = 0
+    reference_area_px: int = 0
+
+
+class SpatialFeedbackItem(BaseModel):
+    code: str      # POSITION_ON_TARGET / UNDER_SEGMENTED / OVER_SEGMENTED ...
+    message: str   # 그대로 노출 가능한 교육용 문장
+
+
+class SpatialFeedback(BaseModel):
+    """"왜 틀렸는지"를 알려주는 공간 피드백.
+
+    **geometry 로 확인되는 것만 담는다.** 내이도 침범·조영증강·종괴 성상 같은 영상 소견은
+    여기 들어오지 않는다 — 그건 전문가가 쓴 `explanation.case_findings` 자리다.
+    채점(grade)에는 관여하지 않는다.
+    """
+
+    source: Literal["geometry"] = "geometry"
+    primary_message: str
+    items: list[SpatialFeedbackItem] = []
+    metrics: SpatialFeedbackMetrics
 
 
 class AiPrediction(BaseModel):
@@ -197,6 +243,8 @@ class EvaluationResult(BaseModel):
     # 채점 기준이 된 전문가 검수 마스크 (v0.2 의 ai_mask_url 을 이름만 바로잡은 것)
     reference_mask_url: Optional[str] = None
     evaluation: Evaluation
+    # geometry 기반 학습 피드백. 좌표 근사 채점(개발 전용)에서는 만들 수 없어 null 이다.
+    spatial_feedback: Optional[SpatialFeedback] = None
     ai_prediction: Optional[AiPrediction] = None
     explanation: Explanation
 

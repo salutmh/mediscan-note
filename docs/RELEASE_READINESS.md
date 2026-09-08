@@ -35,7 +35,7 @@ AI 보조 피드백(참고) → 오답 재학습.
 | 화면 5 | 지어내지 않고 `model_unavailable`, 데모는 flag OFF 기본 | `app/routers/analyze.py:74` |
 | 스키마 | Alembic이 기준, 기동 시 자동 upgrade + 레거시 DB 감지 | `app/db.py:47` |
 | 정적 자산 | 요청 주소 기준 절대 URL 생성 | `app/main.py:32` |
-| 테스트 | **270개 통과** (16개 파일) | `backend/tests/` |
+| 테스트 | **292개 통과** (17개 파일) | `backend/tests/` |
 
 **이미 해결된 것은 다시 만들지 않는다.** 위 항목은 재구현 대상이 아니다.
 
@@ -56,12 +56,12 @@ AI 보조 피드백(참고) → 오답 재학습.
 
 | # | 항목 | 현재 상태 | 상태 |
 |---|---|---|---|
-| H1 | **spatial feedback 없음** | 응답은 dice/iou/location_score 숫자뿐. "왜 틀렸는지"를 못 알려줌 | 🔲 Phase 3 예정 |
+| H1 | **spatial feedback 없음** | ~~숫자뿐~~ → `spatial_feedback` 추가 (coverage/precision/중심거리/과소·과대 표시 + 교육 문구) | ✅ DONE |
 | H2 | **`case_findings` 운영 구조 없음** | 스키마는 있으나 6케이스 모두 `null`, 검토 상태 필드 없음 | 🔲 Phase 4 예정 |
 | H3 | Admin CMS 없음 | 케이스 등록이 CLI(`scripts/import_cases.py`)뿐 → 운영자가 콘텐츠를 못 올림 | 🔲 Phase 5 |
 | H4 | 서버측 토큰 폐기 없음 | 로그아웃은 클라이언트 삭제만, 유출 토큰 최대 7일 유효 | 🔲 미착수 |
 | H5 | 이메일 인증 / 비밀번호 재설정 없음 | 남의 이메일로 가입 가능, 비번 분실 시 계정 영구 상실 | 🔲 미착수 |
-| H6 | 채점 임계값 하드코딩 | `MATCH_DICE=0.60`, `PARTIAL_DICE=0.15` 상수 | 🔲 Phase 3 예정 (config 분리) |
+| H6 | 채점 임계값 하드코딩 | ~~상수~~ → `app/scoring_config.py` 분리 + 응답에 `validation_status` 노출 | ✅ DONE |
 | H7 | 학습 분석 이벤트 없음 | Closed Beta 측정 지표를 수집할 구조 부재 | 🔲 Phase 8 |
 
 ---
@@ -140,8 +140,8 @@ AI 보조 피드백(참고) → 오답 재학습.
 |---|---|
 | E1 | 6케이스 전부 `case_findings` 미작성. 전문가가 작성해야 하며 **Claude가 임의 생성하지 않는다** |
 | E2 | 케이스 난이도(difficulty) 판정 |
-| E3 | Dice 임계값 0.60/0.15의 교육적 타당성 — **현재 `not yet educationally validated`** |
-| E4 | spatial feedback 문구가 학습자에게 오해를 주지 않는지 |
+| E3 | Dice 임계값 0.60/0.15의 교육적 타당성 — 값은 `app/scoring_config.py` 로 분리했고 응답에 `not_yet_educationally_validated` 를 함께 내려보낸다. **값 자체의 검증은 여전히 필요** |
+| E4 | spatial feedback 문구가 학습자에게 오해를 주지 않는지 (문구는 `app/feedback.py` 에 모여 있고, 의료 어휘 금지를 테스트로 고정했다) |
 
 ---
 
@@ -160,7 +160,7 @@ AI 보조 피드백(참고) → 오답 재학습.
 | 게이트 | 상태 |
 |---|---|
 | 보안 최소선 (C1~C4) | ✅ 완료 (테스트 270개) |
-| 학습 피드백이 점수 이상을 제공 | 🔲 Phase 3 예정 |
+| 학습 피드백이 점수 이상을 제공 | ✅ 완료 (geometry 한정) |
 | 운영자가 콘텐츠를 다룰 수 있음 | 🔲 Phase 5 |
 | 케이스 10개 이상 + 해설 | 🔲 전문가 검토 대기 (E1) |
 | 사용 데이터 측정 | 🔲 Phase 8 |
@@ -174,4 +174,6 @@ AI 보조 피드백(참고) → 오답 재학습.
 - 2026-09-08: Phase 1 최초 작성 (커밋 `ef56005` 기준 전체 점검)
 - 2026-09-08: Phase 2 완료 — C1~C4 해소. 테스트 241 → 270.
   신규: `app/config.py`, `app/cors.py`, `app/rate_limit.py`, `app/account.py`
+- 2026-09-08: Phase 3 완료 — H1·H6 해소. 테스트 270 → 292.
+  신규: `app/feedback.py`, `app/scoring_config.py`. 계약 v0.5(`spatial_feedback`, `evaluation.thresholds`)
 (이후 Phase 완료 시마다 여기에 추가한다)
