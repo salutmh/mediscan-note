@@ -128,3 +128,66 @@ def test_window_expiry_allows_retry(monkeypatch):
     assert allowed_first is True
     assert blocked is False and retry_after > 0
     assert allowed_later is True
+
+
+# ------------------------------------- production 에서 조용히 꺼지지 않는지 (#22)
+# 개발·E2E 에서는 MEDISCAN_RATE_LIMIT=0 으로 끄고 돌린다(반복 실행하면 한도에 걸린다).
+# 그 값이 배포에 따라가면 로그인 무차별 대입이 그대로 열리고 서버는 겉보기에 정상이다.
+from app.config import ConfigError  # noqa: E402
+
+
+def _production(monkeypatch):
+    monkeypatch.setenv("MEDISCAN_ENV", "production")
+
+
+@pytest.mark.parametrize("value", ["0", "false", "no", "off", "False"])
+def test_production_rejects_plainly_disabling_rate_limit(monkeypatch, value):
+    _production(monkeypatch)
+    monkeypatch.setenv(rate_limit.ENABLED_ENV, value)
+    monkeypatch.delenv(rate_limit.MULTIPLIER_ENV, raising=False)
+
+    with pytest.raises(ConfigError) as exc:
+        rate_limit.assert_valid()
+    # 어떻게 해야 하는지 알려준다 (막기만 하면 결국 다시 0 으로 끈다)
+    assert rate_limit.EXTERNAL in str(exc.value)
+
+
+def test_production_allows_external_rate_limiting(monkeypatch):
+    # 앞단 프록시·WAF 가 담당하는 정상 구성. "실수로 꺼짐"과 구분되어야 한다.
+    _production(monkeypatch)
+    monkeypatch.setenv(rate_limit.ENABLED_ENV, rate_limit.EXTERNAL)
+    monkeypatch.delenv(rate_limit.MULTIPLIER_ENV, raising=False)
+
+    rate_limit.assert_valid()
+    assert rate_limit._enabled() is False
+    # 끈 사실이 기동 로그에 남는다
+    assert rate_limit.EXTERNAL in (rate_limit.describe() or "")
+
+
+def test_production_rejects_multiplier(monkeypatch):
+    # 배수는 모든 한도를 한꺼번에 늘려 로그인 대입 한도까지 함께 푼다.
+    _production(monkeypatch)
+    monkeypatch.delenv(rate_limit.ENABLED_ENV, raising=False)
+    monkeypatch.setenv(rate_limit.MULTIPLIER_ENV, "100")
+
+    with pytest.raises(ConfigError) as exc:
+        rate_limit.assert_valid()
+    assert "RULES" in str(exc.value), "어디를 고쳐야 하는지 알려줘야 한다"
+
+
+def test_production_default_is_fine(monkeypatch):
+    _production(monkeypatch)
+    monkeypatch.delenv(rate_limit.ENABLED_ENV, raising=False)
+    monkeypatch.delenv(rate_limit.MULTIPLIER_ENV, raising=False)
+    rate_limit.assert_valid()
+    assert rate_limit._enabled() is True
+
+
+def test_development_can_still_disable_freely(monkeypatch):
+    # E2E 반복 실행을 막으면 안 된다.
+    monkeypatch.setenv("MEDISCAN_ENV", "development")
+    monkeypatch.setenv(rate_limit.ENABLED_ENV, "0")
+    monkeypatch.setenv(rate_limit.MULTIPLIER_ENV, "100")
+    rate_limit.assert_valid()
+    assert rate_limit._enabled() is False
+    assert rate_limit.describe() is None

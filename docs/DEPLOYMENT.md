@@ -22,6 +22,7 @@
 | 8 | 케이스 등록·점검 | `python -m scripts.verify_cases` 전체 통과 |
 | 9 | 최초 운영자 지정 | `python -m scripts.grant_admin --email <이메일>` |
 | 10 | 개발 전용 스위치 제거 | 아래 3개가 배포 환경에 남아 있으면 **기동 실패**한다 |
+| 11 | `MEDISCAN_RATE_LIMIT` 확인 | `0` 은 거부된다. 앞단에서 제한한다면 `external` 로 명시 |
 
 **production 에서 기동을 막는 값들** — 잘못 뜬 서버는 겉보기에 정상이라 아무도 눈치채지 못한다.
 그래서 경고가 아니라 실패로 처리한다.
@@ -47,8 +48,18 @@ DATABASE_URL=postgresql+psycopg2://user:pw@host:5432/mediscan
 목록으로 남겨두는 경우). 값이 `1`/`true` 는 물론이고 `ture` 같은 오타여도 기동을 막는다 —
 production 에 이 이름이 붙어 있다는 것 자체가 설정 실수이기 때문이다.
 
-선택 값은 `backend/.env.example` 참고 (`MEDISCAN_TOKEN_TTL`, `MEDISCAN_RATE_LIMIT`,
-`MEDISCAN_PUBLIC_BASE`, `MEDISCAN_ANALYTICS`).
+**요청 수 제한** — 개발·E2E 에서는 `MEDISCAN_RATE_LIMIT=0` 으로 끄고 돌리므로
+배포 환경에 따라오기 쉽다. 꺼지면 로그인 무차별 대입이 열리고 서버는 겉보기에 정상이다.
+
+| 값 | production 에서 |
+|---|---|
+| (미설정) | 앱이 제한한다 — 기본값 |
+| `0` / `false` | **거부**. 기동하지 않는다 |
+| `external` | 허용. 앱은 제한하지 않고 기동 로그에 경고를 남긴다 — **앞단 프록시·WAF 가 `/api/auth/*` 를 제한하고 있어야 한다** |
+| `MEDISCAN_RATE_LIMIT_MULTIPLIER` > 1 | **거부**. 모든 한도를 한꺼번에 늘려 로그인 대입 한도까지 풀린다. 특정 한도만 조정하려면 `app/rate_limit.py` 의 `RULES` 를 고친다 |
+
+선택 값은 `backend/.env.example` 참고 (`MEDISCAN_TOKEN_TTL`, `MEDISCAN_PUBLIC_BASE`,
+`MEDISCAN_ANALYTICS`).
 
 ---
 

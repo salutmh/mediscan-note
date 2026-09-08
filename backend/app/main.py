@@ -8,6 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from app import config, inference, logging_config, model_predictions, scoring_config
 from app.cors import cors_kwargs, describe as describe_cors
 from app.db import DATABASE_URL, init_db
+from app import rate_limit as rate_limit_module
 from app.rate_limit import RateLimitMiddleware
 from app.static_files import STATIC_DIR, STATIC_URL_PREFIX, ensure_dirs, set_request_base
 from app.routers import admin, analyze, auth, cases, consents, wrong_notes
@@ -26,6 +27,11 @@ async def lifespan(app: FastAPI):
     # 채점 임계값이 서로 모순되지 않는지. 잘못되면 등급 하나가 통째로 사라질 수 있는데
     # 응답 형태는 정상이라 눈치채기 어렵다 — 첫 제출이 아니라 기동 때 막는다.
     scoring_config.assert_valid()
+    # 요청 수 제한이 production 에서 조용히 꺼져 있지 않은지.
+    rate_limit_module.assert_valid()
+    _note = rate_limit_module.describe()
+    if _note:
+        logging.getLogger("app").warning(_note)
     # 테이블 생성 + 케이스 시드 (없을 때만). DB 는 DATABASE_URL 로 결정된다 — db.py 참고.
     ensure_dirs()
     init_db()

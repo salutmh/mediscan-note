@@ -13,6 +13,13 @@ requirements 를 늘리지 않는다는 프로젝트 방침(팀원이 pip 추가
 - 프로세스 안 메모리에만 있다. 워커를 여러 개 띄우면 워커마다 따로 센다.
   Closed Beta 규모(단일 워커)에서는 문제가 없지만, 확장 시 Redis 같은 공유 저장소로 옮겨야 한다.
 - 프록시 뒤에 있으면 X-Forwarded-For 의 첫 IP 를 쓴다. 신뢰할 수 있는 프록시가 앞에 있다는 전제다.
+
+**production 에서 끄는 것에 대해**
+개발·E2E 에서는 `MEDISCAN_RATE_LIMIT=0` 으로 끄고 돌린다(반복 실행하면 한도에 걸린다).
+그 값이 배포에 따라가면 로그인 무차별 대입이 그대로 열리고, 서버는 겉보기에 정상이다.
+그래서 production 에서는 `0` 을 거부한다. 앞단 프록시가 제한을 담당하는 정상 구성도
+있으므로 그 경우에는 `MEDISCAN_RATE_LIMIT=external` 로 **의도를 명시**하게 했다.
+"실수로 꺼짐"과 "다른 데서 하고 있음"은 구분되어야 한다.
 """
 import logging
 import os
@@ -22,6 +29,8 @@ from collections import defaultdict, deque
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
+
+from app.config import ConfigError
 
 logger = logging.getLogger(__name__)
 
@@ -43,10 +52,24 @@ RULES: dict[str, tuple[int, int]] = {
 # 테스트·개발에서 한도를 넉넉히 두고 싶을 때 배수로 조정한다.
 MULTIPLIER_ENV = "MEDISCAN_RATE_LIMIT_MULTIPLIER"
 
+# 앞단(프록시·WAF)에서 제한을 담당한다고 **명시**할 때 쓰는 값.
+# production 에서 제한을 끄는 유일한 방법이다.
+EXTERNAL = "external"
+
+_OFF_VALUES = {"0", "false", "no", "off"}
+
+
+def _raw_enabled() -> str:
+    return os.getenv(ENABLED_ENV, "1").strip().lower()
+
 
 def _enabled() -> bool:
-    """기본 ON. 끄려면 MEDISCAN_RATE_LIMIT=0 (개발·테스트 편의)."""
-    return os.getenv(ENABLED_ENV, "1").strip() not in {"0", "false", "False"}
+    """기본 ON. 끄려면 MEDISCAN_RATE_LIMIT=0 (개발·테스트 편의).
+
+    production 에서 `0` 은 config 가 막는다. 앞단에서 제한한다면 `external` 로 적는다.
+    """
+    raw = _raw_enabled()
+    return raw not in _OFF_VALUES and raw != EXTERNAL
 
 
 def _multiplier() -> int:
@@ -54,6 +77,41 @@ def _multiplier() -> int:
         return max(1, int(os.getenv(MULTIPLIER_ENV, "1")))
     except ValueError:
         return 1
+
+
+def assert_valid() -> None:
+    """기동 시점 점검. production 에서 제한이 조용히 꺼져 있지 않은지 본다."""
+    from app import config
+
+    if not config.is_production():
+        return
+
+    raw = _raw_enabled()
+    if raw in _OFF_VALUES:
+        raise ConfigError(
+            f"{ENABLED_ENV}={raw!r} — production 에서 요청 수 제한을 그냥 끌 수 없습니다. "
+            "이 값은 개발·E2E 편의용이라 배포 환경에 따라오기 쉬운데, 꺼지면 로그인 "
+            "무차별 대입이 그대로 열리고 서버는 겉보기에 정상입니다. "
+            f"앞단 프록시·WAF 가 제한을 담당한다면 {ENABLED_ENV}={EXTERNAL} 로 명시하세요."
+        )
+
+    multiplier = _multiplier()
+    if multiplier > 1:
+        raise ConfigError(
+            f"{MULTIPLIER_ENV}={multiplier} — production 에서는 쓸 수 없습니다. "
+            "이 배수는 모든 한도를 한꺼번에 늘리므로 로그인 대입 한도까지 함께 풀립니다. "
+            "특정 한도를 조정해야 한다면 app/rate_limit.py 의 RULES 를 고치세요."
+        )
+
+
+def describe() -> str | None:
+    """production 에서 제한을 끈 상태면 기동 로그에 남긴다."""
+    if _raw_enabled() == EXTERNAL:
+        return (
+            f"요청 수 제한을 앱에서 하지 않습니다 ({ENABLED_ENV}={EXTERNAL}). "
+            "앞단 프록시·WAF 가 /api/auth/* 를 제한하고 있는지 확인하세요."
+        )
+    return None
 
 
 class _SlidingWindow:

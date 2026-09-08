@@ -21,6 +21,9 @@
 > ```bash
 > MEDISCAN_RATE_LIMIT=0 uvicorn app.main:app --port 8010
 > # 또는 MEDISCAN_RATE_LIMIT_MULTIPLIER=20
+>
+> 둘 다 **개발 전용**이다. `MEDISCAN_ENV=production` 에서는 기동이 거부된다
+> (앞단에서 제한한다면 `MEDISCAN_RATE_LIMIT=external`). 배포 환경에 가져가지 않는다.
 > ```
 > (제한 자체를 검증하는 것은 `backend/tests/test_rate_limit.py` 가 한다.)
 
