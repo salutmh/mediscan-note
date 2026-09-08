@@ -26,7 +26,7 @@ from PIL import Image, ImageDraw  # noqa: E402
 
 from app.db import SessionLocal  # noqa: E402
 from app.main import app  # noqa: E402
-from app.models import Consent, Submission, User  # noqa: E402
+from app.models import Consent, LearningEvent, RevokedToken, Submission, User  # noqa: E402
 
 # seed.py 의 REFERENCE_SHAPES 와 같은 값 (VS-SEG-202 기준 병변)
 CASE_ID = "VS-SEG-202"
@@ -122,9 +122,17 @@ def _reset_rate_limit():
 
 @pytest.fixture(autouse=True)
 def _clean_user_data():
-    """테스트마다 사용자 데이터를 비운다. 케이스(시드 데이터)는 유지."""
+    """테스트마다 사용자 데이터를 비운다. 케이스(시드 데이터)는 유지.
+
+    **자식 테이블을 먼저, 명시적으로 지운다.** `db.query(User).delete()` 는 대량 삭제라
+    ORM 의 cascade 를 타지 않는다 — 빠뜨리면 learning_events 같은 행이 테스트 내내 쌓이고,
+    전체 건수를 세는 테스트가 앞 테스트의 잔여물에 걸려 넘어진다.
+    사용자 데이터 테이블을 추가하면 여기에도 추가할 것.
+    """
     yield
     with SessionLocal() as db:
+        db.query(LearningEvent).delete()
+        db.query(RevokedToken).delete()
         db.query(Submission).delete()
         db.query(Consent).delete()
         db.query(User).delete()
@@ -210,6 +218,20 @@ def make_user(client):
         return UserSession(client, email, password, res.json())
 
     return _make
+
+
+@pytest.fixture
+def admin_session(make_user) -> UserSession:
+    """운영자 세션.
+
+    일반 사용자를 만든 뒤 **DB 에서** 승격한다 — 웹으로 스스로 관리자가 되는 경로는 없다
+    (실제 운영에서도 scripts/grant_admin.py 로만 지정한다).
+    """
+    session = make_user("운영자")
+    with SessionLocal() as db:
+        db.get(User, session.user_id).is_admin = True
+        db.commit()
+    return session
 
 
 @pytest.fixture
