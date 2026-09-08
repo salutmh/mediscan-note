@@ -1,0 +1,28 @@
+{
+  "case_id": "VS-SEG-202",
+  "model_version": "v1",
+  "grade": "match",
+  "dice": 0.91,
+  "iou": 0.84,
+  "location_score": 92,
+  "ai_mask_url": "/results/202_mask.png",
+  "explanation": {
+    "case_facts": {
+      "source": "dataset_verified",
+      "disease_name": "전정신경초종 (Vestibular Schwannoma)",
+      "disease_code": "vestibular_schwannoma",
+      "laterality": "right",
+      "laterality_basis": "테스트 픽스처 (합성 데이터)",
+      "representative_slice": 34,
+      "total_slices": 60,
+      "lesion_slice_range": [
+        30,
+        38
+      ],
+      "representative_area_px": 1200,
+      "reference_region": "우측 (테스트 픽스처 기준 마스크 위치)",
+      "dataset": "합성 테스트 픽스처"
+    },
+    "case_findings": null
+  }
+}

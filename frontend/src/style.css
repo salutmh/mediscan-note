@@ -1,0 +1,524 @@
+/* ============================================================================
+   메디스캔노트 디자인 토큰 + 공통 컴포넌트
+   ----------------------------------------------------------------------------
+   방향: 밝은 임상 톤 + 다크 뷰어.
+     UI(헤더/카드/폼)는 밝고 조용하게, 의료영상 뷰어 영역만 어둡게 가져간다.
+     실제 PACS·의료 SaaS가 쓰는 방식으로, 영상 대비가 살아나고 판독에 집중된다.
+
+   여기 정의한 토큰과 .btn/.card/.badge 같은 공통 클래스를 각 화면이 그대로 쓴다.
+   색·간격·타이포를 바꿀 때는 이 파일만 고치면 7개 화면에 동시에 반영된다.
+   ============================================================================ */
+
+/* Pretendard — npm 패키지에서 로컬 번들. dynamic-subset 이라 필요한 글자 조각만 받는다.
+   (CDN 을 쓰지 않으므로 발표장 네트워크가 막혀도 폰트가 깨지지 않는다) */
+@import 'pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css';
+
+:root {
+  /* --- 중립 색 (UI 표면·테두리·텍스트) --- */
+  --gray-0: #ffffff;
+  --gray-25: #fbfcfd;
+  --gray-50: #f5f7fa;
+  --gray-100: #eceff4;
+  --gray-200: #dee3ea;
+  --gray-300: #c7cfda;
+  --gray-400: #9aa5b4;
+  --gray-500: #6b7686;
+  --gray-600: #4d5768;
+  --gray-700: #363f4d;
+  --gray-800: #232a36;
+  --gray-900: #151a23;
+
+  /* --- 브랜드 --- */
+  --brand-50: #eef3ff;
+  --brand-100: #dbe5ff;
+  --brand-300: #9db4fb;
+  --brand-500: #2f62e8;
+  --brand-600: #1f4fd1;
+  --brand-700: #1a3fa6;
+
+  /* --- 상태 (grade / 알림) — 항상 텍스트 라벨과 함께 쓴다. 색만으로 뜻을 전하지 않는다 --- */
+  --match-bg: #e6f6ec;
+  --match-line: #a9dcbc;
+  --match-ink: #12683a;
+  --partial-bg: #fdf4e3;
+  --partial-line: #f0d6a4;
+  --partial-ink: #96570a;
+  --mismatch-bg: #fdf0f0;
+  --mismatch-line: #f2b6b6;
+  --mismatch-ink: #ab2320;
+
+  /* 위 --*-ink 는 "텍스트" 용이다 (작은 한글 라벨이라 WCAG 4.5:1 이상 확보 — 각각 5.2~6.3:1).
+     아래 --mark-* 는 "색 자체가 정보인 마크"(진행 바, 좌측 띠, 레전드 스와치) 용으로 따로 둔다.
+     텍스트 잉크끼리는 부분/불일치가 색상만으로는 구분이 약해서(정상 시각 ΔE 10.8),
+     마크는 인접 쌍 ΔE 23.5 를 통과하는 값으로 다시 잡았다.
+     ※ 일치(초록)↔불일치(빨강)는 적록색약에서 색만으로는 구분되지 않는 조합이라,
+       모든 곳에서 "일치/부분 일치/불일치" 텍스트 라벨과 함께만 쓴다. */
+  --mark-match: #12683a;
+  --mark-partial: #d97706;
+  --mark-mismatch: #a10f1e;
+
+  /* --- 뷰어(다크) --- */
+  --viewer-bg: #0d1117;
+  --viewer-panel: #161c26;
+  --viewer-line: #252d3a;
+  --viewer-ink: #cdd5e1;
+  --viewer-ink-dim: #8b96a8;
+
+  /* --- ROI 오버레이 색 (화면 3 레전드와 캔버스 합성이 같은 값을 쓴다) --- */
+  --roi-user: #2f62e8;
+  --roi-reference: #10b981;
+  --roi-overlap: #facc15;
+
+  /* --- 의미 별칭 --- */
+  --surface: var(--gray-0);
+  --surface-sunken: var(--gray-50);
+  --line: var(--gray-200);
+  --line-strong: var(--gray-300);
+  --ink: var(--gray-900);
+  --ink-secondary: var(--gray-600);
+  --ink-muted: var(--gray-500);
+  --accent: var(--brand-500);
+
+  /* --- 간격 (4px 배수) --- */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+
+  /* --- 모서리 --- */
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 14px;
+  --r-full: 999px;
+
+  /* --- 그림자 (아주 얕게. 의료 UI 는 과한 그림자가 어울리지 않는다) --- */
+  --shadow-sm: 0 1px 2px rgba(21, 26, 35, 0.05);
+  --shadow-md: 0 2px 8px rgba(21, 26, 35, 0.07), 0 1px 2px rgba(21, 26, 35, 0.04);
+  --shadow-lg: 0 12px 32px rgba(21, 26, 35, 0.1), 0 2px 6px rgba(21, 26, 35, 0.05);
+
+  --focus-ring: 0 0 0 3px var(--brand-100);
+  --transition: 140ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ---------------------------------------------------------------- 기본 리셋 */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--surface-sunken);
+  color: var(--ink);
+  font-family: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, system-ui,
+    'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+  /* 한글은 자간을 살짝 좁히면 훨씬 정돈돼 보인다 */
+  letter-spacing: -0.01em;
+  /* 한글이 단어 중간에서 끊기지 않게 (예: "민감정보 처|리" 방지).
+     긴 영문 토큰(URL 등)은 넘치지 않게 anywhere 로 흘린다 */
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ------------------------------------------------------------------ 타이포 */
+h1,
+h2,
+h3 {
+  margin: 0;
+  letter-spacing: -0.025em;
+  line-height: 1.3;
+  font-weight: 700;
+}
+
+h1 {
+  font-size: 26px;
+}
+
+h2 {
+  font-size: 17px;
+}
+
+h3 {
+  font-size: 15px;
+}
+
+p {
+  margin: 0;
+}
+
+a {
+  color: var(--brand-600);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+
+a:hover {
+  color: var(--brand-700);
+}
+
+/* 숫자는 표 정렬이 되도록 고정폭 숫자 사용 (Dice, 점수, 카운트) */
+.tnum,
+dd,
+.metric-value {
+  font-variant-numeric: tabular-nums;
+}
+
+.muted {
+  color: var(--ink-muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.lead {
+  color: var(--ink-secondary);
+  font-size: 14px;
+}
+
+/* ------------------------------------------------------------------- 버튼 */
+button,
+.btn {
+  font: inherit;
+  letter-spacing: inherit;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  padding: 9px 14px;
+  min-height: 38px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--transition), border-color var(--transition), color var(--transition),
+    box-shadow var(--transition);
+}
+
+button:hover:not(:disabled),
+.btn:hover:not(:disabled) {
+  background: var(--gray-50);
+  border-color: var(--gray-400);
+}
+
+button:active:not(:disabled),
+.btn:active:not(:disabled) {
+  background: var(--gray-100);
+}
+
+button:focus-visible,
+.btn:focus-visible,
+input:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--brand-500);
+  outline-offset: 1px;
+}
+
+button:disabled,
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+button.primary,
+.btn.primary {
+  background: var(--brand-500);
+  border-color: var(--brand-500);
+  color: #fff;
+  font-weight: 600;
+}
+
+button.primary:hover:not(:disabled),
+.btn.primary:hover:not(:disabled) {
+  background: var(--brand-600);
+  border-color: var(--brand-600);
+}
+
+button.primary:active:not(:disabled) {
+  background: var(--brand-700);
+}
+
+button.ghost {
+  border-color: transparent;
+  background: transparent;
+  color: var(--ink-secondary);
+}
+
+button.ghost:hover:not(:disabled) {
+  background: var(--gray-100);
+  border-color: transparent;
+}
+
+button.lg {
+  min-height: 46px;
+  padding: 12px 18px;
+  font-size: 15px;
+}
+
+button.sm {
+  min-height: 32px;
+  padding: 6px 10px;
+  font-size: 13px;
+}
+
+/* --------------------------------------------------------------- 세그먼트 탭 */
+.segmented {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 3px;
+  background: var(--gray-100);
+  border-radius: var(--r-md);
+}
+
+.segmented button {
+  min-height: 32px;
+  padding: 5px 13px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ink-secondary);
+  font-size: 13.5px;
+  font-weight: 500;
+}
+
+.segmented button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.65);
+  border-color: transparent;
+}
+
+.segmented button.active {
+  background: var(--surface);
+  color: var(--brand-600);
+  font-weight: 600;
+  box-shadow: var(--shadow-sm);
+}
+
+/* -------------------------------------------------------------------- 카드 */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  padding: var(--sp-5);
+  box-shadow: var(--shadow-sm);
+}
+
+.card-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-4);
+}
+
+/* -------------------------------------------------------------------- 입력 */
+input[type='text'],
+input[type='email'],
+input[type='password'] {
+  font: inherit;
+  letter-spacing: inherit;
+  width: 100%;
+  padding: 10px 12px;
+  min-height: 42px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--ink);
+  transition: border-color var(--transition), box-shadow var(--transition);
+}
+
+input[type='text']:focus,
+input[type='email']:focus,
+input[type='password']:focus {
+  outline: none;
+  border-color: var(--brand-500);
+  box-shadow: var(--focus-ring);
+}
+
+input::placeholder {
+  color: var(--gray-400);
+}
+
+.field {
+  display: block;
+  margin-bottom: var(--sp-3);
+}
+
+.field > span {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--ink-secondary);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+input[type='checkbox'] {
+  width: 17px;
+  height: 17px;
+  accent-color: var(--brand-500);
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+input[type='range'] {
+  accent-color: var(--brand-500);
+  cursor: pointer;
+}
+
+/* -------------------------------------------------------------------- 뱃지 */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-full);
+  background: var(--gray-50);
+  color: var(--ink-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
+.badge.match {
+  background: var(--match-bg);
+  border-color: var(--match-line);
+  color: var(--match-ink);
+}
+
+.badge.partial_match {
+  background: var(--partial-bg);
+  border-color: var(--partial-line);
+  color: var(--partial-ink);
+}
+
+.badge.mismatch {
+  background: var(--mismatch-bg);
+  border-color: var(--mismatch-line);
+  color: var(--mismatch-ink);
+}
+
+/* ---------------------------------------------------------------- 알림 박스 */
+.error,
+.notice,
+.info-box {
+  margin: var(--sp-3) 0;
+  padding: 11px 13px;
+  border: 1px solid;
+  border-radius: var(--r-sm);
+  font-size: 13.5px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.error {
+  background: var(--mismatch-bg);
+  border-color: var(--mismatch-line);
+  color: var(--mismatch-ink);
+}
+
+.notice {
+  background: var(--partial-bg);
+  border-color: var(--partial-line);
+  color: var(--partial-ink);
+}
+
+/* 이름이 너무 일반적이라 화면 안의 지역 클래스와 충돌했다(.info) — info-box 로 구분한다 */
+.info-box {
+  background: var(--brand-50);
+  border-color: var(--brand-100);
+  color: var(--brand-700);
+}
+
+/* ------------------------------------------------------- 다크 뷰어 공통 틀 */
+.viewer-frame {
+  border: 1px solid var(--viewer-line);
+  border-radius: var(--r-lg);
+  background: var(--viewer-bg);
+  overflow: hidden;
+}
+
+.viewer-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: 9px 12px;
+  background: var(--viewer-panel);
+  border-bottom: 1px solid var(--viewer-line);
+  color: var(--viewer-ink);
+  font-size: 13px;
+}
+
+.viewer-bar .spacer {
+  flex: 1;
+}
+
+.viewer-bar .dim {
+  color: var(--viewer-ink-dim);
+  font-size: 12px;
+}
+
+/* 뷰어 안에서 쓰는 어두운 버튼 */
+.viewer-bar button {
+  min-height: 30px;
+  padding: 5px 11px;
+  border-color: var(--viewer-line);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--viewer-ink);
+  font-size: 13px;
+}
+
+.viewer-bar button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: #3a4453;
+}
+
+.viewer-bar button.active {
+  background: var(--brand-500);
+  border-color: var(--brand-500);
+  color: #fff;
+  font-weight: 600;
+}
+
+/* ------------------------------------------------------------------ 유틸 */
+.stack-4 > * + * {
+  margin-top: var(--sp-4);
+}
+
+.stack-5 > * + * {
+  margin-top: var(--sp-5);
+}
+
+.divider {
+  height: 1px;
+  background: var(--line);
+  border: 0;
+  margin: var(--sp-5) 0;
+}
+
+@media (max-width: 640px) {
+  h1 {
+    font-size: 22px;
+  }
+
+  body {
+    font-size: 14.5px;
+  }
+}

@@ -1,0 +1,11 @@
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+pydantic==2.9.2
+sqlalchemy==2.0.35
+alembic==1.19.2
+psycopg2-binary==2.9.9
+python-multipart==0.0.9
+
+# 마스크 디코딩 / 분할 지표 계산 (backend/app/masks.py)
+numpy==2.4.6
+pillow==12.3.0

@@ -1,0 +1,104 @@
+{
+  "_comment": [
+    "실제 케이스 등록용 manifest 예시 (API 계약 v0.4). 이 파일을 복사해 실제 경로로 채운 뒤",
+    "  cd backend && python -m scripts.import_cases data/<내파일>.json",
+    "로 등록한다. 영상/마스크 원본은 git 에 커밋하지 않는다 (.gitignore 참고).",
+    "경로는 이 manifest 파일 위치 기준 상대경로도 된다.",
+    "reference_mask 는 팀에서 검수를 마친 것만 넣는다 - 그것이 곧 채점 기준이 된다.",
+    "",
+    "[케이스 1] 뇌 MRI 처럼 volume 로 들어오는 경우:",
+    "  volume_id / representative_slice / slices[] 를 함께 준다.",
+    "  slices[].slice_index 는 **원본 volume 인덱스를 그대로** 쓴다 (0부터 다시 매기지 않는다).",
+    "  케이스의 image_url / reference_mask_url 은 대표 slice 파일이 된다.",
+    "  VS-SEG 는 scripts/build_vs_seg_case_assets.py 가 이 manifest 를 자동으로 만들어 준다.",
+    "",
+    "[케이스 2] 단일 영상(흉부 X-ray 등)은 image / reference_mask 만 있으면 된다.",
+    "",
+    "explanation 은 출처가 다른 3개 블록으로 나뉜다:",
+    "  case_facts    (dataset_verified) 필수. GT/DICOM 에서 계산된 값만 넣는다.",
+    "  disease_info  (literature_based) **manifest 로 넣을 수 없다.**",
+    "                app/content/diseases/<disease_code>.json 에서 온다.",
+    "  case_findings (expert_reviewed)  선택. 전문가가 이 케이스를 보고 쓴 소견.",
+    "                findings / reviewer / reviewed_at 이 모두 있어야 등록된다.",
+    "",
+    "v0.3 의 평평한 키(key_findings, review_status, medical_terms, reference)가 남아 있으면",
+    "등록이 실패한다 - 조용히 무시되면 옛 해설이 사라진 줄 모르기 때문이다."
+  ],
+  "cases": [
+    {
+      "case_id": "VS-SEG-000",
+      "body_part": "brain_mri",
+      "disease": "vestibular_schwannoma",
+      "volume_id": "VS-SEG-000/T1",
+      "representative_slice": 35,
+      "slice_index": 35,
+      "total_slices": 120,
+      "image": "vs_seg_cases/VS-SEG-000/slice_035.png",
+      "reference_mask": "vs_seg_cases/VS-SEG-000/mask_035.png",
+      "slices": [
+        {
+          "slice_index": 33,
+          "image": "vs_seg_cases/VS-SEG-000/slice_033.png",
+          "mask": null,
+          "lesion_area_px": 0
+        },
+        {
+          "slice_index": 34,
+          "image": "vs_seg_cases/VS-SEG-000/slice_034.png",
+          "mask": "vs_seg_cases/VS-SEG-000/mask_034.png",
+          "lesion_area_px": 812
+        },
+        {
+          "slice_index": 35,
+          "image": "vs_seg_cases/VS-SEG-000/slice_035.png",
+          "mask": "vs_seg_cases/VS-SEG-000/mask_035.png",
+          "lesion_area_px": 1539
+        }
+      ],
+      "explanation": {
+        "case_facts": {
+          "disease_name": "전정신경초종 (Vestibular Schwannoma)",
+          "disease_code": "vestibular_schwannoma",
+          "laterality": "right",
+          "laterality_basis": "DICOM ImageOrientationPatient + GT 마스크 열 중심",
+          "representative_slice": 35,
+          "total_slices": 120,
+          "lesion_slice_range": [30, 41],
+          "representative_area_px": 1539,
+          "reference_region": "우측 (DICOM 영상 방향 ImageOrientationPatient 으로 확인한 전문가 GT 마스크 위치). 대표 slice 35 / 원본 120장, 병변 slice 30~41.",
+          "dataset": "VS-SEG (RTSTRUCT 전문가 GT)"
+        },
+        "case_findings": null
+      }
+    },
+    {
+      "case_id": "CXR-0000",
+      "body_part": "chest_xray",
+      "disease": "pneumothorax",
+      "image": "raw/CXR-0000/image.png",
+      "reference_mask": "raw/CXR-0000/mask.png",
+      "slice_index": 0,
+      "total_slices": 1,
+      "explanation": {
+        "case_facts": {
+          "disease_name": "기흉 (Pneumothorax)",
+          "disease_code": "pneumothorax",
+          "reference_region": "우측 폐첨부 흉막강 (기준 마스크 위치)",
+          "dataset": "예시"
+        },
+        "case_findings": {
+          "findings": "장측 흉막선이 보이고 그 바깥으로 폐 혈관 음영이 소실됨",
+          "medical_terms": [
+            { "term": "흉막선(pleural line)", "description": "" },
+            { "term": "폐첨부(apex)", "description": "" }
+          ],
+          "references": [
+            { "title": "예시 참고자료", "url": "https://example.org/reference/pneumothorax" }
+          ],
+          "reviewer": "홍길동 (영상의학과)",
+          "reviewed_at": "2026-09-08"
+        }
+      }
+    }
+  ]
+}

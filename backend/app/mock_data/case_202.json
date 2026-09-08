@@ -1,0 +1,7 @@
+{
+  "case_id": "VS-SEG-202",
+  "body_part": "brain_mri",
+  "disease": "vestibular_schwannoma",
+  "image_url": "/images/202_t1.png",
+  "image_meta": { "width": 512, "height": 512, "slice_index": 34, "total_slices": 60 }
+}

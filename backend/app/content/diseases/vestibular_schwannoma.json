@@ -1,0 +1,78 @@
+{
+  "_comment": [
+    "전정신경초종 문헌 기반 일반 학습정보 (disease_info, source=literature_based).",
+    "",
+    "**이 케이스의 소견이 아니다.** 질환 일반론이며, 화면 4 에서 안내 문구와 함께 표시된다.",
+    "각 문장 끝의 괄호는 그 내용을 확인한 출처다. references 의 URL 을 실제로 열어 확인한",
+    "내용만 적었고, 확인하지 못한 내용(예: 'ice cream cone sign')은 넣지 않았다.",
+    "출처 확인일: 2026-09-08",
+    "",
+    "작성 방침: 판독 훈련에 필요한 **핵심 일반 학습정보**(위치/신호 특성/조영증강/IAC·CPA)만",
+    "간결하게 둔다. 역학 통계(유병 비율 등)처럼 학습 기능에 필요하지 않은 수치는 넣지 않는다.",
+    "",
+    "source 와 notice 는 여기 적지 않는다 — app/disease_content.py 가 항상 채운다."
+  ],
+  "content_version": "vs-2026-09-08b",
+  "imaging_features": [
+    "전정신경(제8뇌신경, vestibulocochlear nerve)의 슈반세포에서 기원하는 종양이다. (StatPearls 2023)",
+    "소뇌교각(cerebellopontine angle, CPA)과 내이도(internal auditory canal, IAC)에 발생한다. (Applied Radiology 2019)",
+    "T1 강조영상에서 주변 뇌실질과 같거나 낮은 신호로 보인다 (소뇌실질에 대해 등신호). (Applied Radiology 2019, AJNR 2017)",
+    "조영증강 T1 에서 강하게(avid), 대체로 균질하게 조영된다. (Applied Radiology 2019, AJNR 2017, StatPearls 2023)",
+    "T2 강조영상에서는 대개 고신호이며 불균질할 수 있다. (Applied Radiology 2019, StatPearls 2023)",
+    "종양이 커지면 종양 내 출혈과 낭종 때문에 조영증강이 불균질해지는 경우가 많다. (AJNR 2017)",
+    "낭성 변이는 T2 고신호와 다양한 T1 신호를 보이고 낭벽이 조영된다. (AJNR 2017)",
+    "종양이 내이도 안에만 있으면 intrameatal 이라고 부른다. porus acusticus 를 지나 소뇌교각 수조로 확장되면 종양과 추체골이 이루는 각은 대개 예각이다. (Applied Radiology 2019)"
+  ],
+  "medical_terms": [
+    {
+      "term": "소뇌교각 (cerebellopontine angle, CPA)",
+      "description": "전정신경초종이 발생하는 대표적인 부위. (Applied Radiology 2019)"
+    },
+    {
+      "term": "내이도 (internal auditory canal, IAC)",
+      "description": "종양이 이 안에만 있으면 intrameatal 이라고 부른다. (Applied Radiology 2019)"
+    },
+    {
+      "term": "porus acusticus",
+      "description": "종양이 내이도를 벗어나 소뇌교각 수조로 확장될 때 지나는 지점. 여기를 넘지 않으면 intrameatal 이다. (Applied Radiology 2019)"
+    },
+    {
+      "term": "조영증강 T1 (contrast-enhanced T1, ceT1)",
+      "description": "가돌리늄 조영제 투여 후 촬영한 T1 영상. 전정신경초종은 여기서 강하게 조영된다. 이 학습 케이스들이 쓰는 영상 종류이기도 하다. (AJNR 2017, StatPearls 2023, Shapey 2021)"
+    },
+    {
+      "term": "T2 강조영상",
+      "description": "전정신경초종은 대개 고신호로 보이며 불균질할 수 있다. (Applied Radiology 2019, StatPearls 2023)"
+    },
+    {
+      "term": "슈반세포 (Schwann cell)",
+      "description": "신경을 감싸는 세포. 전정신경초종은 제8뇌신경의 슈반세포에서 기원한다. (StatPearls 2023)"
+    }
+  ],
+  "references": [
+    {
+      "title": "Shapey J, et al. Segmentation of vestibular schwannoma from MRI, an open annotated dataset and baseline algorithm. Scientific Data 8:286 (2021). 이 학습 케이스의 영상과 전문가 GT 출처.",
+      "publisher": "Scientific Data (DOI 10.1038/s41597-021-01064-w)",
+      "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC8553833/",
+      "accessed": "2026-09-08"
+    },
+    {
+      "title": "Lin EP, Crane BT. The Management and Imaging of Vestibular Schwannomas. AJNR Am J Neuroradiol 38(11):2034-2043 (2017).",
+      "publisher": "AJNR (DOI 10.3174/ajnr.A5213, PMID 28546250)",
+      "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC5690865/",
+      "accessed": "2026-09-08"
+    },
+    {
+      "title": "Nguyen D, de Kanztow L. Vestibular schwannomas: A Review. Applied Radiology (2019-06-07).",
+      "publisher": "Applied Radiology",
+      "url": "https://appliedradiology.com/articles/vestibular-schwannomas-a-review",
+      "accessed": "2026-09-08"
+    },
+    {
+      "title": "Sheikh MM, De Jesus O. Vestibular Schwannoma. StatPearls (2023-08-23 갱신).",
+      "publisher": "StatPearls Publishing (NBK562312)",
+      "url": "https://www.ncbi.nlm.nih.gov/books/NBK562312/",
+      "accessed": "2026-09-08"
+    }
+  ]
+}

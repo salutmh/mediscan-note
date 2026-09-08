@@ -1,0 +1,123 @@
+# =============================================================================
+# 메디스캔노트 .gitignore
+#
+# 원칙: **경로 단위로 실제 데이터 디렉터리를 먼저 차단**하고, 확장자 차단은 보조로만 쓴다.
+# 확장자를 무턱대고 전역 차단하면 테스트에 필요한 합성 픽스처까지 사라진다.
+#
+# 커밋되는 것(의도적):
+#   backend/app/static/images/*.png, results/*.png  <- 합성 자리표시자 (실제 의료영상 아님).
+#                                                      테스트 픽스처라 새로 clone 해도 pytest 가 돈다.
+#   backend/data/manifest.example.json              <- 실제 경로/값 없는 예시
+#   backend/.env.example, frontend/.env.example     <- 값이 비어 있는 템플릿
+#   backend/app/content/diseases/*.json             <- 문헌 학습정보 (텍스트, 출처 명시)
+# =============================================================================
+
+# --- 실제 의료 데이터 · 실데이터 작업물 (경로 우선 차단) ---------------------
+# 디렉터리 자체가 아니라 '내용물'을 제외해야 아래 negation(!)이 동작한다.
+# (git: 부모 디렉터리가 제외되면 그 안의 파일은 다시 포함할 수 없다)
+backend/data/*
+!backend/data/manifest.example.json
+backend/app/static/cases/
+models/**/outputs/
+models/**/checkpoints/
+/data/
+raw/
+vs_seg_export/
+vs_seg_cases/
+vs_seg_review/
+vs_seg_review_packet/
+vs_seg_predictions/
+
+# --- 의료영상 / 볼륨 / GT 파일 (보조 차단) ----------------------------------
+*.dcm
+*.dicom
+*.nii
+*.nii.gz
+*.mha
+*.mhd
+*.nrrd
+*.npy
+*.npz
+
+# --- 모델 가중치 -------------------------------------------------------------
+*.pth
+*.pt
+*.ckpt
+*.safetensors
+*.onnx
+*.h5
+*.pb
+
+# --- 예측 산출물 (모델이 만든 결과) -----------------------------------------
+prediction.json
+prediction.png
+prediction_mask.npy
+
+# --- 비밀값 / 자격증명 -------------------------------------------------------
+.env
+.env.local
+.env.*.local
+!.env.example
+# .env.development / .env.production 은 API 주소만 담는 공개 설정이라 커밋한다.
+# 비밀값은 여기 넣지 말 것 (백엔드 .env 로).
+*.pem
+*.key
+*.p12
+*.pfx
+*credentials*.json
+*service-account*.json
+secrets.*
+
+# --- 데이터베이스 / 백업 -----------------------------------------------------
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+*.bak
+*.backup
+*.dump
+
+# --- Python ------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# --- Node / 빌드 -------------------------------------------------------------
+node_modules/
+dist/
+build/
+.vite/
+*.tsbuildinfo
+
+# --- 로그 / 임시 / 검증 산출물 ----------------------------------------------
+*.log
+logs/
+tmp/
+temp/
+scratchpad/
+out/
+screenshots/
+shots/
+*.zip
+*.tar
+*.tar.gz
+*.7z
+
+# --- 에디터 / OS -------------------------------------------------------------
+.DS_Store
+Thumbs.db
+.idea/
+*.swp
+
+# --- 로컬 도구 설정 ----------------------------------------------------------
+.claude/settings.local.json

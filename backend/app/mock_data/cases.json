@@ -1,0 +1,18 @@
+{
+  "cases": [
+    {
+      "case_id": "VS-SEG-202",
+      "body_part": "brain_mri",
+      "disease": "vestibular_schwannoma",
+      "thumbnail_url": "/images/202_thumb.png",
+      "solved": false
+    },
+    {
+      "case_id": "VS-SEG-115",
+      "body_part": "brain_mri",
+      "disease": "vestibular_schwannoma",
+      "thumbnail_url": "/images/115_thumb.png",
+      "solved": true
+    }
+  ]
+}
