@@ -8,7 +8,7 @@
 from fastapi import APIRouter, HTTPException
 from sqlalchemy import select
 
-from app import explanations
+from app import analytics, explanations
 from app.deps import CurrentUser, DbSession
 from app.grading import InvalidRoi, NotGradable, evaluate_submission, is_gradable
 from app.models import Case, Submission
@@ -33,11 +33,13 @@ def _extract_roi(payload) -> dict:
     return roi
 
 
-def grade_and_store(case: Case, roi: dict, user, db) -> dict:
+def grade_and_store(case: Case, roi: dict, user, db, duration_seconds=None) -> dict:
     """채점 -> 이력 저장 -> 응답 본문. submit 과 retry 가 함께 쓴다.
 
     채점 불가/ROI 오류일 때는 **저장하지 않고** 예외를 던진다.
     """
+    # 회차는 이번 제출을 저장하기 **전에** 센다 (1부터)
+    attempt = analytics.attempt_number(db, user.user_id, case.case_id)
     try:
         result = evaluate_submission(case, roi)
     except NotGradable as exc:
@@ -60,6 +62,17 @@ def grade_and_store(case: Case, roi: dict, user, db) -> dict:
             # 매번 새로 붙으므로(문헌이 갱신되면 같이 바뀐다) 제출 시점 스냅샷에 넣지 않는다.
             explanation=explanations.stored_blocks(case),
         )
+    )
+    # 관찰용 로그. 실패해도 채점 흐름을 막지 않는다 (app/analytics.py)
+    analytics.record(
+        db,
+        user_id=user.user_id,
+        event=analytics.SUBMISSION_GRADED,
+        case_id=case.case_id,
+        grade=result["grade"],
+        dice=result["dice"],
+        attempt_number=attempt,
+        duration_seconds=duration_seconds,
     )
     db.commit()
 
@@ -103,6 +116,13 @@ def get_case(case_id: str, user: CurrentUser, db: DbSession):
     # 존재를 알려줄 이유가 없으므로 404 로 통일한다.
     if case is None or not case.is_active:
         raise _not_found(case_id)
+
+    # "몇 명이 열어서 몇 명이 제출까지 가는가"를 보려면 시작 지점이 필요하다
+    analytics.record(
+        db, user_id=user.user_id, event=analytics.CASE_OPENED, case_id=case.case_id
+    )
+    db.commit()
+
     return {
         "case_id": case.case_id,
         "body_part": case.body_part,
@@ -118,4 +138,6 @@ def submit_case(case_id: str, payload: dict, user: CurrentUser, db: DbSession):
     case = db.get(Case, case_id)
     if case is None or not case.is_active:
         raise _not_found(case_id)
-    return grade_and_store(case, _extract_roi(payload), user, db)
+    # duration_seconds 는 선택이다. 없으면 소요시간만 비고 나머지는 그대로 기록된다.
+    duration = payload.get("duration_seconds") if isinstance(payload, dict) else None
+    return grade_and_store(case, _extract_roi(payload), user, db, duration_seconds=duration)

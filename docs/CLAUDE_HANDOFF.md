@@ -12,9 +12,9 @@
 | 최종 갱신 | 2026-09-08 |
 | 시작 커밋 | `ef56005` (docs: add public project README) |
 | 현재 브랜치 | `main` (origin/main과 동기) |
-| 현재 Phase | **Phase 6 — 콘텐츠 확장 준비** |
-| STATUS | `NOT_STARTED` (Phase 5까지 DONE) |
-| 마지막 전체 테스트 | **339 passed** (Phase 5 완료 시점) |
+| 현재 Phase | **Phase 1~8 전부 DONE** |
+| STATUS | `DONE` — 남은 것은 BLOCKER 해소와 잔여 High(H4/H5) |
+| 마지막 전체 테스트 | **382 passed** (Phase 8 완료 시점) |
 
 ---
 
@@ -43,9 +43,9 @@
 | 3 | 학습 피드백 엔진 (spatial feedback + threshold config) | **DONE** |
 | 4 | `case_findings` 운영 구조 | **DONE** (구조만 — 내용은 전문가 대기) |
 | 5 | 최소 Admin CMS | **DONE** |
-| 6 | 콘텐츠 확장 준비 (케이스 후보 분석 도구) | **NEXT** |
-| 7 | 모델 평가 개선 | NOT_STARTED |
-| 8 | 사용자 테스트 이벤트 로그 | NOT_STARTED |
+| 6 | 콘텐츠 확장 준비 (케이스 후보 분석 도구) | **DONE** |
+| 7 | 모델 평가 개선 | **DONE** |
+| 8 | 사용자 테스트 이벤트 로그 | **DONE** |
 
 ---
 
@@ -137,19 +137,48 @@
 - 프론트 라우트를 숨기지 않았다. 프론트 숨김은 권한이 아니고, 서버가 403 을 주면
   화면이 "운영자 권한이 필요합니다"를 그대로 보여주는 편이 덜 혼란스럽다.
 
+### Phase 6~8 — 콘텐츠 확장 준비 / 모델 평가 / 학습 이벤트 (DONE)
+
+| Phase | 구현 | 파일 |
+|---|---|---|
+| 6 | 케이스 후보의 **객관적 metadata** 계산 (편측·GT voxel·상대크기·AI 검출·FN/FP). 난이도는 채우지 않는다 | `scripts/analyze_case_candidates.py` |
+| 7 | 모델 평가 — 검출률 / 전체 Dice vs 검출건만 Dice / **크기 구간별** / 버전 비교 | `scripts/evaluate_model.py` |
+| 8 | 학습 이벤트 기록 + 집계 리포트 | `app/analytics.py`, `app/models.py`(LearningEvent), `scripts/learning_report.py` |
+
+**실제로 드러난 사실 (콘텐츠 계획에 반영할 것)**
+- 현재 6케이스는 **우측 5 / 좌측 1** 로 편향돼 있다. 이대로 늘리면 학습자가 "오른쪽을 칠하면 맞는" 훈련을 하게 된다.
+- AI 미검출 1건(VS-SEG-204)은 **세트에서 가장 작은 병변**이다.
+  small 구간 검출률 0.5 vs medium/large 1.0 → CLAUDE.md 의 "소형 intracanalicular" 가설과 방향이 맞는다.
+- 평균 Dice 0.79 는 이 모델을 잘못 요약한다. 검출건만 보면 0.9488 이다
+  (= "전반적으로 부정확"이 아니라 "가끔 완전히 놓치는" 모델).
+
+**설계 메모 (다음 세션이 알아야 할 것)**
+- FN/FP 는 마스크 npy 를 다시 읽지 않고 **Dice 에서 교집합을 역산**해 구한다
+  (`overlap_from_dice`). 수백 MB 파일을 건드리지 않기 위함이다.
+- `size_bucket_relative` 는 **분석 대상 안에서의 3분위**다. 절대 기준이 아니고 의학적 분류도 아니다.
+  `test_same_sizes_in_a_different_set_get_different_buckets` 가 이 성질을 고정한다.
+- 버전 비교는 **평균이 올라도 회귀를 잡는다** — 이전에 검출하던 케이스를 놓치면 `[회귀]` 를 찍는다.
+- 학습 이벤트에는 **개인정보 칸이 아예 없다**. 컬럼 집합을 테스트가 고정하므로
+  (`test_event_table_has_no_personal_fields`) 나중에 이메일·IP 를 추가하려 하면 실패한다. 의도된 가드다.
+- 이벤트는 채점·학습 상태 계산에 개입하지 않는다. 테이블을 통째로 비워도 서비스는 동작한다.
+- 탈퇴 시 이벤트도 함께 삭제된다 (`DELETED_SCOPES` 에 포함).
+
 ---
 
 ## 4. 현재 진행 중인 작업
 
-없음 — Phase 5 까지 완료·커밋됨. Phase 6 부터 시작하면 된다.
+없음 — **Phase 1~8 전부 완료·커밋됨.**
 
 ---
 
 ## 5. 아직 하지 않은 작업
 
-- Phase 6 ~ Phase 8
-- Phase 2 범위 밖으로 남긴 것: H4 서버측 토큰 폐기, H5 이메일 인증·비밀번호 재설정
-- **프론트 탈퇴 UI 미구현** (API 만 완성). Closed Beta 전에 화면이 필요하다.
+계획된 Phase 는 전부 끝났다. 남은 것은:
+- **H4** 서버측 토큰 폐기 (로그아웃이 클라이언트 삭제뿐)
+- **H5** 이메일 인증 / 비밀번호 재설정
+- **프론트 탈퇴 UI** (API 만 완성, 화면 없음) — Closed Beta 전에 필요
+- **케이스 확장**: 좌측·소형 병변 우선 (Phase 6 분석 결과)
+- BLOCKER 1~3 (라이선스 / 전문가 소견 / 규제)
 
 ---
 
@@ -167,9 +196,10 @@
 
 ## 7. Migration 여부
 
-마이그레이션 2건 추가 (**둘 다 추가 전용, 데이터 파괴 없음**):
+마이그레이션 3건 추가 (**전부 추가 전용, 데이터 파괴 없음**):
 - `e81bbce560b5` cases.findings_status (Phase 4)
 - `e93378ca7e48` users.is_admin, cases.is_active, cases.difficulty (Phase 5)
+- `0fc6767cf5ba` learning_events 테이블 신규 (Phase 8)
 스키마 변경 시 반드시:
 ```
 cd backend && alembic revision --autogenerate -m "<설명>"
@@ -182,6 +212,8 @@ cd backend && alembic revision --autogenerate -m "<설명>"
 
 | 시점 | 명령 | 결과 |
 |---|---|---|
+| Phase 8 | `cd backend && pytest` | **382 passed** |
+| Phase 8 | `verify_cases` / `npm run build` | 6케이스 통과 / 통과 |
 | Phase 5 | `cd backend && pytest` | **339 passed** |
 | Phase 5 | `verify_cases` / `npm run build` | 6케이스 통과 / 통과 |
 | Phase 4 | `cd backend && pytest` | **307 passed** |
@@ -212,18 +244,21 @@ cd backend && alembic revision --autogenerate -m "<설명>"
 
 ## 13. NEXT STEP — 다음 세션이 가장 먼저 할 일
 
-> **Phase 6 — 콘텐츠 확장 준비**부터 시작한다.
-> - [x] Phase 1~5 완료. 다시 만들지 말 것.
-> - [ ] `scripts/analyze_case_candidates.py`: VS-SEG export 에서 케이스 후보를 뽑아
->       **객관적 metadata 만** 계산 — left/right, lesion voxel/area, small/large,
->       AI 검출 성공·실패, GT/prediction 불일치, case-level Dice
-> - [ ] **의료적 난이도를 자동 확정하지 않는다.** size·model performance 같은 계산값만 내고
->       difficulty 는 전문가 검토 대상으로 남긴다 (CONTENT_GUIDELINES 6절)
-> - [ ] 출력은 사람이 검토할 수 있는 표/JSON. **DB 를 자동으로 바꾸지 않는다**
-> - [ ] 이어서 Phase 7(모델 평가: mean Dice / 검출률 / FN / lesion size별 / 버전 비교),
->       Phase 8(학습 이벤트 로그 — 개인정보 최소 수집)
-> - [ ] 남은 High: H4 서버측 토큰 폐기, H5 이메일 인증·비밀번호 재설정,
->       **프론트 탈퇴 UI**(API 만 있고 화면이 없다)
+> **Phase 1~8 은 전부 끝났다. 다시 만들지 말 것.**
+> 우선순위 순으로 아래를 이어서 하면 된다.
+>
+> 1. [ ] **프론트 탈퇴 UI** — `DELETE /api/auth/me` 는 있고 화면이 없다.
+>        Closed Beta 에 사용자를 받으려면 탈퇴 경로가 화면에 있어야 한다.
+>        (`frontend/src/api/endpoints.js` 의 `deleteAccount` 가 이미 준비돼 있다)
+> 2. [ ] **H4 서버측 토큰 폐기** — 로그아웃/탈퇴 시 기존 토큰을 서버가 무효화.
+>        지금은 클라이언트 삭제뿐이라 유출 토큰이 최대 7일 유효하다.
+>        (탈퇴는 사용자가 사라져 401 이 되므로 이미 안전하다 — 문제는 로그아웃)
+> 3. [ ] **H5 비밀번호 재설정 / 이메일 인증** — 메일 발송 수단이 필요하다.
+>        외부 서비스 가입이 필요하면 BLOCKER 로 남길 것.
+> 4. [ ] **케이스 확장** — `python -m scripts.analyze_case_candidates` 결과 기준으로
+>        **좌측 병변과 소형 병변을 우선** 확보한다 (현재 우측 5/좌측 1 편향).
+>        등록은 반드시 기존 4단계 파이프라인으로.
+> 5. [ ] BLOCKER 1~3 해소는 사용자 판단이 필요하다 (아래 참고).
 
 ---
 

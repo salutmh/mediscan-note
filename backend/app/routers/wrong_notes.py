@@ -64,4 +64,7 @@ def retry_case(case_id: str, payload: dict, user: CurrentUser, db: DbSession):
             status_code=400,
             detail={"error": True, "code": "INVALID_ROI", "message": "roi 가 필요합니다."},
         )
-    return grade_and_store(case, roi, user, db)
+    # 재도전도 같은 경로로 채점된다. 회차(attempt_number)는 grade_and_store 가 센다 —
+    # 첫 시도와 재도전의 점수 변화를 보려면 이 값이 필요하다.
+    duration = payload.get("duration_seconds") if isinstance(payload, dict) else None
+    return grade_and_store(case, roi, user, db, duration_seconds=duration)

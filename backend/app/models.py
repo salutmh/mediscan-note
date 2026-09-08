@@ -34,6 +34,10 @@ class User(Base):
 
     consents: Mapped[list["Consent"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     submissions: Mapped[list["Submission"]] = relationship(back_populates="user", cascade="all, delete-orphan")
+    # 탈퇴 시 관찰 로그도 함께 지운다 (app/account.py 의 삭제 범위에 포함된다)
+    learning_events: Mapped[list["LearningEvent"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
 
     __table_args__ = (UniqueConstraint("provider", "provider_subject", name="uq_user_provider_subject"),)
 
@@ -123,6 +127,33 @@ class CaseSlice(Base):
     case: Mapped[Case] = relationship(back_populates="slices")
 
     __table_args__ = (UniqueConstraint("case_id", "slice_index", name="uq_case_slice_index"),)
+
+
+class LearningEvent(Base):
+    """학습 관찰 로그 (Closed Beta 측정용).
+
+    **개인정보를 과도하게 담지 않는다** — 이메일·닉네임·IP·User-Agent·ROI 원본은 없다.
+    남기는 것은 내부 user_id, case_id, 이벤트 종류, 시각, 그리고 점수/회차/소요시간뿐이다.
+    자세한 이유는 app/analytics.py 참고.
+
+    **채점이나 학습 상태 계산에 쓰이지 않는다.** 순수 관찰용이라 이 테이블을 통째로 비워도
+    서비스는 그대로 동작한다.
+    """
+
+    __tablename__ = "learning_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    # 계정을 지우면 이벤트도 함께 사라진다 (User.learning_events 의 cascade)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.user_id"), index=True)
+    case_id: Mapped[str | None] = mapped_column(String(40), index=True, default=None)
+    event: Mapped[str] = mapped_column(String(40), index=True)
+    grade: Mapped[str | None] = mapped_column(String(20), default=None)
+    dice: Mapped[float | None] = mapped_column(Float, default=None)
+    attempt_number: Mapped[int | None] = mapped_column(Integer, default=None)
+    duration_seconds: Mapped[int | None] = mapped_column(Integer, default=None)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+
+    user: Mapped[User] = relationship(back_populates="learning_events")
 
 
 class Submission(Base):

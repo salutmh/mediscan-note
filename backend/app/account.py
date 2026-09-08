@@ -10,9 +10,10 @@
   → docs/CLAUDE_HANDOFF.md BLOCKER-3 (NEEDS_REGULATORY_REVIEW)
 
 지워지는 것 (User 의 cascade="all, delete-orphan" 으로 함께 사라진다):
-  - users        계정 (이메일 / 비밀번호 해시 / 닉네임 / SNS 식별자)
-  - consents     동의 이력 전부
-  - submissions  제출·채점 이력 전부 (복습노트·진행현황도 함께 사라진다)
+  - users            계정 (이메일 / 비밀번호 해시 / 닉네임 / SNS 식별자)
+  - consents         동의 이력 전부
+  - submissions      제출·채점 이력 전부 (복습노트·진행현황도 함께 사라진다)
+  - learning_events  학습 관찰 로그 전부
 
 지워지지 않는 것:
   - cases / case_slices  교육 콘텐츠. 사용자 데이터가 아니다.
@@ -26,7 +27,7 @@ from app.models import User
 logger = logging.getLogger(__name__)
 
 # 응답으로 무엇이 지워졌는지 알려준다 (사용자가 확인할 수 있어야 한다).
-DELETED_SCOPES = ["account", "consents", "submissions"]
+DELETED_SCOPES = ["account", "consents", "submissions", "learning_events"]
 
 
 def delete_account(db: Session, user: User) -> dict:
@@ -37,6 +38,7 @@ def delete_account(db: Session, user: User) -> dict:
     counts = {
         "consents": len(user.consents),
         "submissions": len(user.submissions),
+        "learning_events": len(user.learning_events),
     }
     user_id = user.user_id
 
@@ -45,8 +47,8 @@ def delete_account(db: Session, user: User) -> dict:
 
     # 개인 식별 정보는 로그에 남기지 않는다 (이메일·닉네임 금지, 내부 ID 만).
     logger.info(
-        "계정 삭제: user_id=%s consents=%s submissions=%s",
-        user_id, counts["consents"], counts["submissions"],
+        "계정 삭제: user_id=%s consents=%s submissions=%s events=%s",
+        user_id, counts["consents"], counts["submissions"], counts["learning_events"],
     )
     return {
         "deleted": True,

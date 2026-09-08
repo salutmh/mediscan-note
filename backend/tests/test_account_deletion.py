@@ -13,7 +13,7 @@
 from sqlalchemy import select
 
 from app.db import SessionLocal
-from app.models import Case, Consent, Submission, User
+from app.models import Case, Consent, LearningEvent, Submission, User
 
 
 def _counts(user_id: str) -> dict:
@@ -23,6 +23,9 @@ def _counts(user_id: str) -> dict:
             "consents": len(db.scalars(select(Consent).where(Consent.user_id == user_id)).all()),
             "submissions": len(
                 db.scalars(select(Submission).where(Submission.user_id == user_id)).all()
+            ),
+            "learning_events": len(
+                db.scalars(select(LearningEvent).where(LearningEvent.user_id == user_id)).all()
             ),
         }
 
@@ -51,6 +54,7 @@ def test_delete_removes_account_and_user_data(user_a, roi_mismatch):
     user_a.submit(roi_mismatch)
     before = _counts(user_a.user_id)
     assert before["user"] and before["consents"] > 0 and before["submissions"] > 0
+    assert before["learning_events"] > 0, "제출 시 관찰 로그가 남아야 한다"
 
     res = user_a.delete("/api/auth/me", json={"password": user_a.password})
     assert res.status_code == 200, res.text
@@ -60,10 +64,17 @@ def test_delete_removes_account_and_user_data(user_a, roi_mismatch):
     assert body["user_id"] == user_a.user_id
     assert body["deleted_counts"]["consents"] == before["consents"]
     assert body["deleted_counts"]["submissions"] == before["submissions"]
-    assert set(body["deleted_scopes"]) == {"account", "consents", "submissions"}
+    # 학습 관찰 로그(Phase 8)도 함께 지운다 — 사용자 데이터이므로 남기지 않는다
+    assert body["deleted_counts"]["learning_events"] == before["learning_events"]
+    assert set(body["deleted_scopes"]) == {
+        "account",
+        "consents",
+        "submissions",
+        "learning_events",
+    }
 
     after = _counts(user_a.user_id)
-    assert after == {"user": False, "consents": 0, "submissions": 0}
+    assert after == {"user": False, "consents": 0, "submissions": 0, "learning_events": 0}
 
 
 def test_token_stops_working_after_deletion(user_a):

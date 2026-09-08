@@ -35,7 +35,7 @@ AI 보조 피드백(참고) → 오답 재학습.
 | 화면 5 | 지어내지 않고 `model_unavailable`, 데모는 flag OFF 기본 | `app/routers/analyze.py:74` |
 | 스키마 | Alembic이 기준, 기동 시 자동 upgrade + 레거시 DB 감지 | `app/db.py:47` |
 | 정적 자산 | 요청 주소 기준 절대 URL 생성 | `app/main.py:32` |
-| 테스트 | **339개 통과** (19개 파일) | `backend/tests/` |
+| 테스트 | **382개 통과** (22개 파일) | `backend/tests/` |
 
 **이미 해결된 것은 다시 만들지 않는다.** 위 항목은 재구현 대상이 아니다.
 
@@ -62,7 +62,7 @@ AI 보조 피드백(참고) → 오답 재학습.
 | H4 | 서버측 토큰 폐기 없음 | 로그아웃은 클라이언트 삭제만, 유출 토큰 최대 7일 유효 | 🔲 미착수 |
 | H5 | 이메일 인증 / 비밀번호 재설정 없음 | 남의 이메일로 가입 가능, 비번 분실 시 계정 영구 상실 | 🔲 미착수 |
 | H6 | 채점 임계값 하드코딩 | ~~상수~~ → `app/scoring_config.py` 분리 + 응답에 `validation_status` 노출 | ✅ DONE |
-| H7 | 학습 분석 이벤트 없음 | Closed Beta 측정 지표를 수집할 구조 부재 | 🔲 Phase 8 |
+| H7 | 학습 분석 이벤트 없음 | ~~없음~~ → `learning_events` + `scripts/learning_report.py`. **개인정보 미수집**(이메일·IP·ROI 없음) | ✅ DONE |
 
 ---
 
@@ -73,7 +73,7 @@ AI 보조 피드백(참고) → 오답 재학습.
 | M1 | 구조적 로깅 설정 없음 (현재 민감정보 로깅은 확인 결과 **없음** — 7.1 참고) |
 | M2 | `_grade_by_points` 개발용 근사 채점 경로가 코드에 남아 있음 (`MEDISCAN_ALLOW_APPROX_GRADING`로만 동작) |
 | ~~M3~~ | ~~난이도 메타데이터 없음~~ → `cases.difficulty` 추가 (Phase 5). **자동 판정하지 않고 전문가 검토 대상**(E2) |
-| M4 | 모델 평가가 case별 Dice 위주, lesion size별·검출률 분석 도구 없음 |
+| ~~M4~~ | ~~모델 평가 도구 없음~~ → `scripts/evaluate_model.py` (검출률·크기 구간별·버전 비교, Phase 7) |
 | M5 | 예측 sidecar 수동 재계산 |
 | M6 | 동시성/부하 미검증, PostgreSQL 실검증 없음 |
 
@@ -102,7 +102,7 @@ AI 보조 피드백(참고) → 오답 재학습.
 | 회원 탈퇴 / 데이터 삭제 | ✅ `DELETE /api/auth/me` — 계정·동의·제출 이력 하드 삭제 |
 | 민감정보 로깅 | ✅ 확인 결과 password/token/request body를 로깅하는 코드 없음 |
 | 업로드 영상 미저장 + EXIF 제거 | ✅ 기존 구현 |
-| 접속기록(감사 로그) | ❌ 미구현 — 법적 요건 확인 필요 (BLOCKER-3) |
+| 접속기록(감사 로그) | ❌ 미구현 — 법적 요건 확인 필요 (BLOCKER-3). 학습 이벤트 로그는 목적이 다르다(관찰용) |
 | secret이 저장소에 없음 | ✅ 전체 history 스캔 완료, 실 키 0건 |
 
 ### 7.1 로깅 점검 결과
@@ -163,7 +163,7 @@ AI 보조 피드백(참고) → 오답 재학습.
 | 학습 피드백이 점수 이상을 제공 | ✅ 완료 (geometry 한정) |
 | 운영자가 콘텐츠를 다룰 수 있음 | ✅ 완료 (최소 CMS) |
 | 케이스 10개 이상 + 해설 | 🔲 전문가 검토 대기 (E1) |
-| 사용 데이터 측정 | 🔲 Phase 8 |
+| 사용 데이터 측정 | ✅ 완료 (최소 이벤트 로그) |
 | 라이선스 확인 | ❌ BLOCKER-1 |
 
 **현재 판정: 내부 테스트 가능 / 외부 Closed Beta는 BLOCKER-1 해소 후.**
@@ -184,4 +184,10 @@ AI 보조 피드백(참고) → 오답 재학습.
 - 2026-09-08: Phase 5 완료 — H3 해소. 테스트 307 → 339 (admin 32개 중 권한 격리 10개).
   마이그레이션 `e93378ca7e48`(users.is_admin, cases.is_active/difficulty, **추가 전용**).
   신규: `app/routers/admin.py`, `scripts/grant_admin.py`, `frontend/.../AdminCasesView.vue`.
+- 2026-09-08: Phase 6~8 완료 — M3·M4·H7 해소. 테스트 339 → 382.
+  마이그레이션 `0fc6767cf5ba`(learning_events, **신규 테이블만 추가**).
+  신규 스크립트: `analyze_case_candidates.py`, `evaluate_model.py`, `learning_report.py`.
+  신규 모듈: `app/analytics.py`.
+  **발견**: 현재 6케이스는 우측 5/좌측 1 로 편향돼 있고, AI 미검출 1건은 최소 병변이다
+  (small 구간 검출률 0.5 vs medium/large 1.0). 콘텐츠 확장 시 좌측·소형 병변을 우선 확보할 것.
 (이후 Phase 완료 시마다 여기에 추가한다)
