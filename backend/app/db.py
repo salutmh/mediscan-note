@@ -19,12 +19,40 @@ from pathlib import Path
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
+from app.config import ConfigError, is_production
+
 logger = logging.getLogger(__name__)
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 DEFAULT_SQLITE_PATH = BACKEND_DIR / "mediscan.db"
 
-DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{DEFAULT_SQLITE_PATH.as_posix()}")
+
+def _resolve_database_url() -> str:
+    """DB 주소. **production 에서는 반드시 명시해야 한다.**
+
+    개발에서는 미설정 시 로컬 SQLite 파일로 떨어진다 (팀원이 아무 설치 없이 실행 가능).
+    production 에서 같은 폴백이 일어나면 **데이터 손실 사고**가 된다 —
+    컨테이너 안 로컬 파일에 학습 이력이 쌓이고, 재배포하면 통째로 사라진다.
+    그것도 겉보기에는 정상 동작하므로 아무도 눈치채지 못한다. 그래서 기동을 막는다.
+
+    SQLite 자체를 금지하지는 않는다. 볼륨을 붙인 SQLite 로 소규모 운영을 할 수도 있다 —
+    다만 그 선택을 **명시적으로** 하게 만든다.
+    """
+    configured = os.getenv("DATABASE_URL", "").strip()
+    if configured:
+        return configured
+
+    if is_production():
+        raise ConfigError(
+            "DATABASE_URL 이 설정되지 않았습니다. production 에서는 필수입니다.\n"
+            "  미설정 시 컨테이너 안 로컬 SQLite 파일로 떨어지고, 재배포하면 학습 데이터가 사라집니다.\n"
+            "  예: DATABASE_URL=postgresql+psycopg2://user:pw@host:5432/mediscan\n"
+            "  (의도적으로 SQLite 를 쓰려면 볼륨 경로를 직접 지정하세요: sqlite:////data/mediscan.db)"
+        )
+    return f"sqlite:///{DEFAULT_SQLITE_PATH.as_posix()}"
+
+
+DATABASE_URL = _resolve_database_url()
 
 # SQLite 는 기본적으로 커넥션을 만든 스레드에서만 쓸 수 있다.
 # FastAPI 는 요청을 스레드풀에서 처리하므로 이 옵션이 필요하다 (PostgreSQL 에는 불필요).

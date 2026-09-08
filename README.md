@@ -104,6 +104,7 @@ mediscan-note/
 ├── models/           부위별 추론 wrapper (+ 새 부위용 _template)
 ├── docs/api-spec.md  API 명세 v0.4 — 프론트·백엔드의 유일한 접점
 ├── CLAUDE.md         프로젝트 브리프 (작업 맥락)
+├── docs/DEPLOYMENT.md 배포 런북 (체크리스트·백업·사고 대응)
 └── review_bundle.md  코드리뷰용 상세 문서 (구현 현황·알려진 리스크)
 ```
 

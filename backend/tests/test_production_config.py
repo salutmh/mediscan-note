@@ -73,6 +73,36 @@ def test_development_falls_back_with_warning(monkeypatch):
         assert security._resolve_secret_key() == security._DEV_SECRET
 
 
+# -------------------------------------------------------------- DATABASE_URL
+def test_production_requires_database_url(monkeypatch):
+    """미설정 시 컨테이너 안 로컬 SQLite 로 떨어지면 재배포마다 학습 데이터가 사라진다."""
+    from app import db
+
+    _production(monkeypatch)
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    with pytest.raises(ConfigError) as exc:
+        db._resolve_database_url()
+    assert "DATABASE_URL" in str(exc.value)
+
+
+def test_production_accepts_explicit_sqlite(monkeypatch):
+    """SQLite 자체를 금지하지는 않는다 — 볼륨 경로를 **명시적으로** 정하게 할 뿐이다."""
+    from app import db
+
+    _production(monkeypatch)
+    monkeypatch.setenv("DATABASE_URL", "sqlite:////data/mediscan.db")
+    assert db._resolve_database_url() == "sqlite:////data/mediscan.db"
+
+
+def test_development_falls_back_to_local_sqlite(monkeypatch):
+    """개발에서는 아무 설정 없이도 실행돼야 한다."""
+    from app import db
+
+    monkeypatch.setenv("MEDISCAN_ENV", "development")
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    assert db._resolve_database_url().startswith("sqlite:///")
+
+
 # --------------------------------------------------------------------- CORS
 def test_production_requires_cors_origins(monkeypatch):
     _production(monkeypatch)
