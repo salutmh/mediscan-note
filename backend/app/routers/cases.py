@@ -12,7 +12,12 @@ from app import analytics, explanations
 from app.deps import CurrentUser, DbSession
 from app.grading import InvalidRoi, NotGradable, evaluate_submission, is_gradable
 from app.models import Case, CaseSlice, Submission
-from app.repository import has_matched_case_ids, needs_review_case_ids
+from app.repository import (
+    best_dice,
+    has_matched_case_ids,
+    needs_review_case_ids,
+    previous_attempt,
+)
 from app.static_files import absolute_url
 
 router = APIRouter(prefix="/api/cases", tags=["cases"])
@@ -33,13 +38,42 @@ def _extract_roi(payload) -> dict:
     return roi
 
 
+def _progress(attempt: int, previous, previous_best, current_dice) -> dict:
+    """이번 제출을 직전·최고 기록과 견준 결과.
+
+    첫 시도면 비교 대상이 없다 — 그때는 previous 를 None 으로 두고 **없는 것을
+    있는 척하지 않는다**(0 으로 채우면 "0에서 올랐다"로 읽힌다).
+    """
+    prior_dice = previous.dice if previous is not None else None
+    improved = None
+    if prior_dice is not None and current_dice is not None:
+        improved = current_dice > prior_dice
+
+    return {
+        "attempt_number": attempt,
+        "is_first_attempt": previous is None,
+        "previous": None
+        if previous is None
+        else {
+            "dice": previous.dice,
+            "grade": previous.grade,
+            "submitted_at": previous.submitted_at.isoformat() if previous.submitted_at else None,
+        },
+        # 직전보다 나빠도 지금까지의 최고는 남는다 (학습자가 뒤로 갔다고 느끼지 않게)
+        "best_dice": previous_best if previous_best is not None else current_dice,
+        "improved": improved,
+    }
+
+
 def grade_and_store(case: Case, roi: dict, user, db, duration_seconds=None) -> dict:
     """채점 -> 이력 저장 -> 응답 본문. submit 과 retry 가 함께 쓴다.
 
     채점 불가/ROI 오류일 때는 **저장하지 않고** 예외를 던진다.
     """
-    # 회차는 이번 제출을 저장하기 **전에** 센다 (1부터)
+    # 회차와 직전 기록은 이번 제출을 저장하기 **전에** 읽는다 (1부터)
     attempt = analytics.attempt_number(db, user.user_id, case.case_id)
+    previous = previous_attempt(db, user.user_id, case.case_id)
+    previous_best = best_dice(db, user.user_id, case.case_id)
     try:
         result = evaluate_submission(case, roi)
     except NotGradable as exc:
@@ -75,6 +109,14 @@ def grade_and_store(case: Case, roi: dict, user, db, duration_seconds=None) -> d
         duration_seconds=duration_seconds,
     )
     db.commit()
+
+    # 재도전한 학습자가 **지난번보다 나아졌는지** 알 수 있어야 한다.
+    # 회차는 원래도 계산하고 있었지만 운영자용 분석 로그로만 들어가서, 정작 다시 푼
+    # 사람은 자기 변화를 볼 수 없었다. 재도전의 의미가 여기 있으므로 응답에 싣는다.
+    #
+    # 여기 있는 것은 **학습자 자신의 숫자**뿐이다 — 같은 전문가 기준 마스크와의 일치도를
+    # 시점만 달리해 비교한다. 의학적 판단이 아니고 grade 에도 영향을 주지 않는다.
+    result["progress"] = _progress(attempt, previous, previous_best, result["dice"])
 
     result["reference_mask_url"] = absolute_url(result.get("reference_mask_url"))
     if result.get("ai_prediction") and result["ai_prediction"].get("mask_url"):

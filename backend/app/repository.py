@@ -68,3 +68,25 @@ def wrong_note_items(db: Session, user_id: str) -> list[Submission]:
 def needs_review_case_ids(db: Session, user_id: str) -> set[str]:
     """가장 최근 제출이 match 가 아닌 케이스."""
     return {s.case_id for s in wrong_note_items(db, user_id)}
+
+
+def previous_attempt(db: Session, user_id: str, case_id: str) -> Submission | None:
+    """이 케이스에 대한 **직전** 제출. 없으면 None (첫 시도).
+
+    이번 제출을 저장하기 **전에** 불러야 한다.
+    """
+    return db.scalar(
+        select(Submission)
+        .where(Submission.user_id == user_id, Submission.case_id == case_id)
+        .order_by(Submission.submitted_at.desc(), Submission.id.desc())
+        .limit(1)
+    )
+
+
+def best_dice(db: Session, user_id: str, case_id: str) -> float | None:
+    """지금까지 이 케이스에서 낸 최고 일치도. 없으면 None."""
+    return db.scalar(
+        select(func.max(Submission.dice)).where(
+            Submission.user_id == user_id, Submission.case_id == case_id
+        )
+    )

@@ -30,12 +30,13 @@ AI 보조 피드백(참고) → 오답 재학습.
 | 채점 거부 | 기준 마스크 없으면 422 `CASE_NOT_GRADABLE` + **이력 미생성** | `app/routers/cases.py:41` |
 | AI 분리 | sidecar 우선 → volume 모델은 2D 호출 차단 → 실패해도 예외 삼킴 | `app/grading.py:79` |
 | 학습 상태 | `has_matched`(누적) / `needs_review`(최신 제출 기준) 두 축 | `app/repository.py:50` |
+| 재도전 경과 | `progress`(회차·직전 점수·최고 점수·향상 여부). **학습자 자신의 숫자만**, grade 에 영향 없음 | `app/routers/cases.py`, `docs/api-spec.md` |
 | 해설 3층 | `case_facts`/`disease_info`/`case_findings`, `content_levels`는 **파생 계산** | `app/explanations.py:35` |
 | 업로드 검증 | 크기→포맷→손상→픽셀수→region, 미저장 + EXIF 제거 | `app/uploads.py` |
 | 화면 5 | 지어내지 않고 `model_unavailable`, 데모는 flag OFF 기본 | `app/routers/analyze.py:74` |
 | 스키마 | Alembic이 기준, 기동 시 자동 upgrade + 레거시 DB 감지 | `app/db.py:47` |
 | 정적 자산 | 요청 주소 기준 절대 URL 생성 | `app/main.py:32` |
-| 테스트 | 백엔드 **547개**(SQLite·PostgreSQL 양쪽) + 프론트 **48개** + E2E 4종 + 접근성 점검 | `backend/tests/`, `frontend/src/**/*.test.js` |
+| 테스트 | 백엔드 **554개**(SQLite·PostgreSQL 양쪽) + 프론트 **54개** + E2E 4종 + 접근성 점검 | `backend/tests/`, `frontend/src/**/*.test.js` |
 
 **이미 해결된 것은 다시 만들지 않는다.** 위 항목은 재구현 대상이 아니다.
 

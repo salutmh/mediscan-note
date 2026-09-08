@@ -435,6 +435,13 @@
       "reference_area_px": 1539
     }
   },
+  "progress": {
+    "attempt_number": 2,
+    "is_first_attempt": false,
+    "previous": { "dice": 0.4213, "grade": "partial_match", "submitted_at": "2026-09-09T02:11:04+00:00" },
+    "best_dice": 0.4213,
+    "improved": true
+  },
   "ai_prediction": null,
   "explanation": {
     "content_levels": ["dataset_verified", "literature_based"],
@@ -466,6 +473,17 @@
   }
 }
 ```
+
+> **학습 경과 `progress` (v0.7)** — 재도전한 학습자가 **지난번보다 나아졌는지** 알 수 있게 한다.
+> 회차(`attempt_number`)는 원래도 서버가 세고 있었지만 운영자용 분석 로그로만 들어가서,
+> 정작 다시 푼 사람은 자기 변화를 볼 수 없었다. 재도전의 의미가 여기 있으므로 응답에 싣는다.
+>
+> - 첫 시도면 `previous: null`, `improved: null`, `is_first_attempt: true` 다.
+>   **비교 대상이 없는 것을 0 으로 채우지 않는다** — 0 으로 두면 "0에서 올랐다"로 읽힌다.
+> - `best_dice` 는 지금까지의 최고값이다. 이번에 직전보다 낮아도 최고 기록은 남는다.
+> - `improved` 는 **직전 제출과의 비교**다 (최고 기록과의 비교가 아니다).
+> - 여기 있는 것은 전부 **학습자 자신의 숫자**다. 같은 전문가 기준 마스크와의 일치도를
+>   시점만 달리해 비교한 것이라 의학적 판단이 아니고, `grade` 에도 영향을 주지 않는다.
 
 > **공간 피드백 `spatial_feedback` (v0.5)** — "왜 틀렸는지"를 알려주기 위한 블록이다.
 >

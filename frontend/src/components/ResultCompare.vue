@@ -39,6 +39,25 @@ const GRADE_DESC = {
  * 문구는 서버가 만든 것을 그대로 쓴다. 프론트에서 의료적 해석을 덧붙이지 않는다.
  * 좌표 근사 채점에서는 null 이므로 블록 자체를 그리지 않는다.
  */
+// 재도전 경과. 서버가 준 그대로 쓰고 화면에서 계산하지 않는다
+// (여기서 다시 계산하면 서버와 어긋날 수 있다).
+const progress = computed(() => props.result?.progress ?? null)
+
+// 직전보다 낮게 나왔을 때만 "최고 기록"을 함께 보여준다.
+// 잘한 시도에까지 붙이면 소음이고, 못한 시도에는 "여기까지 왔었다"가 도움이 된다.
+const showBest = computed(() => {
+  const p = progress.value
+  if (!p || p.is_first_attempt || p.improved !== false) return false
+  return p.best_dice != null && p.best_dice > (props.result?.dice ?? 0)
+})
+
+const improvedTone = computed(() => {
+  const improved = progress.value?.improved
+  if (improved === true) return 'up'
+  if (improved === false) return 'down'
+  return ''
+})
+
 const spatialFeedback = computed(() => props.result.spatial_feedback ?? null)
 
 /** code 로 색만 나눈다 (의미 부여는 서버 문구가 한다) */
@@ -137,6 +156,13 @@ async function render() {
   outCanvas.value.width = w
   outCanvas.value.height = h
   const ctx = outCanvas.value.getContext('2d')
+  if (!ctx) {
+    // 2D 컨텍스트를 얻지 못하는 경우(캔버스 개수 한도, 일부 환경). 오버레이는 **부가 정보**이고
+    // 등급·수치·피드백이 결과의 본체다. 여기서 그냥 터지면 화면 전체가 빈 채로 남는다.
+    overlayNote.value = '이 환경에서는 겹쳐보기 그림을 그릴 수 없습니다. 아래 수치와 설명은 그대로 유효합니다.'
+    pixelMode.value = false
+    return
+  }
   ctx.clearRect(0, 0, w, h)
   overlayNote.value = ''
 
@@ -227,6 +253,24 @@ function ratio(value, max = 1) {
           </div>
         </div>
       </dl>
+
+      <!-- 재도전 경과 (v0.7).
+           같은 케이스를 다시 푼 사람은 "나아졌는지"를 가장 알고 싶어 한다.
+           서버는 원래도 회차를 세고 있었지만 분석 로그로만 갔다.
+           표시하는 값은 전부 **학습자 자신의 숫자**다 — 같은 기준 마스크와의 일치도를
+           시점만 달리해 견준 것이라 새로운 의학적 주장이 아니다. -->
+      <p v-if="progress && !progress.is_first_attempt" class="attempt" :class="improvedTone">
+        <span class="attempt-count">{{ progress.attempt_number }}번째 시도</span>
+        <span v-if="progress.previous">
+          지난번 {{ progress.previous.dice }} → 이번 {{ result.dice }}
+          <strong v-if="progress.improved === true">기준에 더 가까워졌습니다</strong>
+          <strong v-else-if="progress.improved === false">지난번보다 낮습니다</strong>
+        </span>
+        <span v-if="showBest" class="best">지금까지 최고 {{ progress.best_dice }}</span>
+      </p>
+      <p v-else-if="progress" class="attempt">
+        <span class="attempt-count">첫 시도</span>
+      </p>
     </div>
 
     <!-- 공간 피드백 (v0.5) — "왜 틀렸는지"를 문장으로.
@@ -346,6 +390,31 @@ function ratio(value, max = 1) {
   border-radius: var(--r-sm);
   max-width: 560px;
   font-size: 13px;
+}
+
+.attempt {
+  margin: 14px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--line, rgba(0, 0, 0, 0.08));
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  align-items: baseline;
+  font-size: 0.9rem;
+  color: var(--muted, #667);
+}
+.attempt-count {
+  font-weight: 600;
+  color: var(--ink, #223);
+}
+.attempt.up strong {
+  color: #1a7f5a;
+}
+.attempt.down strong {
+  color: #9a5b16;
+}
+.attempt .best {
+  margin-left: auto;
 }
 
 .verdict {
