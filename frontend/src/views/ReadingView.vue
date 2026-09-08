@@ -13,7 +13,7 @@ import RoiCanvas from '../components/RoiCanvas.vue'
 import ResultCompare from '../components/ResultCompare.vue'
 import ExplanationPanel from '../components/ExplanationPanel.vue'
 import { ApiError } from '../api/client'
-import { getCase, retryWrongNote, submitRoi } from '../api/endpoints'
+import { getCase, listCases, listWrongNotes, retryWrongNote, submitRoi } from '../api/endpoints'
 import { bodyPartLabel, diseaseLabel } from '../labels'
 
 const route = useRoute()
@@ -113,6 +113,7 @@ function resetSubmission() {
   submitError.value = ''
   submittedMaskDataUrl.value = null
   phase.value = 'idle'
+  nextTarget.value = null
 }
 
 function onRoiChange(state) {
@@ -137,6 +138,7 @@ async function onSubmit() {
     submittedMaskDataUrl.value = roiCanvas.value.getMaskDataUrl()
     result.value = isRetry.value ? await retryWrongNote(caseId.value, roi) : await submitRoi(caseId.value, roi)
     phase.value = 'done'
+    findNextTarget()
   } catch (e) {
     submitError.value = e.message
     phase.value = 'idle'
@@ -146,6 +148,48 @@ async function onSubmit() {
 function retry() {
   resetSubmission()
   roiCanvas.value?.clear()
+}
+
+/**
+ * 채점이 끝난 뒤 "다음에 무엇을 할지"를 제시한다.
+ *
+ * 이게 없으면 학습 루프가 닫히지 않는다 — 한 케이스를 끝낼 때마다 사용자가 직접
+ * 목록으로 되돌아가야 하고, 그 지점에서 세션이 끊긴다.
+ *
+ * 판독훈련이면 **아직 학습완료가 아닌 다음 케이스**를, 재도전이면 **남은 복습 케이스**를 고른다.
+ * 목록 조회가 실패해도 결과 화면은 그대로 보여야 하므로 조용히 넘어간다(버튼만 안 나온다).
+ */
+const nextTarget = ref(null)
+
+async function findNextTarget() {
+  nextTarget.value = null
+  try {
+    if (isRetry.value) {
+      const items = (await listWrongNotes()).items.filter((i) => i.case_id !== caseId.value)
+      if (items.length) {
+        nextTarget.value = {
+          caseId: items[0].case_id,
+          label: '다음 복습 케이스',
+          to: { name: 'retry', params: { caseId: items[0].case_id } },
+          remaining: items.length,
+        }
+      }
+      return
+    }
+    const cases = (await listCases()).cases
+    const remaining = cases.filter((c) => !c.has_matched && c.case_id !== caseId.value)
+    if (remaining.length) {
+      nextTarget.value = {
+        caseId: remaining[0].case_id,
+        label: '다음 케이스',
+        to: { name: 'reading', params: { caseId: remaining[0].case_id } },
+        remaining: remaining.length,
+      }
+    }
+  } catch {
+    // 결과 화면을 막을 이유가 없다 — 다음 행동 버튼만 생략된다
+    nextTarget.value = null
+  }
 }
 
 load()
@@ -270,7 +314,30 @@ onBeforeRouteUpdate((to) => {
           >
             {{ phase === 'submitting' ? '채점 중...' : '제출' }}
           </button>
-          <button v-else class="lg wide" @click="retry">다시 풀기</button>
+          <template v-else>
+            <!-- 학습 루프를 닫는다: 끝냈으면 다음에 무엇을 할지 바로 제시한다 -->
+            <RouterLink
+              v-if="nextTarget"
+              :to="nextTarget.to"
+              class="btn primary lg wide next-action"
+            >
+              {{ nextTarget.label }} →
+            </RouterLink>
+            <button class="lg wide" @click="retry">다시 풀기</button>
+            <RouterLink
+              :to="isRetry ? '/wrong-notes' : '/cases'"
+              class="btn lg wide next-action"
+            >
+              {{ isRetry ? '복습노트로' : '케이스 목록으로' }}
+            </RouterLink>
+            <p v-if="nextTarget" class="muted hint">
+              {{ isRetry ? '복습할 케이스' : '아직 학습완료가 아닌 케이스' }}
+              {{ nextTarget.remaining }}개가 남아 있습니다.
+            </p>
+            <p v-else class="muted hint">
+              {{ isRetry ? '복습할 케이스를 모두 마쳤습니다.' : '모든 케이스를 학습완료했습니다.' }}
+            </p>
+          </template>
 
           <p v-if="gradable && !hasInput && phase === 'idle'" class="muted hint">
             영역을 먼저 칠해야 제출할 수 있습니다.
@@ -397,6 +464,15 @@ onBeforeRouteUpdate((to) => {
 
 .slice-locked button {
   flex: 0 0 auto;
+}
+
+/* 채점 후 다음 행동 — RouterLink 라 .btn 을 쓰고, 버튼과 같은 폭으로 맞춘다 */
+.next-action {
+  display: block;
+  width: 100%;
+  text-align: center;
+  text-decoration: none;
+  margin-bottom: var(--sp-2);
 }
 
 .slices input[type='range'] {
