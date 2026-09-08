@@ -178,6 +178,30 @@ def test_difficulty_can_be_set_and_cleared(admin):
     assert res.json()["difficulty"] is None  # 미지정으로 되돌릴 수 있다
 
 
+def test_difficulty_reaches_learners(admin, user_a):
+    """반쪽 기능 방지: 운영자가 설정한 난이도가 학습자 화면까지 도달해야 한다.
+
+    설정은 되는데 아무 데도 안 쓰이면 운영자가 헛일을 하게 된다.
+    """
+    admin._client.request(
+        "PATCH", f"/api/admin/cases/{CASE_ID}", json={"difficulty": "hard"}, headers=admin.headers
+    )
+
+    listed = next(
+        c for c in user_a.get("/api/cases").json()["cases"] if c["case_id"] == CASE_ID
+    )
+    assert listed["difficulty"] == "hard"
+    assert user_a.get(f"/api/cases/{CASE_ID}").json()["difficulty"] == "hard"
+
+
+def test_unset_difficulty_is_null_not_guessed(user_a):
+    """지정하지 않은 난이도를 추측해서 채우지 않는다 (전문가 검토 대상)."""
+    listed = next(
+        c for c in user_a.get("/api/cases").json()["cases"] if c["case_id"] == CASE_ID
+    )
+    assert listed["difficulty"] is None
+
+
 def test_invalid_difficulty_is_rejected(admin):
     res = admin._client.request(
         "PATCH", f"/api/admin/cases/{CASE_ID}", json={"difficulty": "매우어려움"}, headers=admin.headers

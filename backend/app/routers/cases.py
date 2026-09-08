@@ -103,6 +103,9 @@ def list_cases(user: CurrentUser, db: DbSession, body_part: str | None = None):
                 "has_matched": c.case_id in matched,
                 "needs_review": c.case_id in review,
                 "gradable": is_gradable(c),
+                # 전문가가 지정한 난이도. 미지정이면 null 이고 화면에서 아무것도 표시하지 않는다
+                # (추측해서 채우지 않는다 — CONTENT_GUIDELINES 6절).
+                "difficulty": c.difficulty,
             }
             for c in cases
         ]
@@ -130,6 +133,7 @@ def get_case(case_id: str, user: CurrentUser, db: DbSession):
         "image_url": absolute_url(case.image_url),
         "image_meta": case.image_meta or {},
         "gradable": is_gradable(case),
+        "difficulty": case.difficulty,
         "representative_slice": case.representative_slice,
         "slices": _slice_list(db, case),
     }

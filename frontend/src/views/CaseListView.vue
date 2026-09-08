@@ -52,6 +52,26 @@ function select(code) {
 onMounted(load)
 
 // 썸네일 파일이 없으면(백엔드에 정적 이미지 미탑재) 깨진 아이콘 대신 빈 어두운 영역을 둔다.
+/**
+ * 난이도 — **전문가가 지정한 것만** 보여준다.
+ * 미지정(null)이면 아무것도 표시하지 않는다. 자동으로 추정해 채우지 않기 때문에
+ * "표시가 없다 = 아직 판정되지 않았다"가 정확한 의미다.
+ */
+const DIFFICULTY_LABEL = { easy: '쉬움', medium: '보통', hard: '어려움' }
+
+/** 난이도 필터. '' 는 전체. */
+const difficulty = ref('')
+const availableDifficulties = computed(() => {
+  const present = new Set(allCases.value.map((c) => c.difficulty).filter(Boolean))
+  // 지정된 난이도가 하나도 없으면 필터 자체를 감춘다 (죽은 컨트롤을 만들지 않는다)
+  if (present.size < 2) return []
+  return ['', 'easy', 'medium', 'hard'].filter((d) => d === '' || present.has(d))
+})
+
+const visibleCases = computed(() =>
+  difficulty.value ? cases.value.filter((c) => c.difficulty === difficulty.value) : cases.value,
+)
+
 function onThumbError(event) {
   event.target.style.visibility = 'hidden'
 }
@@ -64,6 +84,17 @@ function onThumbError(event) {
       <p class="lead">판독할 케이스를 선택하세요.</p>
     </div>
   </header>
+
+  <div v-if="availableDifficulties.length" class="segmented filters">
+    <button
+      v-for="d in availableDifficulties"
+      :key="d || 'all'"
+      :class="{ active: difficulty === d }"
+      @click="difficulty = d"
+    >
+      {{ d ? DIFFICULTY_LABEL[d] : '전체 난이도' }}
+    </button>
+  </div>
 
   <div v-if="bodyParts.length" class="segmented filters">
     <button
@@ -87,13 +118,13 @@ function onThumbError(event) {
     </li>
   </ul>
 
-  <div v-else-if="!cases.length && !errorMessage" class="card empty">
+  <div v-else-if="!visibleCases.length && !errorMessage" class="card empty">
     <p>해당 부위의 케이스가 없습니다.</p>
     <p class="muted">지금은 뇌 MRI(전정신경초종) 케이스만 등록되어 있습니다.</p>
   </div>
 
   <ul v-else class="grid">
-    <li v-for="c in cases" :key="c.case_id">
+    <li v-for="c in visibleCases" :key="c.case_id">
       <RouterLink :to="{ name: 'reading', params: { caseId: c.case_id } }" class="card case-card">
         <div class="thumb">
           <img :src="c.thumbnail_url" :alt="`${c.case_id} 썸네일`" @error="onThumbError" />
@@ -101,6 +132,9 @@ function onThumbError(event) {
             <span v-if="c.has_matched" class="badge float match">학습완료</span>
             <span v-if="c.needs_review" class="badge float mismatch">복습필요</span>
             <span v-if="!c.has_matched && !c.needs_review" class="badge float">미시도</span>
+            <span v-if="c.difficulty" class="badge float difficulty" :class="c.difficulty">
+              {{ DIFFICULTY_LABEL[c.difficulty] }}
+            </span>
             <span v-if="c.gradable === false" class="badge float dim">채점 준비중</span>
           </span>
         </div>
@@ -196,6 +230,19 @@ a.case-card:hover {
   background: var(--mismatch-bg);
   border-color: var(--mismatch-line);
   color: var(--mismatch-ink);
+}
+
+/* 난이도 — 상태(학습완료/복습필요)와 색이 겹치지 않게 중립 톤을 쓴다.
+   난이도는 성취가 아니라 케이스의 성질이므로 초록/빨강으로 물들이지 않는다. */
+.badge.float.difficulty {
+  background: rgba(13, 17, 23, 0.72);
+  border-color: rgba(255, 255, 255, 0.28);
+  color: #e7ecf3;
+  font-weight: 600;
+}
+
+.badge.float.difficulty.hard {
+  border-color: rgba(255, 255, 255, 0.5);
 }
 
 .badge.float.dim {

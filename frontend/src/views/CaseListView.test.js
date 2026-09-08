@@ -119,6 +119,58 @@ describe('상태 표시', () => {
   })
 })
 
+describe('난이도', () => {
+  it('전문가가 지정한 난이도만 표시한다', async () => {
+    listCases.mockResolvedValue({
+      cases: [
+        { ...brainCase('VS-SEG-202'), difficulty: 'hard' },
+        { ...brainCase('VS-SEG-203'), difficulty: null },
+      ],
+    })
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    const badges = wrapper.findAll('.badge.difficulty').map((b) => b.text())
+    // 지정된 것만 뱃지가 붙는다. 미지정은 아무것도 표시하지 않는다
+    // ("표시가 없다 = 아직 판정되지 않았다"가 정확한 의미여야 한다)
+    expect(badges).toEqual(['어려움'])
+  })
+
+  it('난이도가 하나뿐이거나 없으면 필터를 만들지 않는다', async () => {
+    listCases.mockResolvedValue({
+      cases: [
+        { ...brainCase('VS-SEG-202'), difficulty: 'hard' },
+        { ...brainCase('VS-SEG-203'), difficulty: null },
+      ],
+    })
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    // 죽은 컨트롤을 만들지 않는다 — 눌러도 결과가 같은 필터는 없느니만 못하다
+    expect(wrapper.findAll('.filters').length).toBe(0)
+  })
+
+  it('난이도가 여럿이면 필터로 걸러진다', async () => {
+    listCases.mockResolvedValue({
+      cases: [
+        { ...brainCase('VS-SEG-202'), difficulty: 'hard' },
+        { ...brainCase('VS-SEG-203'), difficulty: 'easy' },
+      ],
+    })
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    const easyTab = wrapper.findAll('.filters button').find((b) => b.text() === '쉬움')
+    await easyTab.trigger('click')
+
+    expect(wrapper.text()).toContain('VS-SEG-203')
+    expect(wrapper.text()).not.toContain('VS-SEG-202')
+  })
+})
+
 describe('실패·빈 상태', () => {
   it('조회가 실패해도 화면이 깨지지 않고 이유를 보여준다', async () => {
     listCases.mockRejectedValue(Object.assign(new Error('백엔드에 연결할 수 없습니다.')))

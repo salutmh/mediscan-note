@@ -112,6 +112,9 @@ class CaseSummary(BaseModel):
     has_matched: bool
     needs_review: bool
     gradable: bool = True
+    # 전문가가 지정한 난이도. **자동으로 채우지 않는다** — 미지정이면 null 이고
+    # 화면에서도 아무것도 표시하지 않는다 (없는 것을 있는 것처럼 보이지 않게).
+    difficulty: Optional[Literal["easy", "medium", "hard"]] = None
 
 
 class CaseSliceInfo(BaseModel):
@@ -132,6 +135,7 @@ class CaseDetail(BaseModel):
     image_url: Optional[str] = None
     image_meta: dict
     gradable: bool = True
+    difficulty: Optional[Literal["easy", "medium", "hard"]] = None
     # 화면·채점에 쓰는 대표 slice (병변 면적이 가장 큰 slice)
     representative_slice: Optional[int] = None
     # 병변 주변 slice 목록. 볼륨 전체가 아니라 **등록된 범위**만 들어 있다.
