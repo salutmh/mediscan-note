@@ -6,8 +6,14 @@
   - 토큰: HMAC-SHA256 로 서명한 payload.signature 형태 (JWT 와 같은 구조의 축소판)
 
 실서비스로 갈 때 교체 지점:
-  - SECRET_KEY 를 반드시 환경변수로 주입 (지금은 미설정 시 개발용 고정값 + 경고)
   - 토큰을 표준 JWT 로 바꾸려면 create_access_token / decode_access_token 두 함수만 갈아끼우면 된다
+
+**서명 키 규칙 (MEDISCAN_ENV 로 갈린다 — config.py)**
+  development : MEDISCAN_SECRET_KEY 미설정이면 개발용 고정값 + 경고 (팀원이 바로 실행 가능)
+  production  : 미설정이거나 개발용 고정값이면 **기동 실패**
+
+개발용 고정값은 공개 저장소에 들어 있어 사실상 공개된 값이다. 배포에서 이 값으로 뜨면
+토큰을 누구나 위조할 수 있으므로, 경고가 아니라 기동 실패로 막는다.
 """
 import base64
 import hashlib
@@ -18,15 +24,47 @@ import secrets
 import time
 import warnings
 
-_DEV_SECRET = "dev-only-insecure-secret-change-me"
-SECRET_KEY = os.getenv("MEDISCAN_SECRET_KEY", _DEV_SECRET)
-TOKEN_TTL_SECONDS = int(os.getenv("MEDISCAN_TOKEN_TTL", str(60 * 60 * 24 * 7)))  # 기본 7일
+from app.config import ConfigError, is_production
 
-if SECRET_KEY == _DEV_SECRET:
-    warnings.warn(
-        "MEDISCAN_SECRET_KEY 가 설정되지 않아 개발용 고정 키를 씁니다. 배포 전에 반드시 환경변수로 주입하세요.",
-        stacklevel=2,
-    )
+_DEV_SECRET = "dev-only-insecure-secret-change-me"
+_MIN_SECRET_LENGTH = 32
+
+SECRET_KEY_ENV = "MEDISCAN_SECRET_KEY"
+
+
+def _resolve_secret_key() -> str:
+    configured = os.getenv(SECRET_KEY_ENV, "").strip()
+
+    if is_production():
+        if not configured:
+            raise ConfigError(
+                f"{SECRET_KEY_ENV} 가 설정되지 않았습니다. production 에서는 필수입니다.\n"
+                f'  생성 예: python -c "import secrets; print(secrets.token_urlsafe(48))"'
+            )
+        if configured == _DEV_SECRET:
+            raise ConfigError(
+                f"{SECRET_KEY_ENV} 가 개발용 고정값입니다. 이 값은 공개 저장소에 있어 "
+                "토큰 위조가 가능하므로 production 에서 쓸 수 없습니다."
+            )
+        if len(configured) < _MIN_SECRET_LENGTH:
+            raise ConfigError(
+                f"{SECRET_KEY_ENV} 가 너무 짧습니다 ({len(configured)}자). "
+                f"{_MIN_SECRET_LENGTH}자 이상을 쓰세요."
+            )
+        return configured
+
+    if not configured:
+        warnings.warn(
+            f"{SECRET_KEY_ENV} 가 설정되지 않아 개발용 고정 키를 씁니다. "
+            "배포(MEDISCAN_ENV=production)에서는 기동이 실패합니다.",
+            stacklevel=3,
+        )
+        return _DEV_SECRET
+    return configured
+
+
+SECRET_KEY = _resolve_secret_key()
+TOKEN_TTL_SECONDS = int(os.getenv("MEDISCAN_TOKEN_TTL", str(60 * 60 * 24 * 7)))  # 기본 7일
 
 # scrypt 파라미터 (n=2**14 는 대화형 로그인에 적당한 수준)
 _SCRYPT_N = 2**14

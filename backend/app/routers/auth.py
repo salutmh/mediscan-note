@@ -19,9 +19,16 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException
 from sqlalchemy import select
 
+from app.account import delete_account
 from app.deps import CurrentUser, DbSession
 from app.models import Consent, User
-from app.schemas import Consents, LoginRequest, SignupRequest, SocialLoginRequest
+from app.schemas import (
+    Consents,
+    DeleteAccountRequest,
+    LoginRequest,
+    SignupRequest,
+    SocialLoginRequest,
+)
 from app.security import create_access_token, hash_password, verify_password
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -146,3 +153,18 @@ def social_login(payload: SocialLoginRequest, db: DbSession):
 @router.get("/me")
 def me(user: CurrentUser):
     return {"user_id": user.user_id, "email": user.email, "nickname": user.nickname}
+
+
+@router.delete("/me")
+def delete_me(user: CurrentUser, db: DbSession, payload: DeleteAccountRequest | None = None):
+    """회원 탈퇴 — 계정·동의 이력·제출 이력을 모두 삭제한다. **되돌릴 수 없다.**
+
+    이메일 계정은 비밀번호를 다시 받아 확인한다. 토큰만 있으면(예: 남의 기기에 남은 세션)
+    계정이 통째로 지워지는 상황을 막기 위함이다.
+    SNS 계정은 확인할 비밀번호가 없으므로 토큰만으로 진행한다.
+    """
+    if user.password_hash:
+        password = payload.password if payload else None
+        if not password or not verify_password(password, user.password_hash):
+            raise _error(403, "PASSWORD_CONFIRMATION_REQUIRED", "탈퇴하려면 비밀번호를 다시 입력해야 합니다.")
+    return delete_account(db, user)

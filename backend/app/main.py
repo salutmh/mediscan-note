@@ -4,8 +4,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from app import inference, model_predictions
+from app import config, inference, model_predictions
+from app.cors import cors_kwargs, describe as describe_cors
 from app.db import DATABASE_URL, init_db
+from app.rate_limit import RateLimitMiddleware
 from app.static_files import STATIC_DIR, STATIC_URL_PREFIX, ensure_dirs, set_request_base
 from app.routers import analyze, auth, cases, consents, wrong_notes
 
@@ -20,14 +22,16 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="메디스캔노트 API", version="0.2.0", lifespan=lifespan)
 
-# 개발 중에는 프론트(Vite 기본 5173포트)에서 자유롭게 호출할 수 있도록 전체 허용.
-# 배포 전에 실제 프론트 도메인으로 좁힐 것.
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# 미들웨어는 **나중에 등록한 것이 바깥쪽**이다 (starlette). 그래서 CORS 를 마지막에 등록해
+# 가장 바깥에 두어야 rate limit 이 돌려주는 429 응답에도 CORS 헤더가 붙는다.
+# (그렇지 않으면 브라우저가 429 본문을 읽지 못해 "네트워크 오류"로만 보인다.)
+app.add_middleware(RateLimitMiddleware)
+
+# CORS 는 환경에 따라 갈린다 (app/cors.py):
+#   development — localhost 아무 포트 허용 (프론트 5173, 포트 변경에도 그대로 동작)
+#   production  — MEDISCAN_CORS_ORIGINS 필수, 와일드카드 금지
+app.add_middleware(CORSMiddleware, **cors_kwargs())
+
 
 @app.middleware("http")
 async def remember_request_base(request, call_next):
@@ -57,6 +61,9 @@ def health():
     # 어느 DB 를 쓰는지 바로 확인할 수 있게 드라이버 이름만 노출 (접속정보는 숨김)
     return {
         "status": "ok",
+        # 배포에서 설정 실수를 빨리 알아채기 위한 값들 (접속정보·키는 노출하지 않는다)
+        "env": config.env(),
+        "cors_origins": describe_cors(),
         "db": DATABASE_URL.split("://", 1)[0],
         "models": inference.status(),
         # 무거운 volume 모델은 요청 시 추론하지 않고 미리 계산된 예측을 쓴다

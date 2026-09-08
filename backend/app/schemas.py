@@ -45,6 +45,21 @@ class SocialLoginRequest(BaseModel):
     consents: Optional[Consents] = None  # 최초 가입일 때만 필수
 
 
+class DeleteAccountRequest(BaseModel):
+    """회원 탈퇴 확인. 이메일 계정은 비밀번호를 다시 받는다 (SNS 계정은 생략 가능)."""
+
+    password: Optional[str] = None
+
+
+class DeleteAccountResult(BaseModel):
+    """무엇이 지워졌는지 사용자가 확인할 수 있게 건수까지 돌려준다."""
+
+    deleted: bool = True
+    user_id: str
+    deleted_counts: dict
+    deleted_scopes: list[str]
+
+
 class AuthResult(BaseModel):
     user_id: str
     email: Optional[str] = None

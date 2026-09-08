@@ -59,6 +59,8 @@
 | `IMAGE_TOO_LARGE` | 413 | 용량 또는 픽셀 수 초과 |
 | `IMAGE_DIMENSION_OUT_OF_RANGE` | 422 | 이미지 크기가 허용 범위 밖 |
 | `INVALID_REGION` | 422 | region 형식·좌표 오류 |
+| `PASSWORD_CONFIRMATION_REQUIRED` | 403 | 회원 탈퇴 시 비밀번호 재확인 실패 |
+| `RATE_LIMITED` | 429 | 인증 엔드포인트 요청 수 제한 초과 (`Retry-After` 헤더 참고) |
 
 ---
 
@@ -154,6 +156,33 @@
 ```json
 { "user_id": "u_001", "email": "user@example.com", "nickname": "온" }
 ```
+
+### 1-4-1. DELETE /api/auth/me — 회원 탈퇴
+
+계정과 딸린 사용자 데이터를 **모두 삭제한다. 되돌릴 수 없다.**
+
+- 이메일 계정: 비밀번호 재확인 필수 (토큰만 탈취된 경우를 막는다)
+- SNS 계정: 확인할 비밀번호가 없으므로 본문 없이 호출 가능
+- 삭제 범위: `users` / `consents` / `submissions`. 교육 콘텐츠(`cases`)는 건드리지 않는다
+- 요청 수 제한: 1시간에 5회
+
+**Request** (이메일 계정)
+```json
+{ "password": "current-password" }
+```
+
+**Response**
+```json
+{
+  "deleted": true,
+  "user_id": "u_001",
+  "deleted_counts": { "consents": 6, "submissions": 3 },
+  "deleted_scopes": ["account", "consents", "submissions"]
+}
+```
+
+> 탈퇴 시 동의 이력까지 지울지(파기 의무)와 증빙으로 남길지(보존)는 법률 판단이 필요하다.
+> 현재는 **전부 삭제**이고, 정책이 바뀌면 `app/account.py::delete_account` 한 곳만 고치면 된다.
 
 ### 1-5. GET /api/consents/current-version
 

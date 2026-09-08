@@ -106,6 +106,21 @@ def _isolated_model_predictions(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _reset_rate_limit():
+    """rate limit 카운터를 테스트마다 비운다.
+
+    미들웨어가 프로세스 안 메모리에 요청 시각을 쌓으므로, 비우지 않으면 앞 테스트의
+    로그인 시도가 뒤 테스트의 한도를 깎아 **테스트 순서에 따라 실패**하게 된다.
+    (rate limit 자체를 검증하는 테스트는 tests/test_rate_limit.py 에 따로 있다.)
+    """
+    from app import rate_limit
+
+    rate_limit.reset()
+    yield
+    rate_limit.reset()
+
+
+@pytest.fixture(autouse=True)
 def _clean_user_data():
     """테스트마다 사용자 데이터를 비운다. 케이스(시드 데이터)는 유지."""
     yield
@@ -165,6 +180,9 @@ class UserSession:
 
     def post(self, path: str, json=None, **kwargs):
         return self._client.post(path, json=json, headers=self.headers, **kwargs)
+
+    def delete(self, path: str, json=None, **kwargs):
+        return self._client.request("DELETE", path, json=json, headers=self.headers, **kwargs)
 
     def submit(self, roi: dict, case_id: str = CASE_ID):
         return self.post(f"/api/cases/{case_id}/submit", json={"roi": roi})

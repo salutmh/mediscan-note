@@ -1,0 +1,183 @@
+# CLAUDE HANDOFF — 세션 인수인계
+
+> **새 세션은 이 파일을 가장 먼저 읽는다.** 그다음 `docs/RELEASE_READINESS.md`, `git status`, `git diff`.
+> 이미 완료·테스트된 작업은 반복하지 않는다. 아래 **NEXT STEP** 부터 이어간다.
+
+---
+
+## 0. 현재 상태 한눈에
+
+| 항목 | 값 |
+|---|---|
+| 최종 갱신 | 2026-09-08 |
+| 시작 커밋 | `ef56005` (docs: add public project README) |
+| 현재 브랜치 | `main` (origin/main과 동기) |
+| 현재 Phase | **Phase 3 — 학습 피드백 엔진** |
+| STATUS | `IN_PROGRESS` |
+| 마지막 전체 테스트 | **270 passed** (Phase 2 완료 시점) |
+
+---
+
+## 1. 전체 목표
+
+발표 전까지 **Closed Beta로 실제 사용자에게 보여줄 수 있는 제품 완성도**를 만든다.
+단순 데모가 아니라 (a) 보안 최소선, (b) 학습 피드백 품질, (c) 콘텐츠 운영 기반을 갖춘다.
+
+**절대 어기지 않는 설계 원칙**
+1. AI prediction을 정답으로 쓰지 않는다. 채점 기준은 전문가 GT뿐이다.
+2. AI가 틀려도 사용자 채점은 정상 동작해야 한다 (VS-SEG-204 회귀 테스트로 고정).
+3. 모델이 없으면 가짜 결과를 만들지 않고 `model_unavailable`을 반환한다.
+4. 전문가 GT를 후처리해서 정답처럼 고치지 않는다.
+5. 문헌 일반론 / case-specific finding / AI 설명을 섞지 않는다.
+6. **출처 없는 의료 내용을 Claude가 생성하지 않는다.** 비어 있는 편이 낫다.
+7. geometry로 알 수 있는 것만 자동 피드백한다 (내이도 침범·조영증강 등은 절대 추론 금지).
+
+---
+
+## 2. Phase 진행 상황
+
+| Phase | 내용 | STATUS |
+|---|---|---|
+| 1 | repository 전체 점검 → `docs/RELEASE_READINESS.md` | **DONE** |
+| 2 | Production Security Hardening (SECRET_KEY/CORS/rate limit/탈퇴/로깅) | **DONE** |
+| 3 | 학습 피드백 엔진 (spatial feedback + threshold config) | **IN_PROGRESS** |
+| 4 | `case_findings` 운영 구조 | NOT_STARTED |
+| 5 | 최소 Admin CMS | NOT_STARTED |
+| 6 | 콘텐츠 확장 준비 (케이스 후보 분석 도구) | NOT_STARTED |
+| 7 | 모델 평가 개선 | NOT_STARTED |
+| 8 | 사용자 테스트 이벤트 로그 | NOT_STARTED |
+
+---
+
+## 3. 완료된 작업
+
+### Phase 1 — repository 전체 점검 (DONE)
+- 코드를 직접 읽고 구현 현황을 Critical/High/Medium/Low로 분류 → `docs/RELEASE_READINESS.md` 생성.
+- **과거 리뷰 문서를 근거로 쓰지 않고 전부 코드에서 재확인함.**
+- 이미 잘 구현되어 있어 **손대면 안 되는 것**: 채점 파이프라인(`grading.py`), AI 분리 구조,
+  해설 3층(`explanations.py`), 업로드 검증(`uploads.py`), Alembic 마이그레이션, 241개 테스트.
+
+### Phase 2 — Production Security Hardening (DONE)
+
+| 항목 | 구현 | 파일 |
+|---|---|---|
+| C1 SECRET_KEY | `MEDISCAN_ENV=production` 이면 미설정·dev값·32자 미만 시 **기동 실패**(ConfigError). development 는 기존대로 경고 후 fallback | `app/config.py`(신규), `app/security.py` |
+| C2 CORS | production 은 `MEDISCAN_CORS_ORIGINS` 필수 + 와일드카드 금지 + 메서드/헤더 축소. development 는 localhost 아무 포트 regex | `app/cors.py`(신규), `app/main.py` |
+| C3 rate limit | 표준 라이브러리 슬라이딩 윈도 미들웨어. login 10/분, signup 10/시간, social-login 20/분, 탈퇴 5/시간. **학습 흐름(제출·조회)에는 걸지 않음**. `METHOD 경로` 로 키를 나눠 `GET /me` 가 `DELETE /me` 한도에 영향받지 않음 | `app/rate_limit.py`(신규) |
+| C4 회원 탈퇴 | `DELETE /api/auth/me`. 이메일 계정은 비밀번호 재확인(403), SNS 계정은 토큰만. 계정·동의·제출 이력 하드 삭제, 삭제 건수 반환 | `app/account.py`(신규), `app/routers/auth.py` |
+| 로깅 점검 | `logger.*` 전수 확인 — password/token/request body 로깅 **없음**. 추가 조치 불필요 | — |
+
+**설계 메모 (다음 세션이 알아야 할 것)**
+- 미들웨어는 **나중에 등록한 것이 바깥쪽**이다. CORS 를 마지막에 등록해야 429 응답에도
+  CORS 헤더가 붙는다 (`app/main.py` 주석 참고). 순서를 바꾸면 브라우저가 429 본문을 못 읽는다.
+- rate limit 은 **프로세스 메모리**에만 있다. 워커를 여러 개 띄우면 워커별로 센다 →
+  확장 시 Redis 등 공유 저장소로 옮겨야 한다 (`app/rate_limit.py` docstring).
+- 테스트 격리를 위해 `conftest.py` 에 `_reset_rate_limit` autouse fixture 를 추가했다.
+  이게 없으면 앞 테스트의 로그인 시도가 뒤 테스트 한도를 깎아 **순서 의존 실패**가 난다.
+- 탈퇴 삭제 범위는 `app/account.py::delete_account` **한 함수**에 모여 있다 (BLOCKER-3 대비).
+
+---
+
+## 4. 현재 진행 중인 작업
+
+**Phase 3 — 학습 피드백 엔진**
+- 목표: 사용자가 "왜 틀렸는지" 알 수 있게 geometry 기반 spatial feedback 추가.
+- 절대 규칙: **geometry 로 알 수 있는 것만** 자동 생성. 내이도 침범·조영증강·종괴 성상 등
+  의료 소견은 절대 추론하지 않는다 (그건 `case_findings` 자리).
+
+---
+
+## 5. 아직 하지 않은 작업
+
+- Phase 3(진행 중) ~ Phase 8
+- Phase 2 범위 밖으로 남긴 것: H4 서버측 토큰 폐기, H5 이메일 인증·비밀번호 재설정
+- **프론트 탈퇴 UI 미구현** (API 만 완성). Closed Beta 전에 화면이 필요하다.
+
+---
+
+## 6. 변경된 주요 파일
+
+**Phase 2**
+- 신규: `backend/app/config.py`, `backend/app/cors.py`, `backend/app/rate_limit.py`, `backend/app/account.py`
+- 신규 테스트: `backend/tests/test_production_config.py`(12), `test_rate_limit.py`(8), `test_account_deletion.py`(9)
+- 수정: `backend/app/main.py`(미들웨어·health), `backend/app/security.py`(키 가드),
+  `backend/app/schemas.py`(DeleteAccount*), `backend/app/routers/auth.py`(DELETE /me),
+  `backend/tests/conftest.py`(rate limit 리셋 + UserSession.delete),
+  `backend/.env.example`, `docs/api-spec.md`(1-4-1, 에러코드 2건)
+
+---
+
+## 7. Migration 여부
+
+Phase 1까지 **마이그레이션 없음**. 스키마 변경 시 반드시:
+```
+cd backend && alembic revision --autogenerate -m "<설명>"
+```
+기존 데이터를 파괴할 수 있는 마이그레이션은 임의로 만들지 않는다 (BLOCKER로 남긴다).
+
+---
+
+## 8~10. 테스트
+
+| 시점 | 명령 | 결과 |
+|---|---|---|
+| Phase 2 | `cd backend && pytest` | **270 passed** |
+| Phase 1 | `cd backend && pytest` | **241 passed** |
+| Phase 1 | `cd backend && python -m scripts.verify_cases` | 6케이스 통과 |
+| Phase 1 | `cd frontend && npm run build` | 통과 |
+
+현재 실패하는 테스트: **없음**
+
+---
+
+## 11. 발견된 문제
+
+`docs/RELEASE_READINESS.md` 3~6절에 Critical(C1~C4) / High(H1~H7) / Medium / Low로 정리.
+
+---
+
+## 12. 사용자 판단이 필요한 사항 (BLOCKERS)
+
+문서 하단 "BLOCKERS" 절 참고. 현재 3건 (라이선스 1, 전문가 1, 규제 1).
+
+---
+
+## 13. NEXT STEP — 다음 세션이 가장 먼저 할 일
+
+> **Phase 3 — 학습 피드백 엔진**을 이어서 진행한다.
+> - [x] Phase 2 완료 (C1~C4). 다시 만들지 말 것.
+> - [ ] `app/feedback.py` 신설: GT coverage(recall) / user precision / centroid distance /
+>       over·under-segmentation 계산. **기존 `masks.dice_iou` 와 `grading.evaluate_submission`
+>       의 동작을 바꾸지 않고 값만 추가한다.**
+> - [ ] 채점 임계값을 `app/scoring_config.py` 로 분리 (`not yet educationally validated` 명시)
+> - [ ] 응답에 `spatial_feedback` 추가 (`EvaluationResult` 스키마 + api-spec.md 동시 갱신)
+> - [ ] 프론트 `ResultCompare.vue` 에 교육적 문구로 표시
+> - [ ] 회귀 확인: `pytest tests/test_grading.py tests/test_ai_prediction.py` 가 그대로 통과해야 한다
+
+---
+
+## BLOCKERS
+
+### BLOCKER-1 — VS-SEG 데이터셋 / VS_Seg 가중치 이용 조건 (`NEEDS_LICENSE_REVIEW`)
+- **무엇이 필요한가**: 데이터셋과 pretrained 가중치를 Closed Beta(외부 사용자 대상)에서 쓸 수 있는지 확인.
+- **왜 필요한가**: 연구 목적 로컬 사용과, 외부 사용자에게 영상을 보여주는 서비스는 조건이 다를 수 있다.
+- **선택지**: (a) 원 저작자/데이터 제공처 조건 확인 후 진행 (b) 조건 불명확하면 Closed Beta를
+  학내 비공개 사용으로 제한 (c) 자체 확보한 교육용 영상으로 교체.
+- **추천**: (a). 확인 전까지는 (b)로 범위를 제한.
+- **영향**: 외부 공개 Closed Beta의 전제 조건. 코드 작업은 계속 가능.
+
+### BLOCKER-2 — `case_findings` 의료 소견 작성 (`NEEDS_EXPERT_REVIEW`)
+- **무엇이 필요한가**: 6케이스의 영상 소견을 작성할 의료 전문가 1명 + 검토자명/검토일.
+- **왜 필요한가**: 학습 피드백의 핵심이며, **Claude가 임의 생성하면 안 되는 내용**이다.
+- **선택지**: (a) 지도교수/멘토 검토 (b) 임상 실습 경험자 검토 후 표기 (c) 비워둔 채 Closed Beta 진행.
+- **추천**: (c)로 시작하되 구조는 미리 만들어 두고(Phase 4), 확보되는 대로 입력.
+- **영향**: 없어도 서비스는 동작한다(블록이 비면 화면에서 생략). 학습 가치는 크게 떨어진다.
+
+### BLOCKER-3 — 탈퇴 시 동의 이력 처리 / 접속기록 보관 (`NEEDS_REGULATORY_REVIEW`)
+- **무엇이 필요한가**: 회원 탈퇴 시 동의 이력을 함께 지울지, 증빙으로 보존할지에 대한 판단.
+- **왜 필요한가**: 개인정보 파기 의무와 동의 증빙 보존이 충돌한다. 법률 판단 영역이다.
+- **선택지**: (a) 전부 하드 삭제 (b) 계정·제출 이력 삭제 + 동의 이력은 익명화 보존
+  (c) 소프트 삭제 후 유예기간.
+- **추천**: Closed Beta 규모에서는 (a)가 사용자에게 가장 안전하고 설명하기 쉽다. Phase 2에서
+  (a)로 구현하되, 판단이 서면 (b)로 바꿀 수 있게 삭제 로직을 한 함수에 모아둔다.
+- **영향**: Phase 2 C4 구현 방식. 이미 (a)로 구현했다면 되돌리는 비용은 작다.
