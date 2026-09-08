@@ -13,6 +13,25 @@ npm run dev                  # http://localhost:5173
 호출 주소는 `.env.development` 의 `VITE_API_BASE` 한 곳에서만 관리한다
 (mock 정적 JSON으로 돌리려면 `/mock` 으로 바꾸면 화면 로직은 그대로 — api-spec.md 5절).
 
+## 테스트
+
+```
+npm test          # vitest run (한 번 실행)
+npm run test:watch
+```
+
+**개수를 늘리는 것이 목적이 아니다.** 실제로 깨질 수 있는 것만 고정한다:
+빈/실패/경계 상태, 그리고 화면이 "없는 것을 있는 것처럼" 보여주지 않는지.
+
+| 파일 | 무엇을 지키나 |
+|---|---|
+| `views/CaseListView.test.js` | 케이스가 없는 부위를 탭으로 만들지 않는다. 학습완료/복습필요 동시 표시. 조회 실패·빈 목록에서 화면이 깨지지 않는다 |
+| `views/ReadingView.test.js` | slice 탐색(영상 전환·입력 잠금·**ROI 유지 설정**), 채점 후 다음 행동, slice 없는 케이스, 다음 대상 조회 실패 |
+| `stores/auth.test.js` | 로그아웃이 **서버에 토큰 폐기를 요청**한다. 서버 실패 시에도 로컬 세션은 비운다. `clearSession` 은 서버를 부르지 않는다(401 재진입 방지) |
+
+브라우저에서 실제로 도는지는 `tools/browser-verify/` 의 E2E 가 본다 (서버 + Chrome 필요).
+여기 단위 테스트는 그 앞단에서 **빠르게** 경계 상황을 잡는 역할이다.
+
 ## 구조
 
 ```
