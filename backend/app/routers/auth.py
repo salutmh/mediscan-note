@@ -18,6 +18,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from app import password_reset, token_revocation
 from app.account import delete_account
@@ -102,7 +103,18 @@ def signup(payload: SignupRequest, db: DbSession):
     )
     db.add(user)
     _save_consents(db, user.user_id, payload.consents)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        # 같은 이메일로 가입 요청이 동시에 들어온 경우(가입 버튼 더블클릭, 응답이 느려서 재시도).
+        # 위의 중복 검사와 이 INSERT 사이에 **scrypt 해싱**이 끼어 있다. 일부러 느리게
+        # 만든 연산이라 경쟁 구간이 마이크로초가 아니라 사람이 두 번 누를 수 있는 폭이다.
+        # 예전에는 여기서 IntegrityError 가 그대로 500 이 됐다 — 사용자에게는 "서버 오류"로
+        # 보이지만 사실은 "이미 가입됨" 이다.
+        db.rollback()
+        if db.scalar(select(User).where(User.email == payload.email)) is None:
+            raise  # 이메일 중복이 아닌 다른 무결성 오류는 숨기지 않는다
+        raise _error(409, "EMAIL_ALREADY_EXISTS", "이미 가입된 이메일입니다.") from None
     db.refresh(user)
     return _auth_response(user)
 
@@ -148,7 +160,22 @@ def social_login(payload: SocialLoginRequest, db: DbSession):
     )
     db.add(user)
     _save_consents(db, user.user_id, payload.consents)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        # 같은 SNS 계정으로 최초 가입이 동시에 들어온 경우.
+        # (provider, provider_subject) 유니크 제약 덕분에 계정이 둘로 갈리지는 않지만,
+        # 두 번째 요청이 500 을 받았다. 재시도의 올바른 결과는 **기존 계정으로 로그인**이다.
+        db.rollback()
+        existing = db.scalar(
+            select(User).where(
+                User.provider == payload.provider,
+                User.provider_subject == payload.provider_token,
+            )
+        )
+        if existing is None:
+            raise
+        return _auth_response(existing, is_new_user=False)
     db.refresh(user)
     return _auth_response(user, is_new_user=True)
 
