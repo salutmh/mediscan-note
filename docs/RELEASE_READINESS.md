@@ -35,7 +35,7 @@ AI 보조 피드백(참고) → 오답 재학습.
 | 화면 5 | 지어내지 않고 `model_unavailable`, 데모는 flag OFF 기본 | `app/routers/analyze.py:74` |
 | 스키마 | Alembic이 기준, 기동 시 자동 upgrade + 레거시 DB 감지 | `app/db.py:47` |
 | 정적 자산 | 요청 주소 기준 절대 URL 생성 | `app/main.py:32` |
-| 테스트 | 백엔드 **544개**(SQLite·PostgreSQL 양쪽) + 프론트 **48개** + E2E 4종 | `backend/tests/`, `frontend/src/**/*.test.js` |
+| 테스트 | 백엔드 **547개**(SQLite·PostgreSQL 양쪽) + 프론트 **48개** + E2E 4종 + 접근성 점검 | `backend/tests/`, `frontend/src/**/*.test.js` |
 
 **이미 해결된 것은 다시 만들지 않는다.** 위 항목은 재구현 대상이 아니다.
 
@@ -84,6 +84,7 @@ AI 보조 피드백(참고) → 오답 재학습.
 | ~~L1~~ | ~~`explanations.py` docstring stale~~ → Phase 4에서 수정 완료 |
 | L2 | `cases.reference_shape` 레거시 컬럼 (근사 채점 전용) |
 | L3 | `frontend/public/icons.svg` — Vite 템플릿 잔재, 어디서도 참조되지 않음 |
+| L4 | **키보드만으로 ROI 를 그릴 수 없다.** 포인터 자유곡선 입력이라 대체 입력 수단이 필요하다. `tools/browser-verify/a11y-audit.mjs` 는 통과하지만 그 점검은 이 항목을 보지 않는다 |
 
 ---
 

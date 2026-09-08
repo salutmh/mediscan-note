@@ -56,6 +56,7 @@ node tools/browser-verify/user-flow.mjs ./out/flow 9333
 node tools/browser-verify/consent-and-sns.mjs ./out/consent 9333
 node tools/browser-verify/slice-navigation.mjs ./out/slices 9333
 node tools/browser-verify/screenshot-all.mjs ./out/shots 9333
+node tools/browser-verify/a11y-audit.mjs ./out/a11y 9333
 ```
 
 ## 참고
@@ -73,3 +74,28 @@ node tools/browser-verify/screenshot-all.mjs ./out/shots 9333
   Dice 가 0.85 미만이거나 콘솔 에러가 있으면 **exit code 1** 로 끝난다 (CI 에 걸기 좋다).
 - 업로드 테스트용 영상은 페이지 안에서 캔버스로 생성한다 (네트워크·파일시스템 의존 없음).
 - 마지막에 콘솔 에러 목록을 출력한다. 정상이면 "콘솔 에러 없음".
+
+
+---
+
+## a11y-audit.mjs — 접근성 기본 점검
+
+실제로 렌더된 DOM 에서 **기계로 확실히 알 수 있는 것만** 본다:
+이미지 대체 텍스트, 버튼·링크의 읽을 이름, 입력의 label, canvas 대체 설명,
+제목 단계 건너뜀, `<html lang>`.
+
+색 대비나 "키보드만으로 ROI 를 그릴 수 있는가" 는 **판단하지 않는다** — 사람이 봐야 한다.
+지적이 있어도 종료코드는 0 이다 (빌드를 막는 도구가 아니라 검토할 목록을 만드는 도구다).
+
+출력에 `[입력N 버튼N 이미지N 캔버스N]` 을 함께 찍는다.
+**"0건 지적"이 제대로 본 결과인지 화면이 안 그려진 탓인지 구분하기 위해서다.**
+회원가입 화면에서 입력이 10개로 나오지 않으면 점검기가 화면을 못 본 것이다.
+
+### 이 도구를 만들면서 두 번 틀렸던 것 (같은 실수 반복 방지)
+
+1. 로그인한 상태로 `/login` 을 열어서 `/cases` 로 튕겼다 → 입력이 가장 많은 화면이
+   통째로 점검에서 빠졌다. **로그인 화면은 로그아웃 상태에서 먼저 본다.**
+2. `?tab=signup` 으로 탭이 바뀔 거라 가정했다 → 실제로는 버튼 클릭이라
+   로그인 탭을 두 번 본 꼴이었다. **탭은 눌러서 전환한다.**
+
+둘 다 "통과" 로 보였다는 점이 핵심이다. 점검 도구는 무엇을 봤는지 함께 내야 한다.

@@ -43,6 +43,15 @@ const strokeCount = ref(0)
 const imageBroken = ref(false)
 
 const hasInput = computed(() => points.value.length > 0 || strokeCount.value > 0)
+
+// 캔버스를 스크린리더가 무엇이라고 읽을지. 화면에 보이는 상태(잠김/표시 여부)를 그대로 옮긴다.
+const canvasLabel = computed(() => {
+  const what = '의료영상 위에 이상 부위를 표시하는 영역'
+  if (props.disabled) return `${what} (입력 잠김)`
+  return hasInput.value
+    ? `${what} — 표시함 (스트로크 ${strokeCount.value}개)`
+    : `${what} — 아직 표시하지 않음`
+})
 // 뷰어 박스를 원본 비율과 똑같이 맞춘다. 그래야 letterbox 여백 없이
 // 캔버스 좌표와 화면상의 이미지 픽셀이 1:1로 대응한다 (업로드 영상이 정사각형이 아닐 때 중요).
 const aspectRatio = computed(() => `${props.width} / ${props.height}`)
@@ -248,10 +257,21 @@ defineExpose({
         <div v-else class="base placeholder">
           <span>영상 없음</span>
         </div>
+        <!--
+          캔버스 내용은 픽셀뿐이라 대체 설명이 없으면 스크린리더에 아무것도 전달되지 않는다
+          (요소 자체가 조용히 건너뛰어진다). 무엇을 위한 영역이고 지금 어떤 상태인지를
+          이름으로 남긴다.
+
+          다만 **이것으로 ROI 그리기가 접근 가능해지는 것은 아니다.** 포인터로 자유곡선을
+          그리는 입력을 키보드·스크린리더로 대체하려면 별도 입력 수단이 필요하다.
+          지금은 "여기에 무엇이 있는지 알 수 있다"까지만 한다.
+        -->
         <canvas
           ref="viewCanvas"
           class="overlay"
           :class="[tool, { locked: disabled }]"
+          role="img"
+          :aria-label="canvasLabel"
           @pointerdown="onPointerDown"
           @pointermove="onPointerMove"
           @pointerup="onPointerUp"
