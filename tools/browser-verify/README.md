@@ -16,6 +16,14 @@
 
 ## 실행
 
+> ⚠️ **E2E 를 반복 실행하면 가입 요청 수 제한(기본 시간당 10회)에 걸린다.**
+> 검증용으로 띄울 때는 제한을 끄거나 넉넉히 준다:
+> ```bash
+> MEDISCAN_RATE_LIMIT=0 uvicorn app.main:app --port 8010
+> # 또는 MEDISCAN_RATE_LIMIT_MULTIPLIER=20
+> ```
+> (제한 자체를 검증하는 것은 `backend/tests/test_rate_limit.py` 가 한다.)
+
 1. 백엔드와 프론트를 띄운다.
 
 ```bash

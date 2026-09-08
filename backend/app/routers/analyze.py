@@ -86,25 +86,39 @@ def _unavailable_response(reason: str) -> dict:
     }
 
 
+def image_model_unavailable_reason(body_part: str) -> str | None:
+    """이 부위의 **업로드 이미지 분석**이 왜 불가능한지. 가능하면 None.
+
+    이미지와 분리해 둔 이유: 사용자가 영상을 올리고 ROI 를 칠하고 요청까지 **다 한 뒤에야**
+    "준비 중"이라는 답을 받으면 그 노력이 통째로 낭비된다.
+    화면이 미리 물어볼 수 있어야 한다 (GET /api/analyze/availability).
+    """
+    module = inference.get_module(body_part)
+    if module is None:
+        return f"추론 모듈 없음: {body_part}"
+    if getattr(module, "INPUT_KIND", "image") == "volume":
+        return (
+            "이 부위 모델은 volume(연속 슬라이스) 입력 전용이라 업로드한 이미지 한 장으로는 "
+            "분석할 수 없습니다. 학습 때와 다른 입력을 넣으면 잘못된 결과가 나옵니다."
+        )
+    if not inference.is_available(body_part):
+        return inference.unavailable_reason(body_part) or "모델이 준비되지 않음"
+    if not callable(getattr(module, "predict_image", None)):
+        return "이 부위 모델은 업로드 이미지 분석(predict_image)을 지원하지 않습니다."
+    return None
+
+
 def _analyze_with_model(body_part: str, image, region):
     """2D 입력을 지원하는 부위 모델이 있으면 그것으로 분석한다.
 
     **이미지를 파일로 저장하지 않는다** — PIL 객체를 그대로 넘긴다 (업로드 미저장 규칙).
     """
-    module = inference.get_module(body_part)
-    if module is None:
-        return None, f"추론 모듈 없음: {body_part}"
-    if getattr(module, "INPUT_KIND", "image") == "volume":
-        return None, (
-            "이 부위 모델은 volume(연속 슬라이스) 입력 전용이라 업로드한 이미지 한 장으로는 "
-            "분석할 수 없습니다. 학습 때와 다른 입력을 넣으면 잘못된 결과가 나옵니다."
-        )
-    if not inference.is_available(body_part):
-        return None, inference.unavailable_reason(body_part) or "모델이 준비되지 않음"
+    reason = image_model_unavailable_reason(body_part)
+    if reason:
+        return None, reason
 
-    predict_image = getattr(module, "predict_image", None)
-    if not callable(predict_image):
-        return None, "이 부위 모델은 업로드 이미지 분석(predict_image)을 지원하지 않습니다."
+    module = inference.get_module(body_part)
+    predict_image = getattr(module, "predict_image")
 
     try:
         result = predict_image(image, region=region)
@@ -132,6 +146,26 @@ def _has_sensitive_data_consent(db: DbSession, user_id: str) -> bool:
         .limit(1)
     )
     return bool(latest and latest.agreed)
+
+
+@router.get("/availability")
+def availability(user: CurrentUser, body_part: str = DEFAULT_BODY_PART):
+    """업로드 영상 분석이 지금 가능한지 **미리** 알려준다.
+
+    화면이 이걸 먼저 물어보면, 사용자가 영상을 올리고 ROI 를 칠하고 요청까지 한 뒤에야
+    "준비 중"을 만나는 헛수고를 막을 수 있다.
+
+    데모 모드가 켜져 있으면 그 사실도 함께 알린다 — 예시 데이터가 실제 분석처럼
+    보이면 안 되기 때문이다.
+    """
+    reason = image_model_unavailable_reason(body_part)
+    return {
+        "body_part": body_part,
+        "available": reason is None,
+        "unavailable_reason": reason,
+        "is_demo": _demo_enabled(),
+        "disclaimer": DISCLAIMER,
+    }
 
 
 @router.post("")

@@ -275,3 +275,38 @@ def test_exif_metadata_is_stripped():
     assert not cleaned.getexif(), "EXIF 가 제거되어야 한다"
     assert cleaned.info == {} or "exif" not in cleaned.info
     assert cleaned.size == (128, 128)
+
+
+# ------------------------------------------- 사전 가용성 조회 (헛수고 방지)
+def test_availability_reports_unavailable_with_reason(user_a):
+    """사용자가 영상을 올리고 ROI 를 칠한 뒤에야 "준비 중"을 만나면 노력이 낭비된다."""
+    body = user_a.get("/api/analyze/availability").json()
+
+    assert body["available"] is False
+    assert body["unavailable_reason"]
+    # volume 입력 모델이라는 사실을 사실대로 알린다
+    assert "volume" in body["unavailable_reason"]
+    assert body["disclaimer"]
+
+
+def test_availability_requires_authentication(client):
+    assert client.get("/api/analyze/availability").status_code == 401
+
+
+def test_availability_matches_actual_analyze_result(user_a):
+    """미리 알려준 것과 실제 결과가 다르면 안내가 거짓말이 된다."""
+    availability = user_a.get("/api/analyze/availability").json()
+    actual = user_a.post("/api/analyze", json=_payload()).json()
+
+    if availability["available"]:
+        assert actual["status"] in {"ok", "demo"}
+    else:
+        assert actual["status"] in {"model_unavailable", "demo"}
+        if actual["status"] == "model_unavailable":
+            assert actual["unavailable_reason"] == availability["unavailable_reason"]
+
+
+def test_availability_reports_demo_mode(user_a, monkeypatch):
+    """데모 예시가 실제 분석처럼 보이면 안 되므로 상태를 알린다."""
+    monkeypatch.setenv("MEDISCAN_ANALYZE_DEMO", "1")
+    assert user_a.get("/api/analyze/availability").json()["is_demo"] is True

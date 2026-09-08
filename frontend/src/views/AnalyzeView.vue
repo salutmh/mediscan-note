@@ -8,9 +8,9 @@
  * 참고: api-spec.md 2-6 의 region 예시는 { type, points } 뿐이라 그 형태 그대로 보낸다.
  * 모델이 마스크까지 필요하면 2-3(submit)처럼 region.mask_png_base64 를 스펙에 추가해야 한다 (팀 확인 필요).
  */
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import RoiCanvas from '../components/RoiCanvas.vue'
-import { analyzeImage } from '../api/endpoints'
+import { analyzeAvailability, analyzeImage } from '../api/endpoints'
 
 // 서버 응답 전에도 고지 문구가 비어 보이지 않게 쓰는 기본값. 분석 후에는 응답의 disclaimer 로 대체된다.
 const DEFAULT_DISCLAIMER = '본 결과는 학습 참고용 AI 분석이며 확정 진단이 아닙니다.'
@@ -33,6 +33,27 @@ const hasInput = ref(false)
 
 const phase = ref('idle') // 'idle' | 'analyzing' | 'done'
 const result = ref(null)
+
+/**
+ * 분석 가능 여부를 **미리** 확인한다.
+ *
+ * 예전에는 화면 문구에 "준비 중"을 하드코딩해두고, 사용자가 영상을 올리고 ROI 를 칠하고
+ * 요청까지 한 뒤에야 서버가 model_unavailable 을 돌려줬다. 그 노력이 통째로 낭비된다.
+ * 모델이 준비되면 문구가 반대로 거짓말을 하게 되는 문제도 있었다.
+ *
+ * 조회에 실패하면 **막지 않는다** — 확인을 못 했다고 기능을 잠그면 더 나쁘다.
+ * 그 경우 서버가 요청 시점에 사실대로 답한다.
+ */
+const availability = ref(null)
+const analysisBlocked = computed(() => availability.value?.available === false)
+
+onMounted(async () => {
+  try {
+    availability.value = await analyzeAvailability()
+  } catch {
+    availability.value = null
+  }
+})
 const analyzeError = ref('')
 
 const disclaimer = computed(() => result.value?.disclaimer ?? DEFAULT_DISCLAIMER)
@@ -134,11 +155,20 @@ function percent(p) {
 
   <header class="head">
     <h1>내 영상 AI 분석</h1>
-    <p class="lead">
-      <strong>이 화면의 AI 분석 기능은 준비 중입니다.</strong>
-      단일 이미지에 맞는 분석 모델이 준비되면 제공될 예정이며, 지금은 영상 업로드와 영역 지정까지
-      동작합니다.
+    <!-- 준비 상태를 서버에 물어서 표시한다. 화면에 하드코딩하면 모델이 준비된 뒤에
+         반대로 거짓말을 하게 된다. -->
+    <p v-if="analysisBlocked" class="lead">
+      <strong>이 화면의 AI 분석 기능은 아직 준비되지 않았습니다.</strong>
+      아래에서 영상 업로드와 영역 지정은 해보실 수 있지만, <strong>분석 결과는 제공되지 않습니다.</strong>
+      업로드한 영상은 서버에 저장되지 않고, 촬영기기 정보 등 메타데이터는 제거됩니다.
+    </p>
+    <p v-else class="lead">
+      영상을 올리고 확인하고 싶은 부위를 표시하면 AI 분석 결과를 보여드립니다.
       업로드한 영상은 서버에 저장되지 않고 분석에만 사용되며, 촬영기기 정보 등 메타데이터는 제거됩니다.
+    </p>
+
+    <p v-if="analysisBlocked && availability?.unavailable_reason" class="notice blocked-reason">
+      {{ availability.unavailable_reason }}
     </p>
   </header>
 
@@ -196,11 +226,22 @@ function percent(p) {
         <button
           v-if="phase !== 'done'"
           class="primary lg wide"
-          :disabled="!hasInput || phase === 'analyzing'"
+          :disabled="!hasInput || phase === 'analyzing' || analysisBlocked"
           @click="onAnalyze"
         >
-          {{ phase === 'analyzing' ? '분석 중...' : 'AI 분석 요청' }}
+          {{
+            analysisBlocked
+              ? '분석 준비 중'
+              : phase === 'analyzing'
+                ? '분석 중...'
+                : 'AI 분석 요청'
+          }}
         </button>
+
+        <p v-if="analysisBlocked" class="muted hint">
+          단일 이미지용 분석 모델이 준비되면 이 버튼이 활성화됩니다.
+          지금은 업로드와 영역 지정까지만 확인하실 수 있습니다.
+        </p>
         <button v-else class="lg wide" @click="reset">영역 다시 지정</button>
       </div>
 
@@ -272,6 +313,11 @@ function percent(p) {
   background: var(--surface-sunken);
   border: 1px solid var(--line-strong);
   color: var(--ink-secondary);
+}
+
+.blocked-reason {
+  margin-top: var(--sp-3);
+  font-size: 12.5px;
 }
 
 .state.demo {

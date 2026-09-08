@@ -147,7 +147,7 @@ await evaluate(`
       }),
     })
     const data = await res.json()
-    localStorage.setItem('mediscan.token', data.access_token)
+    localStorage.setItem('mediscan.access_token', data.access_token)
     localStorage.setItem('mediscan.user', JSON.stringify({
       user_id: data.user_id, email: data.email, nickname: data.nickname,
     }))

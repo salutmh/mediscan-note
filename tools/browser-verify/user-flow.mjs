@@ -281,7 +281,7 @@ await evaluate(`
     }
     const inputs = document.querySelectorAll('.field input')
     set(inputs[0], ${JSON.stringify(email)})
-    set(inputs[1], 'pw1234')
+    set(inputs[1], 'pw12345678')
     set(inputs[2], '흐름테스트')
     await new Promise((r) => setTimeout(r, 100))
     // 전체 동의 체크
@@ -294,7 +294,26 @@ await shoot('f01-signup-filled')
 await clickText('가입 완료')
 await sleep(2200)
 await shoot('f02-after-signup')
-console.log('   현재 경로:', await evaluate('location.pathname'))
+
+// 가입이 실패했는데 그냥 진행하면 3단계 뒤에 "reference_mask_url 을 얻지 못했습니다" 같은
+// 엉뚱한 메시지로 죽는다. 실패는 일어난 자리에서 알린다.
+const afterSignup = await evaluate(`
+  (() => ({
+    path: location.pathname,
+    hasToken: Boolean(localStorage.getItem('mediscan.access_token')),
+    error: document.querySelector('.error, .notice')?.textContent?.trim() ?? '',
+  }))()
+`)
+console.log('   현재 경로:', afterSignup.path)
+if (!afterSignup.hasToken) {
+  console.error('')
+  console.error('가입에 실패했습니다. 화면 메시지:', afterSignup.error || '(없음)')
+  console.error('흔한 원인:')
+  console.error('  - 비밀번호 정책(8자 이상)을 만족하지 않음')
+  console.error('  - 가입 요청 수 제한(기본 시간당 10회). E2E 를 반복 실행하면 걸린다.')
+  console.error('    백엔드를 MEDISCAN_RATE_LIMIT=0 으로 띄우고 다시 시도하세요.')
+  process.exit(1)
+}
 
 console.log('2) 케이스 목록 — 전부 미해결이어야 함')
 await goto('/cases', 1800)

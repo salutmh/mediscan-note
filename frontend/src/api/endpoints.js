@@ -42,6 +42,8 @@ export const listWrongNotes = () => api.get('/wrong-notes')
 export const retryWrongNote = (caseId, roi) =>
   api.post(`/wrong-notes/${encodeURIComponent(caseId)}/retry`, { roi })
 export const analyzeImage = ({ image_base64, region }) => api.post('/analyze', { image_base64, region })
+// 2-6-1. 업로드 분석이 지금 가능한지 **미리** 확인 — 사용자가 헛수고하지 않게 한다
+export const analyzeAvailability = () => api.get('/analyze/availability')
 
 // 1-4-3. 비밀번호 변경 — 성공하면 **다른 기기 로그인이 전부 끊기고** 새 토큰이 온다.
 export const changePassword = ({ current_password, new_password }) =>
