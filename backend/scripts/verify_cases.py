@@ -33,7 +33,7 @@ if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
 from app import explanations, inference, model_predictions  # noqa: E402
-from app.db import SessionLocal  # noqa: E402
+from app.db import SessionLocal, run_migrations  # noqa: E402
 from app.grading import evaluate_submission, is_gradable  # noqa: E402
 from app.models import Case, CaseSlice  # noqa: E402
 from app.static_files import resolve_local_path  # noqa: E402
@@ -102,6 +102,10 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="등록된 케이스 sanity check (DB 변경 없음)")
     parser.add_argument("--case-ids", nargs="*", help="생략 시 전체")
     args = parser.parse_args()
+
+    # 스키마를 head 까지 올린 뒤 읽는다 (import_cases 와 동일한 보장).
+    # 없으면 모델에 컬럼이 추가될 때마다 "no such column" 원시 에러로 죽는다.
+    run_migrations()
 
     exit_code = 0
     with SessionLocal() as db:
@@ -173,8 +177,15 @@ def main() -> int:
             print(f"  기준 영역: {facts.get('reference_region')}")
             if explanation["disease_info"] is None:
                 print("  질환 문헌 정보: 없음 (app/content/diseases/ 미작성)")
+            status = explanation["case_findings_status"]
             if explanation["case_findings"] is None:
-                print("  케이스별 영상 소견: 없음 (전문가 검토 전)")
+                print(f"  케이스별 영상 소견: 없음 (검토 상태: {status})")
+            else:
+                findings = explanation["case_findings"]
+                print(
+                    f"  케이스별 영상 소견: 있음 (검토 상태: {status}, "
+                    f"검토 {findings.get('reviewer')} · {findings.get('reviewed_at')})"
+                )
             if not facts:
                 print("  [실패] case_facts 가 없습니다.")
                 exit_code = 1

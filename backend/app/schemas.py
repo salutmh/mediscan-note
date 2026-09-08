@@ -135,19 +135,33 @@ class DiseaseInfo(BaseModel):
     content_version: Optional[str] = None
 
 
+FindingsStatus = Literal["needs_expert_review", "in_review", "approved"]
+
+
 class CaseFindings(BaseModel):
     """전문가가 **이 케이스를 보고 쓴** 영상 소견.
 
     검토 출처 메타데이터(reviewer / reviewed_at)를 필수로 둔다 — 누가 언제 본 내용인지
     남지 않는 소견은 등록하지 않는다. (필드가 있다는 것만으로 검토를 보증하지는 않는다.)
+
+    **여기 들어가는 문장은 전부 사람이 쓴 것이다.** 자동 생성하지 않는다.
+    geometry 로 계산되는 내용은 `spatial_feedback` 이 따로 담당한다.
+
+    학습용 필드(`learning_points` / `common_mistakes` 등)도 전문가가 채운다.
+    비어 있으면 화면에서 그 줄이 빠질 뿐, 지어내서 채우지 않는다.
     """
 
     source: Literal["expert_reviewed"] = "expert_reviewed"
-    findings: str
+    findings: str                                  # 핵심 영상 소견
+    lesion_location: Optional[str] = None          # 병변 위치 설명 (전문가 문장)
+    reference_region_note: Optional[str] = None    # 정답(기준) 영역이 왜 그렇게 잡혔는지
+    learning_points: list[str] = []                # 학습자가 확인할 포인트
+    common_mistakes: list[str] = []                # 자주 놓치는 부분
     medical_terms: list[MedicalTerm] = []
     references: list[Reference] = []
     reviewer: str
-    reviewed_at: str  # YYYY-MM-DD
+    reviewed_at: str                               # YYYY-MM-DD
+    content_version: Optional[str] = None
 
 
 class Explanation(BaseModel):
@@ -161,6 +175,9 @@ class Explanation(BaseModel):
     case_facts: Optional[CaseFacts] = None
     disease_info: Optional[DiseaseInfo] = None
     case_findings: Optional[CaseFindings] = None
+    # 소견이 없을 때 화면이 조용히 빈칸을 보여주는 대신 상태를 말할 수 있게 한다.
+    # ("아직 없음"과 "검토 중"은 학습자에게 다른 정보다)
+    case_findings_status: FindingsStatus = "needs_expert_review"
 
 
 class ScoringThresholds(BaseModel):

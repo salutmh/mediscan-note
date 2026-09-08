@@ -29,7 +29,7 @@ BACKEND_DIR = Path(__file__).resolve().parent.parent
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
-from app.db import SessionLocal  # noqa: E402
+from app.db import SessionLocal, run_migrations  # noqa: E402
 from app.models import Case, CaseSlice, Submission  # noqa: E402
 from app.static_files import STATIC_DIR  # noqa: E402
 
@@ -58,6 +58,9 @@ def main() -> int:
         "--purge-files", action="store_true", help="static/cases/<case_id>/ 자산 폴더도 삭제"
     )
     args = parser.parse_args()
+
+    # 스키마를 head 까지 올린 뒤 읽는다 (import_cases / verify_cases 와 동일한 보장)
+    run_migrations()
 
     with SessionLocal() as db:
         cases = _selected(db, args.case_ids, args.body_part, args.all)

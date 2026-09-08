@@ -94,7 +94,14 @@ def test_response_uses_reference_mask_contract(user_a):
     assert "model_version" not in body, "채점 응답의 최상위 model_version 은 v0.3 에서 제거됐다"
     # v0.4: 해설은 출처가 다른 3개 블록 + 파생 content_levels
     explanation = body["explanation"]
-    assert set(explanation) == {"content_levels", "case_facts", "disease_info", "case_findings"}
+    assert set(explanation) == {
+        "content_levels",
+        "case_facts",
+        "disease_info",
+        "case_findings",
+        # v0.5: 소견이 비어 있는 '이유'를 화면이 말할 수 있게 상태를 함께 내려보낸다
+        "case_findings_status",
+    }
     assert explanation["case_facts"]["source"] == "dataset_verified"
     assert {"disease_name", "reference_region"} <= set(explanation["case_facts"])
     assert "dataset_verified" in explanation["content_levels"]

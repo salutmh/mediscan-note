@@ -12,9 +12,9 @@
 | 최종 갱신 | 2026-09-08 |
 | 시작 커밋 | `ef56005` (docs: add public project README) |
 | 현재 브랜치 | `main` (origin/main과 동기) |
-| 현재 Phase | **Phase 4 — case_findings 운영 구조** |
-| STATUS | `NOT_STARTED` (Phase 3까지 DONE) |
-| 마지막 전체 테스트 | **292 passed** (Phase 3 완료 시점) |
+| 현재 Phase | **Phase 5 — 최소 Admin CMS** |
+| STATUS | `NOT_STARTED` (Phase 4까지 DONE) |
+| 마지막 전체 테스트 | **307 passed** (Phase 4 완료 시점) |
 
 ---
 
@@ -41,8 +41,8 @@
 | 1 | repository 전체 점검 → `docs/RELEASE_READINESS.md` | **DONE** |
 | 2 | Production Security Hardening (SECRET_KEY/CORS/rate limit/탈퇴/로깅) | **DONE** |
 | 3 | 학습 피드백 엔진 (spatial feedback + threshold config) | **DONE** |
-| 4 | `case_findings` 운영 구조 | **NEXT** |
-| 5 | 최소 Admin CMS | NOT_STARTED |
+| 4 | `case_findings` 운영 구조 | **DONE** (구조만 — 내용은 전문가 대기) |
+| 5 | 최소 Admin CMS | **NEXT** |
 | 6 | 콘텐츠 확장 준비 (케이스 후보 분석 도구) | NOT_STARTED |
 | 7 | 모델 평가 개선 | NOT_STARTED |
 | 8 | 사용자 테스트 이벤트 로그 | NOT_STARTED |
@@ -95,17 +95,38 @@
 - 좌표 근사 채점(개발 전용)에는 마스크가 없어 `spatial_feedback: null` 이다. 지어내지 않는다.
 - 프론트는 서버 문구를 **그대로** 출력한다. 화면에서 의료적 해석을 덧붙이지 않기 위함이다.
 
+### Phase 4 — case_findings 운영 구조 (DONE, 내용은 전문가 대기)
+
+| 항목 | 구현 | 파일 |
+|---|---|---|
+| 학습 필드 확장 | `lesion_location` / `reference_region_note` / `learning_points[]` / `common_mistakes[]` / `content_version` 추가 (전부 선택, 전부 사람이 작성) | `app/schemas.py` |
+| 검토 상태 | `cases.findings_status` 컬럼 (`needs_expert_review`/`in_review`/`approved`) + 응답 `explanation.case_findings_status` | `app/models.py`, `app/explanations.py` |
+| 마이그레이션 | `e81bbce560b5` — **추가 전용**. server_default 로 기존 행은 `needs_expert_review` | `alembic/versions/` |
+| 등록 경로 | `import_cases.py` 가 새 필드를 받되 없으면 빈 채로 둔다. 소견이 실제로 있을 때만 `approved` | `scripts/import_cases.py` |
+| 화면 | 소견이 없을 때 **왜 없는지**를 상태별 문구로 말한다 | `frontend/src/components/ExplanationPanel.vue` |
+| 규칙 문서 | `docs/CONTENT_GUIDELINES.md` 신규 — GT 원칙 / 등록 규칙 / 작성 규칙 / **AI 생성 가능·불가 목록** | |
+
+**설계 메모 (다음 세션이 알아야 할 것)**
+- **상태보다 실제 내용이 우선한다.** `findings_status=approved` 인데 소견이 비어 있으면
+  응답은 `needs_expert_review` 로 나간다 (`explanations.findings_status`).
+  상태 필드만 올려서 "검토된 것처럼" 보이게 하는 경로를 만들지 않기 위함이다.
+- **의료 내용은 채우지 않았다.** 6케이스 전부 `needs_expert_review` 다. 이건 미완성이 아니라
+  의도된 상태다 (BLOCKER-2).
+- CLI 스크립트가 마이그레이션을 보장하지 않아 컬럼 추가 시 `no such column` 으로 죽었다.
+  `verify_cases.py` / `remove_cases.py` 에 `run_migrations()` 를 추가해 `import_cases` 와 맞췄다.
+  **앞으로 DB 를 읽는 스크립트를 만들면 같은 처리를 넣을 것.**
+
 ---
 
 ## 4. 현재 진행 중인 작업
 
-없음 — Phase 3 까지 완료·커밋됨. Phase 4 부터 시작하면 된다.
+없음 — Phase 4 까지 완료·커밋됨. Phase 5 부터 시작하면 된다.
 
 ---
 
 ## 5. 아직 하지 않은 작업
 
-- Phase 4 ~ Phase 8
+- Phase 5 ~ Phase 8
 - Phase 2 범위 밖으로 남긴 것: H4 서버측 토큰 폐기, H5 이메일 인증·비밀번호 재설정
 - **프론트 탈퇴 UI 미구현** (API 만 완성). Closed Beta 전에 화면이 필요하다.
 
@@ -125,7 +146,8 @@
 
 ## 7. Migration 여부
 
-Phase 1까지 **마이그레이션 없음**. 스키마 변경 시 반드시:
+**Phase 4에서 1건 추가**: `e81bbce560b5` (cases.findings_status) — **추가 전용, 데이터 파괴 없음**.
+스키마 변경 시 반드시:
 ```
 cd backend && alembic revision --autogenerate -m "<설명>"
 ```
@@ -137,6 +159,8 @@ cd backend && alembic revision --autogenerate -m "<설명>"
 
 | 시점 | 명령 | 결과 |
 |---|---|---|
+| Phase 4 | `cd backend && pytest` | **307 passed** |
+| Phase 4 | `verify_cases` / `npm run build` | 6케이스 통과 / 통과 |
 | Phase 3 | `cd backend && pytest` | **292 passed** |
 | Phase 3 | `cd frontend && npm run build` | 통과 |
 | Phase 3 | `cd backend && python -m scripts.verify_cases` | 6케이스 통과 |
@@ -163,17 +187,16 @@ cd backend && alembic revision --autogenerate -m "<설명>"
 
 ## 13. NEXT STEP — 다음 세션이 가장 먼저 할 일
 
-> **Phase 4 — `case_findings` 운영 구조**부터 시작한다.
-> - [x] Phase 1~3 완료. 다시 만들지 말 것 (`app/feedback.py`, `app/scoring_config.py`,
->       `app/config.py`, `app/cors.py`, `app/rate_limit.py`, `app/account.py` 는 이미 있다).
-> - [ ] `CaseFindings` 스키마 확장: 학습 포인트 / 자주 놓치는 부분 / 정답 영역 설명 /
->       `review_status`(`needs_expert_review` 등) / `content_version` 필드 추가
-> - [ ] **의료 내용을 채우지 않는다.** 구조만 만들고 6케이스는 `needs_expert_review` 상태로 둔다
-> - [ ] `import_cases.py` 가 새 필드를 받도록 확장 (기존 manifest 는 그대로 동작해야 함)
-> - [ ] 스키마 변경이 DB 컬럼을 건드리면 `alembic revision --autogenerate` 필수.
->       기존 데이터를 지우는 마이그레이션은 만들지 말고 BLOCKER 로 남길 것
-> - [ ] `docs/CONTENT_GUIDELINES.md` 작성 (GT 사용 원칙 / case_findings 작성 규칙 /
->       AI가 생성 가능한 것과 불가능한 것)
+> **Phase 5 — 최소 Admin CMS**부터 시작한다. 거대한 CMS 를 만들지 않는다.
+> - [x] Phase 1~4 완료. 다시 만들지 말 것.
+> - [ ] 관리자 권한: `users.is_admin` 컬럼 + 추가 전용 마이그레이션 + `require_admin` 의존성.
+>       **일반 사용자는 절대 접근 불가**여야 하고, 이를 테스트로 고정할 것
+> - [ ] `/api/admin/cases` 목록·상세·수정(활성/비활성, difficulty, findings_status)
+> - [ ] `case_findings` 입력/수정 엔드포인트 — `reviewer`/`reviewed_at` 없으면 거부
+> - [ ] 케이스 활성/비활성: `cases.is_active` 추가 후 `GET /api/cases` 가 비활성을 숨기도록
+>       (기존 학습 흐름·제출 이력은 건드리지 않는다)
+> - [ ] 최초 관리자 지정 방법은 **CLI 스크립트**로 (웹에서 스스로 승격하는 경로를 만들지 않는다)
+> - [ ] 관리자 화면은 최소한으로. 우선순위는 API + 권한 격리 테스트
 
 ---
 

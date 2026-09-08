@@ -88,6 +88,21 @@ def _open_image(path: Path, label: str) -> Image.Image:
     return image
 
 
+def _optional_text(value) -> str | None:
+    """빈 문자열은 None 으로. '있는 척'하는 빈 블록을 만들지 않는다."""
+    text = str(value).strip() if value is not None else ""
+    return text or None
+
+
+def _string_list(value, field: str) -> list[str]:
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise ImportError_(f"explanation.case_findings.{field} 는 문자열 배열이어야 합니다.")
+    items = [str(v).strip() for v in value]
+    return [item for item in items if item]
+
+
 def _validate_case_findings(findings) -> dict:
     """전문가 소견 블록. 검토 출처 메타데이터(누가/언제)가 없으면 등록하지 않는다."""
     if not isinstance(findings, dict):
@@ -111,10 +126,17 @@ def _validate_case_findings(findings) -> dict:
     return {
         "source": SOURCE_EXPERT,
         "findings": str(findings["findings"]).strip(),
+        # 아래 학습용 필드는 선택이다. **비어 있으면 비운 채로 둔다** —
+        # 전문가가 쓰지 않은 내용을 등록 과정에서 만들어 넣지 않는다.
+        "lesion_location": _optional_text(findings.get("lesion_location")),
+        "reference_region_note": _optional_text(findings.get("reference_region_note")),
+        "learning_points": _string_list(findings.get("learning_points"), "learning_points"),
+        "common_mistakes": _string_list(findings.get("common_mistakes"), "common_mistakes"),
         "medical_terms": findings.get("medical_terms", []),
         "references": findings.get("references", []),
         "reviewer": str(findings["reviewer"]).strip(),
         "reviewed_at": reviewed_at,
+        "content_version": _optional_text(findings.get("content_version")),
     }
 
 
@@ -389,6 +411,11 @@ def import_manifest(manifest_path: Path, replace: bool = False, dry_run: bool = 
                 "total_slices": info["total_slices"],
             }
             case.explanation = info["explanation"]
+            # 소견이 실제로 들어왔을 때만 approved. 없으면 "아직 검토 전"이라고 사실대로 둔다.
+            # (manifest 로 상태만 approved 로 올리는 경로를 만들지 않는다)
+            case.findings_status = (
+                "approved" if info["explanation"].get("case_findings") else "needs_expert_review"
+            )
             # 좌표 근사 채점은 개발 전용이라 실제 케이스에는 쓰지 않는다
             case.reference_shape = None
             db.add(case)

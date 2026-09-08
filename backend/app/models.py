@@ -79,6 +79,13 @@ class Case(Base):
     reference_shape: Mapped[dict | None] = mapped_column(JSON, default=None)
     # 화면 4(학습 해설)에 쓰는 케이스별 해설. api-spec.md 2-3 의 explanation 객체 형태.
     explanation: Mapped[dict | None] = mapped_column(JSON, default=None)
+    # 전문가 소견(case_findings)의 검토 진행 상태.
+    # needs_expert_review(기본) | in_review | approved
+    # 소견이 비어 있는 이유가 "아직 아무도 안 봤다"인지 "검토 중"인지 구분해야
+    # 운영자가 진행 상황을 알 수 있고, 화면도 학습자에게 사실대로 말할 수 있다.
+    findings_status: Mapped[str] = mapped_column(
+        String(30), default="needs_expert_review", server_default="needs_expert_review"
+    )
 
     submissions: Mapped[list["Submission"]] = relationship(back_populates="case")
     slices: Mapped[list["CaseSlice"]] = relationship(

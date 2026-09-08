@@ -348,7 +348,8 @@
       "references": [{ "title": "...", "publisher": "...", "url": "...", "accessed": "2026-09-08" }],
       "content_version": "vs-2026-09-08"
     },
-    "case_findings": null
+    "case_findings": null,
+    "case_findings_status": "needs_expert_review"
   }
 }
 ```
@@ -390,6 +391,31 @@
 > | `case_facts` | `dataset_verified` | 전문가 GT(RTSTRUCT) + DICOM 태그에서 **계산**된 값 | manifest (사람이 타이핑하는 문장 없음) |
 > | `disease_info` | `literature_based` | 질환 단위 문헌 학습정보. **이 케이스의 소견이 아니다** | `app/content/diseases/<disease_code>.json` |
 > | `case_findings` | `expert_reviewed` | 전문가가 **이 케이스를 보고** 쓴 영상 소견 | manifest (reviewer / reviewed_at 필수) |
+>
+> **`case_findings` 필드 (v0.5 확장)** — 전부 사람이 쓴다. 자동 생성하지 않는다.
+>
+> | 필드 | 필수 | 뜻 |
+> |---|---|---|
+> | `findings` | ✅ | 핵심 영상 소견 |
+> | `reviewer` / `reviewed_at` | ✅ | 누가 언제 검토했는지 (없으면 등록 자체가 거부된다) |
+> | `lesion_location` | | 병변 위치에 대한 전문가 설명 |
+> | `reference_region_note` | | 기준(정답) 영역이 왜 그렇게 잡혔는지 |
+> | `learning_points` | | 학습자가 확인할 포인트 (문자열 배열) |
+> | `common_mistakes` | | 자주 놓치는 부분 (문자열 배열) |
+> | `medical_terms` / `references` | | 용어·출처 |
+> | `content_version` | | 콘텐츠 버전 |
+>
+> **`case_findings_status`** — 소견이 비어 있는 *이유*를 말해준다.
+> 빈칸만 보여주면 학습자는 "원래 없는 것"인지 "준비 중"인지 알 수 없다.
+>
+> | 값 | 뜻 |
+> |---|---|
+> | `needs_expert_review` | 아직 전문가가 보지 않음 (현재 6케이스 전부 이 상태) |
+> | `in_review` | 검토 진행 중 |
+> | `approved` | 검토 완료 — `case_findings` 에 내용이 있다 |
+>
+> 상태는 DB(`cases.findings_status`)에 저장하지만, **소견이 실제로 있으면 저장값과 무관하게
+> `approved` 로 나간다.** 상태 필드가 실제 내용과 어긋나도 응답이 거짓말을 하지 않게 하기 위함이다.
 >
 > - `content_levels` 는 **저장하지 않고 블록 존재 여부에서 계산한다.** 세 값은 서로 배타적이지
 >   않아서(사실 + 문헌이 동시에 있을 수 있다) 스칼라 상태 필드로는 표현되지 않는다.

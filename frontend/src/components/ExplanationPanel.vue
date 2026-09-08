@@ -24,6 +24,25 @@ const facts = computed(() => props.explanation.case_facts ?? null)
 const diseaseInfo = computed(() => props.explanation.disease_info ?? null)
 const findings = computed(() => props.explanation.case_findings ?? null)
 
+/**
+ * 소견이 없을 때 그 '이유'를 말해준다 (case_findings_status).
+ * 빈칸만 보여주면 학습자는 원래 없는 것인지 준비 중인지 알 수 없다.
+ */
+const FINDINGS_PENDING_MESSAGE = {
+  needs_expert_review:
+    '이 케이스의 개별 영상 소견은 아직 등록되지 않았습니다. ' +
+    '검증되지 않은 내용을 채우지 않기 위해 전문가 검토 전까지 비워 둡니다 — ' +
+    '검토가 끝나면 검토자·검토일과 함께 이 자리에 추가됩니다.',
+  in_review:
+    '이 케이스의 영상 소견은 현재 전문가 검토 중입니다. ' +
+    '검토가 끝나면 검토자·검토일과 함께 이 자리에 표시됩니다.',
+}
+const findingsPendingMessage = computed(
+  () =>
+    FINDINGS_PENDING_MESSAGE[props.explanation.case_findings_status] ??
+    FINDINGS_PENDING_MESSAGE.needs_expert_review,
+)
+
 const lateralityLabel = computed(() => {
   const value = facts.value?.laterality
   return value ? (LATERALITY_LABEL[value] ?? value) : null
@@ -162,6 +181,31 @@ function isUrl(value) {
       <template v-if="findings">
         <p class="findings">{{ findings.findings }}</p>
         <dl class="rows">
+          <!-- 아래 항목은 전문가가 쓴 것만 나온다. 비어 있으면 줄 자체가 빠진다. -->
+          <div v-if="findings.lesion_location" class="row">
+            <dt>병변 위치</dt>
+            <dd>{{ findings.lesion_location }}</dd>
+          </div>
+          <div v-if="findings.reference_region_note" class="row">
+            <dt>기준 영역 설명</dt>
+            <dd>{{ findings.reference_region_note }}</dd>
+          </div>
+          <div v-if="findings.learning_points?.length" class="row">
+            <dt>확인할 점</dt>
+            <dd>
+              <ul class="points">
+                <li v-for="(point, i) in findings.learning_points" :key="i">{{ point }}</li>
+              </ul>
+            </dd>
+          </div>
+          <div v-if="findings.common_mistakes?.length" class="row">
+            <dt>자주 놓치는 부분</dt>
+            <dd>
+              <ul class="points">
+                <li v-for="(item, i) in findings.common_mistakes" :key="i">{{ item }}</li>
+              </ul>
+            </dd>
+          </div>
           <div v-if="findings.medical_terms?.length" class="row">
             <dt>의학용어</dt>
             <dd>
@@ -179,10 +223,9 @@ function isUrl(value) {
           </div>
         </dl>
       </template>
-      <p v-else class="muted">
-        이 케이스의 개별 영상 소견은 등록되어 있지 않습니다.
-        전문가 검토가 이루어지면 이 자리에 검토자·검토일과 함께 추가됩니다.
-      </p>
+      <!-- 없을 때도 자리를 남기되, 왜 없는지를 상태로 구분해 말한다.
+           "원래 없는 것"과 "준비 중"은 학습자에게 다른 정보다. -->
+      <p v-else class="muted">{{ findingsPendingMessage }}</p>
     </section>
   </section>
 </template>
@@ -349,6 +392,17 @@ dd {
   margin: 0;
   padding: 0;
   font-size: 13px;
+}
+
+/* 학습 포인트·자주 놓치는 부분 — 용어 목록과 달리 문장이라 불릿을 남긴다 */
+.points {
+  margin: 0;
+  padding-left: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  line-height: 1.55;
 }
 
 @media (max-width: 560px) {
