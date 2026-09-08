@@ -148,11 +148,12 @@ async function render() {
     if (props.userMaskDataUrl) userBits = toMaskBits(await loadImage(props.userMaskDataUrl), w, h)
     if (referenceMaskUrl.value) aiBits = toMaskBits(await loadImage(referenceMaskUrl.value), w, h)
   } catch {
-    // 기준 마스크가 없거나(404) 다른 도메인이면 폴백
+    // 기준 마스크를 픽셀로 읽지 못하는 경우(파일 없음, 캔버스 오염 등) 반투명 겹치기로 폴백.
+    // 사용자에게는 "무엇이 달라 보이는지"만 알려준다 — 원인은 개발자가 콘솔에서 볼 몫이다.
     pixelMode.value = false
     overlayNote.value =
-      `기준 마스크(${referenceMaskUrl.value})를 픽셀 단위로 읽지 못해 반투명 겹치기로 표시합니다. ` +
-      '(이미지가 없거나 다른 도메인에서 서빙되는 경우 — 백엔드에서 CORS 허용 헤더를 주면 정확한 겹침 색상이 나옵니다.)'
+      '겹침 영역을 정확한 색으로 계산하지 못해 두 영역을 반투명하게 겹쳐 표시합니다. ' +
+      '위치와 범위는 그대로 비교할 수 있습니다.'
     return
   }
 

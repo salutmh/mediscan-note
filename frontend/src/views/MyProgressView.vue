@@ -133,9 +133,8 @@ onMounted(async () => {
       </ul>
 
       <p class="muted foot">
-        기획서의 "부위별 일치율"은 제출별 등급 분포가 필요합니다.
-        지금 API(GET /api/cases)는 has_matched/needs_review 두 상태만 주기 때문에 학습완료율까지만 계산했습니다 —
-        집계 엔드포인트가 정해지면 이 화면만 바꾸면 됩니다 (api-spec.md 4절 화면 7).
+        <strong>학습완료</strong>는 그 케이스에서 한 번이라도 <strong>일치</strong> 판정을 받은 것을 뜻하며,
+        한 번 달성하면 취소되지 않습니다. 이후 다시 틀리면 <strong>복습필요</strong>가 함께 표시됩니다.
       </p>
     </section>
   </template>

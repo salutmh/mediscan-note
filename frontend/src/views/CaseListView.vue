@@ -3,24 +3,30 @@
  * 화면 1 — 케이스 목록 (api-spec.md 2-1 / 4절 화면 1)
  * 부위 필터 탭 -> GET /api/cases?body_part=... , 카드에 썸네일 + solved 뱃지.
  */
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { listCases } from '../api/endpoints'
 import { bodyPartLabel, diseaseLabel } from '../labels'
 
-// api-spec.md 0절의 부위 코드
-const BODY_PARTS = [
-  { code: '', label: '전체' },
-  { code: 'brain_mri', label: '뇌 MRI' },
-  { code: 'brain_ct', label: '뇌 CT' },
-  { code: 'chest_xray', label: '흉부 X-ray' },
-  { code: 'abdomen_ct', label: '복부 CT' },
-  { code: 'knee_mri', label: '무릎 MRI' },
-]
-
 const selected = ref('')
 const cases = ref([])
+const allCases = ref([]) // 필터 탭을 만들기 위한 전체 목록 (부위 필터 없이 한 번 받는다)
 const loading = ref(false)
 const errorMessage = ref('')
+
+/**
+ * 부위 탭은 **실제로 케이스가 있는 부위만** 만든다.
+ *
+ * 예전에는 계약에 정의된 5개 부위를 모두 탭으로 깔아뒀는데, 지금 등록된 것은 뇌 MRI 뿐이라
+ * 나머지 4개는 눌러도 빈 목록이었다. 첫 사용자에게 **있지도 않은 콘텐츠를 있는 것처럼**
+ * 보여주는 셈이고, 빈 화면을 네 번 만나게 된다.
+ * 다른 부위가 등록되면 자동으로 탭이 생긴다.
+ */
+const bodyParts = computed(() => {
+  const codes = [...new Set(allCases.value.map((c) => c.body_part))].sort()
+  const tabs = codes.map((code) => ({ code, label: bodyPartLabel(code) }))
+  // 부위가 하나뿐이면 "전체 / 뇌 MRI" 두 탭이 같은 결과라 탭 자체가 의미 없다
+  return tabs.length > 1 ? [{ code: '', label: '전체' }, ...tabs] : []
+})
 
 async function load() {
   loading.value = true
@@ -28,6 +34,8 @@ async function load() {
   try {
     const data = await listCases(selected.value || undefined)
     cases.value = data.cases ?? []
+    // 필터가 걸리지 않은 응답일 때만 탭 기준 목록을 갱신한다
+    if (!selected.value) allCases.value = cases.value
   } catch (e) {
     errorMessage.value = e.message
     cases.value = []
@@ -57,9 +65,9 @@ function onThumbError(event) {
     </div>
   </header>
 
-  <div class="segmented filters">
+  <div v-if="bodyParts.length" class="segmented filters">
     <button
-      v-for="bp in BODY_PARTS"
+      v-for="bp in bodyParts"
       :key="bp.code"
       :class="{ active: selected === bp.code }"
       @click="select(bp.code)"
