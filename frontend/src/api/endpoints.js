@@ -22,6 +22,10 @@ export const socialLogin = ({ provider, provider_token, consents }) =>
 // 1-4. 토큰 유효성 확인
 export const getMe = () => api.get('/auth/me')
 
+// 1-4-2. 로그아웃 — **서버에서 이 토큰을 폐기한다.**
+// 브라우저에서 지우는 것만으로는 부족하다 (공용 PC 에서 토큰이 만료까지 살아 있으면 안 된다).
+export const logoutRequest = () => api.post('/auth/logout')
+
 // --- 2. 케이스 / 판독 -------------------------------------------------------
 // 2-1. 케이스 목록
 export const listCases = (bodyPart) =>

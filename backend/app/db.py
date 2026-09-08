@@ -11,12 +11,15 @@ URL 만 바꾸면 되고 모델·라우터는 손대지 않는다.
 스키마는 **Alembic 마이그레이션이 유일한 기준**이다 (backend/alembic/).
 `create_all` 은 더 이상 기동 경로에서 쓰지 않는다 — 모델을 바꾸면 반드시 마이그레이션을 만든다.
 """
+import logging
 import os
 from collections.abc import Iterator
 from pathlib import Path
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
+
+logger = logging.getLogger(__name__)
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 DEFAULT_SQLITE_PATH = BACKEND_DIR / "mediscan.db"
@@ -86,8 +89,14 @@ def run_migrations() -> None:
 def init_db() -> None:
     """앱 시작 시 호출 — 마이그레이션 적용 후 케이스 시드."""
     from app import models  # noqa: F401  — 모델이 Base.metadata 에 등록되도록 import
+    from app import token_revocation
     from app.seed import seed_cases
 
     run_migrations()
     with SessionLocal() as db:
         seed_cases(db)
+        # 이미 만료된 토큰의 폐기 기록은 남겨 둘 이유가 없다(어차피 거부된다).
+        # 목록이 무한히 자라면 요청마다 도는 조회가 계속 무거워진다.
+        purged = token_revocation.purge_expired(db)
+        if purged:
+            logger.info("만료된 토큰 폐기 기록 %s건 정리", purged)

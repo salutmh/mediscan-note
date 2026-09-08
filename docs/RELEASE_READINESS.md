@@ -35,7 +35,7 @@ AI 보조 피드백(참고) → 오답 재학습.
 | 화면 5 | 지어내지 않고 `model_unavailable`, 데모는 flag OFF 기본 | `app/routers/analyze.py:74` |
 | 스키마 | Alembic이 기준, 기동 시 자동 upgrade + 레거시 DB 감지 | `app/db.py:47` |
 | 정적 자산 | 요청 주소 기준 절대 URL 생성 | `app/main.py:32` |
-| 테스트 | **382개 통과** (22개 파일) | `backend/tests/` |
+| 테스트 | **396개 통과** (23개 파일) | `backend/tests/` |
 
 **이미 해결된 것은 다시 만들지 않는다.** 위 항목은 재구현 대상이 아니다.
 
@@ -59,7 +59,7 @@ AI 보조 피드백(참고) → 오답 재학습.
 | H1 | **spatial feedback 없음** | ~~숫자뿐~~ → `spatial_feedback` 추가 (coverage/precision/중심거리/과소·과대 표시 + 교육 문구) | ✅ DONE |
 | H2 | **`case_findings` 운영 구조 없음** | ~~검토 상태 없음~~ → 학습 필드 확장 + `findings_status`(DB) + 응답 `case_findings_status`. **내용은 전문가 대기(E1)** | ✅ 구조 DONE |
 | H3 | Admin CMS 없음 | ~~CLI 뿐~~ → `/api/admin/*` + 최소 운영 화면. 활성/비활성·난이도·검토상태·소견 등록 | ✅ DONE |
-| H4 | 서버측 토큰 폐기 없음 | 로그아웃은 클라이언트 삭제만, 유출 토큰 최대 7일 유효 | 🔲 미착수 |
+| H4 | 서버측 토큰 폐기 없음 | ~~클라이언트 삭제만~~ → `POST /api/auth/logout` + `revoked_tokens` 폐기 목록 | ✅ DONE |
 | H5 | 이메일 인증 / 비밀번호 재설정 없음 | 남의 이메일로 가입 가능, 비번 분실 시 계정 영구 상실 | 🔲 미착수 |
 | H6 | 채점 임계값 하드코딩 | ~~상수~~ → `app/scoring_config.py` 분리 + 응답에 `validation_status` 노출 | ✅ DONE |
 | H7 | 학습 분석 이벤트 없음 | ~~없음~~ → `learning_events` + `scripts/learning_report.py`. **개인정보 미수집**(이메일·IP·ROI 없음) | ✅ DONE |
@@ -96,7 +96,7 @@ AI 보조 피드백(참고) → 오답 재학습.
 | 인증 엔드포인트 rate limit | ✅ signup/login/social-login/탈퇴. 학습 흐름은 제외 |
 | 비밀번호 해싱 | ✅ scrypt (n=2^14) |
 | 토큰 서명·만료 | ✅ HMAC-SHA256 + exp |
-| 서버측 토큰 폐기 | ❌ 미구현 (H4) |
+| 서버측 토큰 폐기 | ✅ 로그아웃 시 jti 기준 폐기. 다른 기기 세션은 유지. 만료분 자동 정리 |
 | 이메일 인증 | ❌ 미구현 (H5) |
 | 비밀번호 재설정 | ❌ 미구현 (H5) |
 | 회원 탈퇴 / 데이터 삭제 | ✅ `DELETE /api/auth/me` + 화면(`/account`). 계정·동의·제출·학습기록 하드 삭제 |
@@ -190,4 +190,8 @@ AI 보조 피드백(참고) → 오답 재학습.
   신규 모듈: `app/analytics.py`.
   **발견**: 현재 6케이스는 우측 5/좌측 1 로 편향돼 있고, AI 미검출 1건은 최소 병변이다
   (small 구간 검출률 0.5 vs medium/large 1.0). 콘텐츠 확장 시 좌측·소형 병변을 우선 확보할 것.
+- 2026-09-08: H4 서버측 토큰 폐기 완료. 테스트 382 → 396.
+  마이그레이션 `72c54e42f82a`(revoked_tokens, **신규 테이블만**).
+  부수 발견·수정: 401 핸들러가 `logout()` 을 부르면 무효 토큰으로 서버를 다시 호출해
+  401 루프가 될 수 있었다 → `clearSession()` 으로 분리.
 (이후 Phase 완료 시마다 여기에 추가한다)

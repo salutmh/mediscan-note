@@ -19,8 +19,9 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException
 from sqlalchemy import select
 
+from app import token_revocation
 from app.account import delete_account
-from app.deps import CurrentUser, DbSession
+from app.deps import CurrentTokenPayload, CurrentUser, DbSession
 from app.models import Consent, User
 from app.schemas import (
     Consents,
@@ -155,8 +156,31 @@ def me(user: CurrentUser):
     return {"user_id": user.user_id, "email": user.email, "nickname": user.nickname}
 
 
+@router.post("/logout")
+def logout(payload: CurrentTokenPayload, db: DbSession):
+    """로그아웃 — **이 토큰을 서버에서 폐기한다.**
+
+    브라우저에서 토큰을 지우는 것만으로는 부족하다. 공용 PC 에서 로그아웃했는데
+    그 토큰이 만료(기본 7일)까지 살아 있으면, 기록이나 로그에 남은 값으로 다시 들어올 수 있다.
+
+    다른 기기의 로그인은 끊지 않는다 (토큰마다 jti 가 다르다).
+    이미 폐기된 토큰으로 다시 불러도 성공으로 응답한다 — 로그아웃은 멱등해야 한다.
+    """
+    revoked = token_revocation.revoke(db, payload)
+    return {
+        "logged_out": True,
+        # jti 가 없는 옛 토큰은 개별 폐기가 불가능하다. 사실대로 알린다.
+        "token_revoked": revoked,
+    }
+
+
 @router.delete("/me")
-def delete_me(user: CurrentUser, db: DbSession, payload: DeleteAccountRequest | None = None):
+def delete_me(
+    user: CurrentUser,
+    db: DbSession,
+    token_payload: CurrentTokenPayload,
+    payload: DeleteAccountRequest | None = None,
+):
     """회원 탈퇴 — 계정·동의 이력·제출 이력을 모두 삭제한다. **되돌릴 수 없다.**
 
     이메일 계정은 비밀번호를 다시 받아 확인한다. 토큰만 있으면(예: 남의 기기에 남은 세션)
@@ -167,4 +191,7 @@ def delete_me(user: CurrentUser, db: DbSession, payload: DeleteAccountRequest | 
         password = payload.password if payload else None
         if not password or not verify_password(password, user.password_hash):
             raise _error(403, "PASSWORD_CONFIRMATION_REQUIRED", "탈퇴하려면 비밀번호를 다시 입력해야 합니다.")
+
+    # 계정이 사라지면 그 토큰은 어차피 401 이지만, 폐기도 함께 남겨 방어선을 겹친다.
+    token_revocation.revoke(db, token_payload)
     return delete_account(db, user)

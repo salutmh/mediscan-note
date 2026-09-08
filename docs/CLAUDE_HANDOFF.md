@@ -12,9 +12,9 @@
 | 최종 갱신 | 2026-09-08 |
 | 시작 커밋 | `ef56005` (docs: add public project README) |
 | 현재 브랜치 | `main` (origin/main과 동기) |
-| 현재 Phase | **Phase 1~8 전부 DONE** |
-| STATUS | `DONE` — 남은 것은 BLOCKER 해소와 잔여 High(H4/H5) |
-| 마지막 전체 테스트 | **382 passed** (Phase 8 완료 시점) |
+| 현재 모드 | **지속 자율 개발 루프** (Phase 1~8 은 최초 백로그였고 전부 완료) |
+| STATUS | `IN_PROGRESS` — 사이클마다 제품 재평가 → 최고가치 작업 선정 |
+| 마지막 전체 테스트 | **396 passed** |
 
 ---
 
@@ -137,6 +137,36 @@
 - 프론트 라우트를 숨기지 않았다. 프론트 숨김은 권한이 아니고, 서버가 403 을 주면
   화면이 "운영자 권한이 필요합니다"를 그대로 보여주는 편이 덜 혼란스럽다.
 
+### 자율 루프 #1 — 서버측 토큰 폐기 (H4, DONE)
+
+**왜 이걸 먼저 골랐나**: 이 서비스는 학내 실습실 같은 **공용 PC 배포**를 상정한다.
+로그아웃해도 그 토큰이 최대 7일 유효한 것은 실제 위험(1순위: 보안)이라 판단했다.
+
+| 항목 | 구현 |
+|---|---|
+| 토큰 식별 | `create_access_token` 이 토큰마다 `jti` 를 넣는다. 이게 있어야 **이 세션 하나만** 끊을 수 있다 |
+| 폐기 목록 | `revoked_tokens` 테이블(DB 기반이라 워커 여러 개에서도 동작). 허용목록 대신 폐기목록 — 로그아웃한 것만 남기면 되어 훨씬 작다 |
+| 검사 | `current_user` 가 매 요청 폐기 여부 확인 → 401 `TOKEN_REVOKED` |
+| 엔드포인트 | `POST /api/auth/logout` (멱등). 탈퇴 시에도 함께 폐기 |
+| 정리 | 앱 기동 시 만료된 폐기 기록 삭제 (`purge_expired`) |
+| 프론트 | 로그아웃이 서버 폐기를 먼저 호출. 실패해도 로컬은 비우고 **"서버에 닿지 못했다"고 로그인 화면에 안내** |
+
+**설계 결정 (되돌리기 전에 읽을 것)**
+- `current_token_payload` 는 **의도적으로 폐기 목록을 보지 않는다.** 로그아웃을 두 번 눌러도
+  성공해야 하기 때문이다. 이 경로는 토큰 외 입력이 없고 폐기만 하므로 얻을 수 있는 게 없다.
+  데이터를 만지는 엔드포인트는 전부 `current_user`(폐기 확인 O)를 쓴다.
+- `revoked_tokens.user_id` 에 **외래키를 걸지 않았다.** 계정이 삭제돼도 그 토큰이 만료될 때까지는
+  폐기 기록이 남아 있어야 하기 때문이다.
+- `jti` 없는 옛 토큰은 개별 폐기가 불가능하다. 성공한 척하지 않고 `token_revoked: false` 로 알린다.
+  기존 로그인 세션은 그대로 동작한다(`test_legacy_token_without_jti_still_authenticates`).
+
+**작업 중 발견한 버그 (수정 완료)**
+`main.js` 의 401 핸들러가 `logout()` 을 부르고 있었다. 로그아웃이 서버 호출을 하게 되면서
+**무효 토큰으로 서버를 다시 불러 401 이 또 나는 재진입 구조**가 될 뻔했다.
+로컬 정리 전용 `clearSession()` 을 분리해 401 핸들러·탈퇴 완료 두 곳에 적용했다.
+
+---
+
 ### Phase 6~8 — 콘텐츠 확장 준비 / 모델 평가 / 학습 이벤트 (DONE)
 
 | Phase | 구현 | 파일 |
@@ -200,6 +230,7 @@
 - `e81bbce560b5` cases.findings_status (Phase 4)
 - `e93378ca7e48` users.is_admin, cases.is_active, cases.difficulty (Phase 5)
 - `0fc6767cf5ba` learning_events 테이블 신규 (Phase 8)
+- `72c54e42f82a` revoked_tokens 테이블 신규 (자율 루프 #1)
 스키마 변경 시 반드시:
 ```
 cd backend && alembic revision --autogenerate -m "<설명>"
@@ -212,6 +243,7 @@ cd backend && alembic revision --autogenerate -m "<설명>"
 
 | 시점 | 명령 | 결과 |
 |---|---|---|
+| 자율 #1 | `cd backend && pytest` | **396 passed** |
 | Phase 8 | `cd backend && pytest` | **382 passed** |
 | Phase 8 | `verify_cases` / `npm run build` | 6케이스 통과 / 통과 |
 | Phase 5 | `cd backend && pytest` | **339 passed** |
@@ -248,10 +280,7 @@ cd backend && alembic revision --autogenerate -m "<설명>"
 > 우선순위 순으로 아래를 이어서 하면 된다.
 >
 > 1. [x] ~~프론트 탈퇴 UI~~ → **완료**. `/account` (상단 닉네임 클릭).
->        무엇이 지워지는지 화면에 적고, 이메일 계정은 비밀번호를 재확인한다.
-> 2. [ ] **H4 서버측 토큰 폐기** — 로그아웃/탈퇴 시 기존 토큰을 서버가 무효화.
->        지금은 클라이언트 삭제뿐이라 유출 토큰이 최대 7일 유효하다.
->        (탈퇴는 사용자가 사라져 401 이 되므로 이미 안전하다 — 문제는 로그아웃)
+> 2. [x] ~~H4 서버측 토큰 폐기~~ → **완료**. `POST /api/auth/logout` + `revoked_tokens`.
 > 3. [ ] **H5 비밀번호 재설정 / 이메일 인증** — 메일 발송 수단이 필요하다.
 >        외부 서비스 가입이 필요하면 BLOCKER 로 남길 것.
 > 4. [ ] **케이스 확장** — `python -m scripts.analyze_case_candidates` 결과 기준으로

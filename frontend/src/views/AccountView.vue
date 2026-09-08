@@ -14,7 +14,7 @@
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { deleteAccount } from '../api/endpoints'
-import { authState, logout } from '../stores/auth'
+import { authState, clearSession } from '../stores/auth'
 
 const router = useRouter()
 
@@ -44,8 +44,9 @@ async function submit() {
   error.value = ''
   try {
     result.value = await deleteAccount(isEmailAccount.value ? password.value : undefined)
-    // 계정이 사라졌으므로 토큰도 더는 쓸 수 없다 (서버가 401 을 준다)
-    logout()
+    // 계정이 사라졌고 서버가 그 토큰을 이미 폐기했다. 로컬만 비우면 된다 —
+    // 여기서 서버 로그아웃을 또 부르면 401 만 돌아온다.
+    clearSession()
   } catch (e) {
     error.value = e.message
   } finally {

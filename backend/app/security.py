@@ -22,6 +22,7 @@ import json
 import os
 import secrets
 import time
+import uuid
 import warnings
 
 from app.config import ConfigError, is_production
@@ -115,8 +116,15 @@ def verify_password(password: str, stored: str | None) -> bool:
 
 # ------------------------------------------------------------------------ 토큰
 def create_access_token(user_id: str, ttl_seconds: int | None = None) -> str:
+    """토큰마다 고유한 jti 를 넣는다.
+
+    jti 가 있어야 **이 토큰 하나만** 폐기할 수 있다 (app/token_revocation.py).
+    없으면 로그아웃할 때 그 사용자의 다른 기기 세션까지 같이 끊거나,
+    아니면 아무것도 못 끊거나 둘 중 하나가 된다.
+    """
     payload = {
         "sub": user_id,
+        "jti": uuid.uuid4().hex,
         "iat": int(time.time()),
         "exp": int(time.time()) + (ttl_seconds if ttl_seconds is not None else TOKEN_TTL_SECONDS),
     }

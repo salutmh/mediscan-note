@@ -1,13 +1,23 @@
 <script setup>
+import { ref } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { authState, isLoggedIn, logout } from './stores/auth'
 
 const router = useRouter()
 const route = useRoute()
 
-function onLogout() {
-  logout()
-  router.push({ name: 'login' })
+const loggingOut = ref(false)
+
+async function onLogout() {
+  // 서버에 토큰 폐기를 요청한 뒤 화면을 넘긴다. 실패해도 로컬 세션은 비워지므로
+  // 이 기기에서는 로그아웃되지만, 그 토큰은 서버에서 아직 유효하다.
+  loggingOut.value = true
+  const revoked = await logout()
+  loggingOut.value = false
+  router.push({
+    name: 'login',
+    query: revoked ? undefined : { logout: 'local_only' },
+  })
 }
 
 const NAV = [
@@ -63,7 +73,9 @@ function initial(nickname) {
           <span class="avatar" aria-hidden="true">{{ initial(authState.user?.nickname) }}</span>
           <span class="nickname">{{ authState.user?.nickname ?? '사용자' }}</span>
         </RouterLink>
-        <button class="ghost sm" @click="onLogout">로그아웃</button>
+        <button class="ghost sm" :disabled="loggingOut" @click="onLogout">
+          {{ loggingOut ? '로그아웃 중…' : '로그아웃' }}
+        </button>
       </div>
     </div>
   </header>

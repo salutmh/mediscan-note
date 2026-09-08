@@ -20,6 +20,12 @@ import { applyAuthResult } from '../stores/auth'
 const router = useRouter()
 const route = useRoute()
 
+/**
+ * 로그아웃 요청이 서버에 닿지 못한 경우(네트워크 끊김 등) 안내한다.
+ * 이 기기에서는 로그아웃됐지만 그 토큰은 서버에서 아직 유효하다 — 공용 PC 라면 중요한 정보다.
+ */
+const logoutIncomplete = computed(() => route.query.logout === 'local_only')
+
 const mode = ref('login') // 'login' | 'signup'
 const email = ref('')
 const password = ref('')
@@ -157,6 +163,12 @@ const PROVIDERS = [
       <h1>메디스캔노트</h1>
       <p class="lead">의료영상 판독을 직접 연습하고, AI 기준과 비교해 학습하는 서비스</p>
     </div>
+
+    <!-- 서버에 로그아웃이 닿지 못한 경우. 공용 PC 에서는 알아야 하는 정보다. -->
+    <p v-if="logoutIncomplete" class="notice">
+      이 기기에서는 로그아웃했지만 <strong>서버에 연결하지 못해 세션이 완전히 종료되지 않았습니다.</strong>
+      공용 컴퓨터라면 네트워크 연결 후 다시 로그인해 로그아웃해 주세요.
+    </p>
 
     <div class="card panel">
       <!-- SNS 신규 가입: 동의만 받는 단계 -->

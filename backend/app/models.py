@@ -129,6 +129,24 @@ class CaseSlice(Base):
     __table_args__ = (UniqueConstraint("case_id", "slice_index", name="uq_case_slice_index"),)
 
 
+class RevokedToken(Base):
+    """폐기된 액세스 토큰 (로그아웃).
+
+    사용자 행이 아니라 **토큰 행**이다. 그래서 user_id 에 외래키를 걸지 않는다 —
+    계정이 삭제돼도 그 토큰이 만료될 때까지는 폐기 기록이 남아 있어야 하기 때문이다.
+    (계정 삭제 자체로도 401 이 되지만, 두 방어선을 겹쳐 둔다.)
+
+    만료된 기록은 token_revocation.purge_expired 가 정리한다.
+    """
+
+    __tablename__ = "revoked_tokens"
+
+    jti: Mapped[str] = mapped_column(String(40), primary_key=True)
+    user_id: Mapped[str | None] = mapped_column(String(32), index=True, default=None)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    revoked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class LearningEvent(Base):
     """학습 관찰 로그 (Closed Beta 측정용).
 

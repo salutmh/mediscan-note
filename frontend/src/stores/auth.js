@@ -35,9 +35,32 @@ export function applyAuthResult(result) {
   return authState.user
 }
 
-export function logout() {
+/** 로컬 상태만 비운다 (401 처리처럼 서버 호출이 무의미한 경우용) */
+export function clearSession() {
   clearToken()
   localStorage.removeItem(USER_KEY)
   authState.token = null
   authState.user = null
+}
+
+/**
+ * 로그아웃 — **서버에 토큰 폐기를 먼저 요청한 뒤** 로컬을 비운다.
+ *
+ * 서버 호출이 실패해도(네트워크 끊김 등) 로컬은 반드시 비운다. 그래야 이 기기에서는
+ * 최소한 로그아웃된 상태가 된다. 다만 그 토큰은 서버에서 아직 유효하므로,
+ * 호출 성공 여부를 돌려줘 화면이 필요하면 안내할 수 있게 한다.
+ */
+export async function logout() {
+  let revoked = false
+  try {
+    // 순환 import 를 피하려고 여기서 가져온다 (endpoints -> client -> stores/auth)
+    const { logoutRequest } = await import('../api/endpoints')
+    await logoutRequest()
+    revoked = true
+  } catch {
+    revoked = false
+  } finally {
+    clearSession()
+  }
+  return revoked
 }
