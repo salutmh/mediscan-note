@@ -59,6 +59,7 @@ ADMIN_ENDPOINTS = [
     ("PATCH", f"/api/admin/cases/{CASE_ID}", {"is_active": False}),
     ("PUT", f"/api/admin/cases/{CASE_ID}/findings", FINDINGS_PAYLOAD),
     ("DELETE", f"/api/admin/cases/{CASE_ID}/findings", None),
+    ("GET", "/api/admin/learning-summary", None),
 ]
 
 
@@ -339,6 +340,58 @@ def test_findings_do_not_touch_case_facts(admin):
     )
     after = admin.get(f"/api/admin/cases/{CASE_ID}").json()["explanation"]["case_facts"]
     assert after == before
+
+
+# ------------------------------------------------------------------ 학습 지표
+def test_learning_summary_is_aggregate_only(admin, user_a, roi_mismatch):
+    """운영자가 **개인의 학습 내용을 들여다보는 도구가 아니다.**
+
+    집계만 나가야 한다 — user_id·이메일이 응답에 섞이면 목적이 달라진다.
+    """
+    import json
+
+    user_a.get(f"/api/cases/{CASE_ID}")
+    user_a.submit(roi_mismatch)
+
+    body = admin.get("/api/admin/learning-summary").json()
+    payload = json.dumps(body, ensure_ascii=False)
+
+    assert user_a.user_id not in payload, "응답에 개인 식별자가 들어 있다"
+    assert user_a.email not in payload
+    # 집계는 제대로 나온다
+    assert body["users_seen"] >= 1
+    assert body["submissions"] >= 1
+
+
+def test_learning_summary_matches_cli_report(admin, user_a, roi_mismatch):
+    """CLI 와 API 가 같은 함수를 쓴다 — 두 곳에서 따로 계산하면 숫자가 갈라진다."""
+    from sqlalchemy import select
+
+    from app.db import SessionLocal
+    from app.learning_stats import build_report
+    from app.models import LearningEvent
+
+    user_a.submit(roi_mismatch)
+
+    api = admin.get("/api/admin/learning-summary").json()
+    with SessionLocal() as db:
+        events = db.scalars(select(LearningEvent).order_by(LearningEvent.id)).all()
+        cli = build_report(events)
+
+    assert api["submissions"] == cli["submissions"]
+    assert api["users_seen"] == cli["users_seen"]
+
+
+def test_learning_summary_reports_collection_state(admin, monkeypatch):
+    """'데이터가 없다'와 '수집이 꺼져 있다'는 다른 이야기다."""
+    monkeypatch.setenv("MEDISCAN_ANALYTICS", "0")
+    assert admin.get("/api/admin/learning-summary").json()["analytics_enabled"] is False
+
+
+def test_learning_summary_without_events_does_not_crash(admin):
+    body = admin.get("/api/admin/learning-summary").json()
+    assert body["events"] == 0
+    assert body["start_to_submit_rate"] is None
 
 
 # ------------------------------------------- GT 를 화면에서 고치는 경로가 없다 (핵심)

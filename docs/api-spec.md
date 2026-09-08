@@ -750,6 +750,32 @@
 > **소견 내용 없이 `approved` 로 올릴 수 없다** — 422 `FINDINGS_REQUIRED`.
 > 상태만 올려서 "검토된 것처럼" 보이게 하는 경로를 막는다.
 
+### 2-A-3-1. GET /api/admin/learning-summary — 학습 지표
+
+Closed Beta 에서 "학습이 실제로 일어나는가"를 운영자가 서버 접속 없이 확인한다.
+
+```json
+{
+  "analytics_enabled": true,
+  "users_seen": 12, "events": 340,
+  "cases_opened": 48, "cases_submitted": 39, "start_to_submit_rate": 0.8125,
+  "submissions": 61, "retry_count": 22,
+  "first_attempt_mean_dice": 0.41, "retry_mean_dice": 0.78,
+  "mean_improvement": 0.34, "improved_pairs": 18, "worsened_pairs": 3,
+  "mean_duration_seconds": 143.2,
+  "per_case": { "VS-SEG-202": { "attempts": 14, "first_attempt_match_rate": 0.28, "mean_dice": 0.52 } }
+}
+```
+
+- **집계만 나간다.** `user_id`·이메일은 응답에 포함되지 않는다 — 운영자가 개인의 학습 내용을
+  들여다보는 도구가 아니다 (`test_learning_summary_is_aggregate_only` 가 고정).
+- CLI(`scripts/learning_report.py`)와 **같은 함수**(`app/learning_stats.build_report`)를 쓴다.
+  두 곳에서 따로 계산하면 숫자가 갈라진다.
+- `analytics_enabled: false` 는 수집이 꺼져 있다는 뜻이다 —
+  "데이터가 없다"와 "수집을 안 하고 있다"를 구분할 수 있어야 한다.
+- `mean_improvement` 는 같은 (사용자, 케이스)의 첫 시도 → 최종 시도 Dice 변화 평균이다.
+  **학습 효과의 최소 신호**로 본다.
+
 ### 2-A-4. PUT /api/admin/cases/{case_id}/findings
 
 전문가 소견 등록/수정. 성공하면 `findings_status` 가 자동으로 `approved` 가 된다.

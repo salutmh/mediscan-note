@@ -35,7 +35,7 @@ AI 보조 피드백(참고) → 오답 재학습.
 | 화면 5 | 지어내지 않고 `model_unavailable`, 데모는 flag OFF 기본 | `app/routers/analyze.py:74` |
 | 스키마 | Alembic이 기준, 기동 시 자동 upgrade + 레거시 DB 감지 | `app/db.py:47` |
 | 정적 자산 | 요청 주소 기준 절대 URL 생성 | `app/main.py:32` |
-| 테스트 | 백엔드 **435개**(SQLite·PostgreSQL 양쪽) + 프론트 **22개** + E2E 4종 | `backend/tests/`, `frontend/src/**/*.test.js` |
+| 테스트 | 백엔드 **441개**(SQLite·PostgreSQL 양쪽) + 프론트 **22개** + E2E 4종 | `backend/tests/`, `frontend/src/**/*.test.js` |
 
 **이미 해결된 것은 다시 만들지 않는다.** 위 항목은 재구현 대상이 아니다.
 
@@ -62,7 +62,7 @@ AI 보조 피드백(참고) → 오답 재학습.
 | H4 | 서버측 토큰 폐기 없음 | ~~클라이언트 삭제만~~ → `POST /api/auth/logout` + `revoked_tokens` 폐기 목록 | ✅ DONE |
 | H5 | 이메일 인증 / 비밀번호 재설정 없음 | **비밀번호 변경은 구현**(`POST /api/auth/password`, 다른 기기 로그아웃 포함) + 최소 8자 정책. 이메일 인증·분실 시 재설정은 메일 발송 수단 필요 | 🟡 부분 |
 | H6 | 채점 임계값 하드코딩 | ~~상수~~ → `app/scoring_config.py` 분리 + 응답에 `validation_status` 노출 | ✅ DONE |
-| H7 | 학습 분석 이벤트 없음 | ~~없음~~ → `learning_events` + `scripts/learning_report.py`. **개인정보 미수집**(이메일·IP·ROI 없음) | ✅ DONE |
+| H7 | 학습 분석 이벤트 없음 | ~~없음~~ → `learning_events` + CLI + **운영자 화면 지표**(`GET /api/admin/learning-summary`). 개인정보 미수집, 집계만 노출 | ✅ DONE |
 
 ---
 
@@ -234,4 +234,8 @@ AI 보조 피드백(참고) → 오답 재학습.
   전혀 반영되지 않고 있었다(설정해도 아무 일도 안 일어남). 목록·상세 응답에 노출하고
   뱃지·필터를 붙였다. **미지정은 표시하지 않는다** — 추측해서 채우지 않으므로
   "표시가 없다 = 아직 판정 전"이 정확한 의미다. 테스트 433 → 435, 프론트 22 → 25.
+- 2026-09-08: **학습 지표를 운영자 화면에 노출.** 이벤트를 수집하면서도 볼 방법이 CLI 뿐이라
+  운영자가 서버 접속 없이는 학습이 일어나는지 알 수 없었다. 집계 로직을
+  `app/learning_stats.py` 로 옮겨 **CLI 와 API 가 같은 함수를 쓰게** 했다
+  (두 곳에서 따로 계산하면 숫자가 갈라진다). 응답에 개인 식별자가 없음을 테스트로 고정.
 (이후 Phase 완료 시마다 여기에 추가한다)

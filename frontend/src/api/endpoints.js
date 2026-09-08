@@ -54,6 +54,8 @@ export const deleteAccount = (password) => api.delete('/auth/me', password ? { p
 // 일반 사용자가 호출하면 403 ADMIN_REQUIRED 가 온다. 화면에서도 숨기지만,
 // 실제 차단은 서버가 한다 (프론트 숨김은 UX 이지 권한이 아니다).
 export const adminListCases = () => api.get('/admin/cases')
+// 학습 지표 — **집계만** 온다 (누가 무엇을 틀렸는지는 나오지 않는다)
+export const adminLearningSummary = () => api.get('/admin/learning-summary')
 export const adminGetCase = (caseId) => api.get(`/admin/cases/${encodeURIComponent(caseId)}`)
 export const adminUpdateCase = (caseId, patch) =>
   api.patch(`/admin/cases/${encodeURIComponent(caseId)}`, patch)

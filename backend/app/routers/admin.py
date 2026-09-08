@@ -19,10 +19,10 @@
 from fastapi import APIRouter, HTTPException
 from sqlalchemy import func, select
 
-from app import explanations
+from app import explanations, learning_stats
 from app.deps import CurrentAdmin, DbSession
 from app.grading import is_gradable
-from app.models import Case, CaseSlice, Submission
+from app.models import Case, CaseSlice, LearningEvent, Submission
 from app.schemas import AdminCaseUpdate, CaseFindingsInput
 from app.static_files import absolute_url
 
@@ -137,6 +137,27 @@ def update_case(case_id: str, payload: AdminCaseUpdate, admin: CurrentAdmin, db:
     db.commit()
     db.refresh(case)
     return {"updated": changed, **_summary(db, case)}
+
+
+# ------------------------------------------------------------------ 학습 지표
+@router.get("/learning-summary")
+def learning_summary(admin: CurrentAdmin, db: DbSession):
+    """Closed Beta 에서 "학습이 실제로 일어나는가"를 본다.
+
+    **집계만 돌려준다.** 누가 무엇을 틀렸는지는 나가지 않는다 — 운영자가 개인의 학습 내용을
+    들여다보는 도구가 아니다. CLI(`scripts/learning_report.py`)와 **같은 함수**를 쓴다
+    (두 곳에서 따로 계산하면 숫자가 갈라진다).
+
+    이벤트 수집이 꺼져 있으면(`MEDISCAN_ANALYTICS=0`) 빈 집계가 나온다 —
+    "데이터가 없다"와 "수집이 꺼져 있다"를 구분할 수 있게 상태도 함께 알려준다.
+    """
+    from app import analytics
+
+    events = db.scalars(select(LearningEvent).order_by(LearningEvent.id)).all()
+    return {
+        "analytics_enabled": analytics.enabled(),
+        **learning_stats.build_report(events),
+    }
 
 
 # ------------------------------------------------------------------ 전문가 소견

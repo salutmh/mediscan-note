@@ -15,6 +15,7 @@
 import { onMounted, ref } from 'vue'
 import {
   adminDeleteFindings,
+  adminLearningSummary,
   adminListCases,
   adminSaveFindings,
   adminUpdateCase,
@@ -43,6 +44,12 @@ const STATUS_LABEL = {
   approved: '검토 완료',
 }
 
+/**
+ * 학습 지표 — "학습이 실제로 일어나는가"를 운영자가 서버 접속 없이 볼 수 있게 한다.
+ * 집계만 오고 개인 학습 내용은 나오지 않는다.
+ */
+const summary = ref(null)
+
 async function load() {
   loading.value = true
   error.value = ''
@@ -53,6 +60,12 @@ async function load() {
     else error.value = e.message
   } finally {
     loading.value = false
+  }
+  // 지표 조회가 실패해도 케이스 관리는 되어야 한다 — 조용히 넘어간다
+  try {
+    summary.value = await adminLearningSummary()
+  } catch {
+    summary.value = null
   }
 }
 
@@ -174,7 +187,59 @@ onMounted(load)
       <p v-if="notice" class="notice ok">{{ notice }}</p>
       <p v-if="loading" class="muted">불러오는 중…</p>
 
-      <table v-else class="admin-table">
+      <!-- 학습 지표 (집계) -->
+      <section v-if="summary" class="summary">
+        <div class="summary-head">
+          <h2>학습 지표</h2>
+          <span class="muted">집계만 표시합니다 · 개인 학습 내용은 포함되지 않습니다</span>
+        </div>
+
+        <p v-if="!summary.analytics_enabled" class="notice">
+          학습 이벤트 수집이 꺼져 있습니다 (<code>MEDISCAN_ANALYTICS=0</code>).
+          아래 수치는 그 이전에 쌓인 것입니다.
+        </p>
+        <p v-else-if="!summary.events" class="muted">
+          아직 기록된 학습 활동이 없습니다. 사용자가 케이스를 열고 제출하면 쌓입니다.
+        </p>
+
+        <dl v-else class="stat-row">
+          <div>
+            <dt>참여자</dt>
+            <dd class="tnum">{{ summary.users_seen }}명</dd>
+          </div>
+          <div>
+            <dt>시작 → 제출 전환율</dt>
+            <dd class="tnum">
+              {{ summary.start_to_submit_rate == null ? '—'
+                : Math.round(summary.start_to_submit_rate * 100) + '%' }}
+            </dd>
+          </div>
+          <div>
+            <dt>첫 시도 평균 Dice</dt>
+            <dd class="tnum">{{ summary.first_attempt_mean_dice ?? '—' }}</dd>
+          </div>
+          <div>
+            <dt>재도전 평균 Dice</dt>
+            <dd class="tnum">{{ summary.retry_mean_dice ?? '—' }}</dd>
+          </div>
+          <div>
+            <dt>재도전 시 점수 변화</dt>
+            <dd class="tnum" :class="{ up: (summary.mean_improvement ?? 0) > 0 }">
+              {{ summary.mean_improvement == null ? '—'
+                : (summary.mean_improvement > 0 ? '+' : '') + summary.mean_improvement }}
+            </dd>
+          </div>
+          <div>
+            <dt>평균 소요시간</dt>
+            <dd class="tnum">
+              {{ summary.mean_duration_seconds == null ? '—'
+                : Math.round(summary.mean_duration_seconds) + '초' }}
+            </dd>
+          </div>
+        </dl>
+      </section>
+
+      <table v-if="!loading" class="admin-table">
         <thead>
           <tr>
             <th>케이스</th>
@@ -299,6 +364,57 @@ onMounted(load)
 .page-head p {
   margin: 0 0 var(--sp-5);
   font-size: 13px;
+}
+
+/* 학습 지표 — 케이스 표와 시각적으로 분리한다 (다른 성격의 정보다) */
+.summary {
+  padding: var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-sunken);
+  margin-bottom: var(--sp-5);
+}
+
+.summary-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--sp-3);
+}
+
+.summary-head h2 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.summary-head span {
+  font-size: 11.5px;
+}
+
+.stat-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-5);
+  margin: 0;
+}
+
+.stat-row dt {
+  font-size: 11.5px;
+  color: var(--ink-muted);
+  font-weight: 600;
+}
+
+.stat-row dd {
+  margin: 2px 0 0;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+/* 재도전에서 점수가 올랐다는 것은 학습이 일어났다는 최소 신호다 */
+.stat-row dd.up {
+  color: var(--match-ink);
 }
 
 .admin-table {
