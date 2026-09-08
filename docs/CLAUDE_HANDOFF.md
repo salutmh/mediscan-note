@@ -137,6 +137,44 @@
 - 프론트 라우트를 숨기지 않았다. 프론트 숨김은 권한이 아니고, 서버가 403 을 주면
   화면이 "운영자 권한이 필요합니다"를 그대로 보여주는 편이 덜 혼란스럽다.
 
+### 자율 루프 #15 — 콘텐츠 확장 준비 (후보 24건 선별, DONE)
+
+**발견**: 콘텐츠 확장이 "데이터가 없어 막혀 있다"고 생각했는데, **원본 VS-SEG 데이터셋
+242케이스가 로컬에 있었다** (`C:/Users/user/Downloads/vestibular_schwannoma_seg`).
+학습 venv(`<학습리포>/.venv`)에 pydicom·rt_utils 가 있어 읽을 수 있다.
+
+**한 일**: 242케이스를 전부 export 하면 케이스당 ~150MB 라 감당이 안 되므로,
+**볼륨을 파일로 쓰지 않고** 편측성·병변 크기만 재는 스크리닝 도구를 만들었다.
+
+| 결과 | 값 |
+|---|---|
+| 판독 가능 | **238 / 242** (4건은 T1 시리즈/RTSTRUCT 문제) |
+| 편측 분포 | 좌 108 / 우 130 — **원본은 거의 균형** (편향은 우리 선택의 문제였다) |
+| GT voxel | 330 ~ 44,230 (중앙 6,012) — **소형 병변이 충분히 있다** |
+| 선별 후보 | **24건: 좌우 12:12, 크기 small/medium/large 8:8:8** |
+
+**내가 만든 편향과 수정**: 첫 추천 로직은 "소형이 부족하니 작은 것부터"만 골랐더니
+24건 전부가 최소 크기(330~1,777)로 나왔다. 데이터셋 중앙값이 6,012 인데 그 아래만 담은
+셈이라 **반대 방향 편향**을 만든 것이다. 크기 3분위 계층을 추가해 고르게 뽑도록 고쳤다.
+
+**여기서 멈춘 이유 (다음 세션이 이어갈 지점)**
+파이프라인의 **육안 검수 단계는 사람이 GT 를 눈으로 확인하는 자리**라 건너뛸 수 없다
+(CONTENT_GUIDELINES 3절). 스크리닝은 "어떤 케이스를 볼지" 고르는 데까지다.
+
+다음 단계 (사람이 검수에 참여해야 한다):
+```bash
+cd backend
+# 1) 선별된 24건 export (학습 venv, 케이스당 ~150MB → 약 3.6GB)
+<학습리포>/.venv/Scripts/python -m scripts.export_vs_seg_npy     --data-root "C:/Users/user/Downloads/vestibular_schwannoma_seg"     --out data/vs_seg_export --cases VS-SEG-018 VS-SEG-182 ...
+# 2) 검수 패킷 생성 → **사람이 오버레이를 보고 GT 확인**
+python -m scripts.make_review_overlays ...
+# 3) PNG 자산 생성 → 4) import_cases → 5) verify_cases
+```
+후보 목록은 `backend/data/vs_seg_screening.json` 의 `recommended` 에 있다
+(gitignore 대상이라 커밋되지 않는다 — 다시 만들려면 `--from-json` 없이 재실행).
+
+---
+
 ### 자율 루프 #14 — PostgreSQL 재검증 (DONE)
 
 마이그레이션이 3개 늘어(세션 컷오프·재설정 코드 등) **다시 돌렸고, 또 잡혔다.**
