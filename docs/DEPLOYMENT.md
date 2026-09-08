@@ -129,7 +129,22 @@ python -m scripts.backup_db --out /var/backups/mediscan --keep 14
 
 - SQLite 는 **온라인 백업 API** 를 쓴다 (서버가 도는 중에도 안전. 단순 복사는 깨질 수 있다).
 - PostgreSQL 은 `pg_dump` 를 부른다.
+- **백업 직후 파일을 열어서 검증한다.** 무결성과 행 수를 원본과 대조하고, 실패하면 종료코드 1 이다.
+  cron 에 걸었다면 이 종료코드를 알림으로 연결한다 — 조용히 실패하는 백업이 가장 나쁘다.
 - cron 예: `0 4 * * * cd /srv/mediscan/backend && python -m scripts.backup_db --out /var/backups/mediscan --keep 14`
+
+**검증이 잡아내는 것** (셋 다 "백업 완료" 만 보면 알 수 없다)
+
+| 상황 | 어떻게 보이는가 | 검증 결과 |
+|---|---|---|
+| `DATABASE_URL` 미설정 → 엉뚱한 개발 DB 를 백업 | 파일이 정상적으로 생기고 크기도 그럴듯하다 | 원본에 사용자 데이터가 없다고 경고 |
+| 디스크가 차서 파일이 잘림 | 크기만 보면 정상 | `integrity_check` 실패 → 종료코드 1 |
+| `pg_dump` 가 도중에 끊김 | 파일이 남는다 | COPY 블록이 닫히지 않음 → 종료코드 1 |
+| 원본엔 있는데 백업이 비어 있음 | — | 테이블별 대조에서 `!` 로 표시 → 종료코드 1 |
+
+대조 대상은 **다시 만들 수 없는 데이터**다: `users` / `consents` / `submissions` / `learning_events`.
+백업 스냅샷 이후에 새 행이 들어올 수 있으므로 백업 < 원본 은 정상으로 본다.
+반대로 백업 > 원본 이면 다른 DB 를 백업한 것이므로 실패로 처리한다.
 
 > ⚠️ **백업 파일에는 계정·동의 이력·학습 이력이 들어 있다.** 원본 DB 와 같은 수준으로 보호한다.
 > git·공개 저장소·공유 폴더에 두지 않는다.
@@ -137,6 +152,10 @@ python -m scripts.backup_db --out /var/backups/mediscan --keep 14
 **복구 연습을 한 번은 해본다.** 해본 적 없는 백업은 백업이 아니다.
 - SQLite: 서버를 내리고 파일을 제자리에 되돌린다
 - PostgreSQL: `psql -d mediscan -f <덤프파일>`
+- 보관 중인 백업만 다시 검사: `python -m scripts.backup_db --verify-only /var/backups/mediscan/mediscan-<시각>.sqlite`
+
+> 검증은 "이 파일을 읽을 수 있고 안에 데이터가 있다" 까지만 확인한다.
+> **실제로 되돌려 서비스가 뜨는지는 사람이 한 번 해봐야 한다.**
 
 ---
 
