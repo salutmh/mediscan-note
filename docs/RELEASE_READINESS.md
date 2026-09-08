@@ -76,7 +76,7 @@ AI 보조 피드백(참고) → 오답 재학습.
 | ~~M3~~ | ~~난이도 메타데이터 없음~~ → `cases.difficulty` 추가 (Phase 5). **자동 판정하지 않고 전문가 검토 대상**(E2) |
 | ~~M4~~ | ~~모델 평가 도구 없음~~ → `scripts/evaluate_model.py` (검출률·크기 구간별·버전 비교, Phase 7) |
 | M5 | 예측 sidecar 수동 재계산 |
-| M6 | ~~동시성 미검증~~ → **경쟁 조건 2건을 재현해서 고쳤다**(`tests/test_concurrency.py`): 로그아웃 더블클릭 시 IntegrityError → 500, 재설정 코드가 두 번 사용 가능. ~~PostgreSQL 실검증 없음~~ → **검증 완료**(scripts/verify_postgres.py, 544 테스트 통과). **부하 테스트는 여전히 미실시** — Closed Beta 규모에서는 우선순위가 낮다 |
+| M6 | ~~동시성 미검증~~ → **경쟁 조건 2건을 재현해서 고쳤다**(`tests/test_concurrency.py`): 로그아웃 더블클릭 시 IntegrityError → 500, 재설정 코드가 두 번 사용 가능. ~~PostgreSQL 실검증 없음~~ → **검증 완료**(scripts/verify_postgres.py, 544 테스트 통과). **동시 쓰기 스모크 확인**(`scripts/load_smoke.py`): 동시 30명 x 3회 = 90건 전부 성공, 중앙 445ms, SQLite 잠금 오류 0건. 단일 요청은 앱 내부 30ms / 네트워크 경유 44ms. 본격 부하 테스트(지속 처리량·한계점)는 여전히 미실시 — Closed Beta 규모에서는 우선순위가 낮다 |
 
 ## 6. Low
 

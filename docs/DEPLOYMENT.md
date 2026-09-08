@@ -186,6 +186,7 @@ MEDISCAN_LOG_FORMAT=json     # text(기본) | json — 로그 수집기에 넣�
 | 학습 지표 | `python -m scripts.learning_report` |
 | 모델 성능 | `python -m scripts.evaluate_model` |
 | 운영자 목록 | `python -m scripts.grant_admin --list` |
+| 동시 쓰기 확인 | `python -m scripts.load_smoke --users 30` — 오류 없이 끝나야 한다 |
 
 콘텐츠 관리(활성/비활성, 난이도, 전문가 소견)는 운영자 계정으로 `/admin/cases` 화면에서 한다.
 
