@@ -71,7 +71,7 @@ AI 보조 피드백(참고) → 오답 재학습.
 | # | 항목 |
 |---|---|
 | ~~M1~~ | ~~구조적 로깅 없음~~ → `app/logging_config.py` (text/json, 레벨 설정). **원래 앱의 INFO 로그가 전부 버려지고 있었다** |
-| M2 | `_grade_by_points` 개발용 근사 채점 경로가 코드에 남아 있음 (`MEDISCAN_ALLOW_APPROX_GRADING`로만 동작) |
+| ~~M2~~ | ~~`_grade_by_points` 개발용 근사 채점 경로가 코드에 남아 있음~~ → `MEDISCAN_ALLOW_APPROX_GRADING` 을 포함한 **개발 전용 스위치 3종이 production 에서 기동을 막는다**(`app/config.py`, `tests/test_dev_only_flags.py`). 경로 자체는 개발용으로 남긴다 |
 | ~~M3~~ | ~~난이도 메타데이터 없음~~ → `cases.difficulty` 추가 (Phase 5). **자동 판정하지 않고 전문가 검토 대상**(E2) |
 | ~~M4~~ | ~~모델 평가 도구 없음~~ → `scripts/evaluate_model.py` (검출률·크기 구간별·버전 비교, Phase 7) |
 | M5 | 예측 sidecar 수동 재계산 |

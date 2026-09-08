@@ -164,7 +164,9 @@ alembic current / alembic history                     # 상태 확인
 
 프론트는 `GET /api/cases/{id}` 의 `gradable: false` 를 보고 제출 버튼을 미리 막는다.
 
-좌표 근사 채점(`coordinate_approx`)은 **개발 전용**이다. `MEDISCAN_ALLOW_APPROX_GRADING=1` 일 때만
+좌표 근사 채점(`coordinate_approx`)은 **개발 전용**이며 `MEDISCAN_ENV=production` 에서는
+켜져 있기만 해도 기동이 실패한다 (검수되지 않은 기준으로 학습자를 평가하지 않기 위해서다).
+`MEDISCAN_ALLOW_APPROX_GRADING=1` 일 때만
 동작하고, 응답에 `is_provisional: true` 가 붙어 화면 상단에 경고가 뜬다. 일반 UI 흐름에서는 쓰지 않는다.
 
 ### 케이스 등록 운영 규칙 (MVP)

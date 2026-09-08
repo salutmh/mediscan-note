@@ -26,12 +26,11 @@
 그때는 `status: "demo"` + `is_demo: true` 가 붙어 실제 분석이 아님이 응답에 남는다.
 """
 import logging
-import os
 
 from fastapi import APIRouter, HTTPException
 from sqlalchemy import select
 
-from app import inference
+from app import config, inference
 from app.deps import CurrentUser, DbSession
 from app.models import Consent
 from app.static_files import absolute_url
@@ -47,7 +46,8 @@ DEFAULT_BODY_PART = "brain_mri"
 
 
 def _demo_enabled() -> bool:
-    return os.getenv(DEMO_ENV, "").strip() in {"1", "true", "True"}
+    """production 에서는 config 가 막는다 — 모델이 없는데 결과를 꾸며내면 안 된다."""
+    return config.dev_only_flag(DEMO_ENV)
 
 
 def _demo_response() -> dict:

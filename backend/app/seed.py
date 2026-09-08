@@ -18,12 +18,12 @@
 """
 import json
 import logging
-import os
 from pathlib import Path
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app import config
 from app.models import Case
 
 logger = logging.getLogger(__name__)
@@ -58,8 +58,11 @@ MOCK_SEED_ENV = "MEDISCAN_SEED_MOCK_CASES"
 
 
 def mock_seeding_enabled() -> bool:
-    """합성 mock 케이스를 DB 에 넣을지. 기본은 끔 (실데이터만 서비스 DB 에 둔다)."""
-    return os.getenv(MOCK_SEED_ENV, "").strip() in {"1", "true", "True"}
+    """합성 mock 케이스를 DB 에 넣을지. 기본은 끔 (실데이터만 서비스 DB 에 둔다).
+
+    production 에서는 config 가 막는다 — 합성 자리표시자가 학습 콘텐츠로 노출되면 안 된다.
+    """
+    return config.dev_only_flag(MOCK_SEED_ENV)
 
 
 def seed_cases(db: Session) -> int:

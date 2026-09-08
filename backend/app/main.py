@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -17,10 +18,27 @@ async def lifespan(app: FastAPI):
     # 로깅을 가장 먼저 켠다 — 이후 기동 과정(마이그레이션·시드·정리)의 로그를 보기 위해서다.
     # 설정하지 않으면 app 의 logger.info 가 전부 버려진다 (root 기본 레벨이 WARNING).
     logging_config.configure()
+    # 개발 전용 스위치가 production 에 남아 있으면 여기서 기동을 막는다.
+    # DB 를 건드리기 **전에** 확인한다 — 시드 스위치가 켜져 있으면 init_db 가
+    # 합성 케이스를 이미 넣어버리기 때문이다.
+    config.assert_dev_only_flags_off()
+    _warn_dev_only_flags()
     # 테이블 생성 + 케이스 시드 (없을 때만). DB 는 DATABASE_URL 로 결정된다 — db.py 참고.
     ensure_dirs()
     init_db()
     yield
+
+
+def _warn_dev_only_flags() -> None:
+    """개발 환경에서 켜진 스위치를 기동 로그에 남긴다.
+
+    production 은 위에서 이미 막혔으므로 여기 오면 development 다. 켜둔 사실을
+    잊고 "왜 이런 결과가 나오지?" 로 시간을 쓰는 일을 줄이기 위해 눈에 띄게 남긴다.
+    """
+    for name in config.describe_dev_only_flags():
+        logging.getLogger("app").warning(
+            "개발 전용 설정이 켜져 있습니다 - %s: %s", name, config.DEV_ONLY_FLAGS[name]
+        )
 
 
 app = FastAPI(title="메디스캔노트 API", version="0.2.0", lifespan=lifespan)

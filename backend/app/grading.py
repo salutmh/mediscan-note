@@ -15,10 +15,9 @@ AI 예측 마스크는 채점에 일절 관여하지 않는다 — 모델은 완
 """
 import logging
 import math
-import os
 from pathlib import Path
 
-from app import explanations, feedback, inference, masks, model_predictions, scoring_config
+from app import config, explanations, feedback, inference, masks, model_predictions, scoring_config
 from app.static_files import resolve_local_path
 
 logger = logging.getLogger(__name__)
@@ -34,9 +33,17 @@ METHOD_REFERENCE = "reference_mask"
 METHOD_APPROX = "coordinate_approx"
 
 
+APPROX_ENV = "MEDISCAN_ALLOW_APPROX_GRADING"
+
+
 def _approx_allowed() -> bool:
-    """좌표 근사 채점은 개발 환경에서만. 일반 UI 흐름에서는 쓰지 않는다."""
-    return os.getenv("MEDISCAN_ALLOW_APPROX_GRADING", "").strip() in {"1", "true", "True"}
+    """좌표 근사 채점은 개발 환경에서만. 일반 UI 흐름에서는 쓰지 않는다.
+
+    config.dev_only_flag 를 거치므로 production 에서는 이 스위치가 켜져 있으면
+    (기동 점검을 어떻게든 지나쳤더라도) 채점을 하지 않고 오류로 끝난다.
+    검수되지 않은 기준으로 학습자를 평가하느니 채점을 못 하는 편이 낫다.
+    """
+    return config.dev_only_flag(APPROX_ENV)
 
 
 class NotGradable(Exception):

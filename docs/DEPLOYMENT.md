@@ -21,6 +21,7 @@
 | 7 | 백업 예약 | 아래 4절 |
 | 8 | 케이스 등록·점검 | `python -m scripts.verify_cases` 전체 통과 |
 | 9 | 최초 운영자 지정 | `python -m scripts.grant_admin --email <이메일>` |
+| 10 | 개발 전용 스위치 제거 | 아래 3개가 배포 환경에 남아 있으면 **기동 실패**한다 |
 
 **production 에서 기동을 막는 값들** — 잘못 뜬 서버는 겉보기에 정상이라 아무도 눈치채지 못한다.
 그래서 경고가 아니라 실패로 처리한다.
@@ -31,6 +32,20 @@ MEDISCAN_SECRET_KEY=...          # python -c "import secrets; print(secrets.toke
 MEDISCAN_CORS_ORIGINS=https://mediscan.example.com
 DATABASE_URL=postgresql+psycopg2://user:pw@host:5432/mediscan
 ```
+
+**production 에 있으면 기동을 막는 값들 (개발 전용 스위치)** — 로컬 `.env` 를 복사하거나
+데모 준비 후 원복을 잊으면 따라오기 쉬운 값들이다. 켜진 채로 떠도 서버는 겉보기에 멀쩡하고,
+사용자만 사실과 다른 것을 보게 된다.
+
+| 환경변수 | 켜지면 무슨 일이 생기는가 |
+|---|---|
+| `MEDISCAN_ALLOW_APPROX_GRADING` | 전문가 검수 기준 마스크가 아니라 **원 근사로 grade 를 매긴다** |
+| `MEDISCAN_SEED_MOCK_CASES` | 실제 의료영상이 아닌 **합성 자리표시자가 학습 콘텐츠로 노출**된다 |
+| `MEDISCAN_ANALYZE_DEMO` | 모델이 없는데 **분석 결과가 있는 것처럼 보인다** |
+
+셋 다 `MEDISCAN_ANALYZE_DEMO=0` 처럼 **명시적으로 꺼 두는 것은 허용**한다 (배포 템플릿에
+목록으로 남겨두는 경우). 값이 `1`/`true` 는 물론이고 `ture` 같은 오타여도 기동을 막는다 —
+production 에 이 이름이 붙어 있다는 것 자체가 설정 실수이기 때문이다.
 
 선택 값은 `backend/.env.example` 참고 (`MEDISCAN_TOKEN_TTL`, `MEDISCAN_RATE_LIMIT`,
 `MEDISCAN_PUBLIC_BASE`, `MEDISCAN_ANALYTICS`).
