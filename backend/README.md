@@ -72,9 +72,16 @@ MEDISCAN_TEST_DATABASE_URL=postgresql+psycopg2://... pytest
 
 > ⚠️ 이 스크립트는 **downgrade 로 스키마를 통째로 내렸다 올린다.** 운영 DB 를 가리키지 말 것.
 
-**주의(이식성 함정)**: `db.query(X).delete()` 같은 대량 삭제는 ORM cascade 를 타지 않는다.
-SQLite 에서는 통과하고 PostgreSQL 에서는 FK 위반이 난다. 사용자 삭제는 반드시
-`db.delete(user)`(= `app/account.py` 가 쓰는 경로)를 쓴다.
+**이식성 함정 (둘 다 실제로 겪었다)**
+
+1. **대량 삭제는 ORM cascade 를 타지 않는다.** `db.query(X).delete()` 는 SQLite 에서 통과하고
+   PostgreSQL 에서 FK 위반이 난다. 사용자 삭제는 반드시 `db.delete(user)`
+   (= `app/account.py` 가 쓰는 경로)를 쓴다.
+2. **테스트에서 없는 외래키로 행을 만들지 않는다.** SQLite 는 외래키를 기본적으로 강제하지
+   않아 `user_id="u_ghost"` 같은 고아 행이 조용히 만들어진다. PostgreSQL 에서는 실패한다.
+   픽스처로 실제 사용자를 만들어 붙인다.
+
+> **테이블을 추가하면 PostgreSQL 검증을 다시 돌릴 것.** 두 번 다 이 검증이 잡아냈다.
 
 ### 연결 설정
 

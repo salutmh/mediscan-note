@@ -189,27 +189,31 @@ def test_learning_history_survives_reset(client, admin_session, user_a, roi_mism
 
 
 # ------------------------------------------------------------------ 정리
-def test_expired_codes_are_purged():
+def test_expired_codes_are_purged(user_a, user_b):
+    """만료된 코드는 기동 시 정리한다 (목록이 무한히 자라지 않게).
+
+    **실재하는 사용자에 붙인다.** 없는 user_id 로 행을 만들면 SQLite 에서는 통과하지만
+    PostgreSQL(배포 DB)에서는 외래키 위반이다 — 실제로 이 테스트가 그렇게 깨졌었다.
+    """
     with SessionLocal() as db:
         db.add(
             PasswordResetCode(
-                user_id="u_ghost", code_hash="a" * 64, expires_at=utcnow() - timedelta(days=1)
+                user_id=user_a.user_id, code_hash="a" * 64, expires_at=utcnow() - timedelta(days=1)
             )
         )
         db.add(
             PasswordResetCode(
-                user_id="u_ghost2", code_hash="b" * 64, expires_at=utcnow() + timedelta(days=1)
+                user_id=user_b.user_id, code_hash="b" * 64, expires_at=utcnow() + timedelta(days=1)
             )
         )
         db.commit()
 
         removed = password_reset.purge_expired(db)
         remaining = {r.code_hash for r in db.scalars(select(PasswordResetCode)).all()}
-        db.execute(select(PasswordResetCode))
 
     assert removed >= 1
-    assert "a" * 64 not in remaining
-    assert "b" * 64 in remaining
+    assert "a" * 64 not in remaining, "만료된 코드가 남아 있다"
+    assert "b" * 64 in remaining, "아직 유효한 코드까지 지웠다"
 
 
 @pytest.fixture(autouse=True)

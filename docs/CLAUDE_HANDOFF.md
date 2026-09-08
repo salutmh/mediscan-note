@@ -14,7 +14,7 @@
 | 현재 브랜치 | `main` (origin/main과 동기) |
 | 현재 모드 | **지속 자율 개발 루프** (Phase 1~8 은 최초 백로그였고 전부 완료) |
 | STATUS | `IN_PROGRESS` — 사이클마다 제품 재평가 → 최고가치 작업 선정 |
-| 마지막 전체 테스트 | 백엔드 **471 passed** (SQLite·PostgreSQL 양쪽) / 프론트 **25 passed** / E2E 4종 |
+| 마지막 전체 테스트 | 백엔드 **471 passed** (SQLite·PostgreSQL 양쪽 재검증) (SQLite·PostgreSQL 양쪽) / 프론트 **25 passed** / E2E 4종 |
 
 ---
 
@@ -136,6 +136,27 @@
   **admin 엔드포인트를 추가하면 이 목록에도 추가할 것** — 그래야 비로그인/일반 사용자 차단이 자동 검증된다.
 - 프론트 라우트를 숨기지 않았다. 프론트 숨김은 권한이 아니고, 서버가 403 을 주면
   화면이 "운영자 권한이 필요합니다"를 그대로 보여주는 편이 덜 혼란스럽다.
+
+### 자율 루프 #14 — PostgreSQL 재검증 (DONE)
+
+마이그레이션이 3개 늘어(세션 컷오프·재설정 코드 등) **다시 돌렸고, 또 잡혔다.**
+
+- 마이그레이션 **8단계** upgrade/downgrade/재upgrade 전부 통과, 스키마 드리프트 없음
+- **발견**: `test_expired_codes_are_purged` 가 존재하지 않는 `user_id="u_ghost"` 로
+  행을 만들고 있었다. SQLite 는 외래키를 강제하지 않아 통과했지만 PostgreSQL 에서는 FK 위반.
+  픽스처의 실제 사용자에 붙이도록 수정.
+- 결과: **SQLite 471 / PostgreSQL 471 둘 다 통과**
+
+**규칙으로 굳힌다: 테이블을 추가하면 PostgreSQL 검증을 반드시 다시 돌린다.**
+두 번 돌렸고 두 번 다 이식성 문제를 잡았다 (`backend/README.md` 의 "이식성 함정" 참고).
+
+```bash
+docker run -d --name mediscan-pg-test -e POSTGRES_PASSWORD=testpw   -e POSTGRES_DB=mediscan_test -p 55432:5432 postgres:16-alpine
+cd backend && python -m scripts.verify_postgres --url postgresql+psycopg2://postgres:testpw@localhost:55432/mediscan_test --with-tests
+docker rm -f mediscan-pg-test
+```
+
+---
 
 ### 자율 루프 #13 — 비밀번호 재설정 (계정 복구의 마지막 공백, DONE)
 
