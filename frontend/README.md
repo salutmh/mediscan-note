@@ -27,6 +27,8 @@ npm run test:watch
 |---|---|
 | `views/CaseListView.test.js` | 케이스가 없는 부위를 탭으로 만들지 않는다. 학습완료/복습필요 동시 표시. 조회 실패·빈 목록에서 화면이 깨지지 않는다 |
 | `views/ReadingView.test.js` | slice 탐색(영상 전환·입력 잠금·**ROI 유지 설정**), 채점 후 다음 행동, slice 없는 케이스, 다음 대상 조회 실패 |
+| `views/AccountView.test.js` | 비밀번호 변경(확인 불일치·짧은 비밀번호는 서버까지 가지 않는다, 성공 시 토큰 교체), 회원 탈퇴(무엇이 지워지는지 먼저 보여준다, 한 번에 삭제되지 않는다) |
+| `views/AnalyzeView.test.js` | 준비 상태를 **하드코딩하지 않는다**, 불가능하면 업로드 전에 이유를 알리고 요청 버튼을 막는다, **확인 실패 시에는 잠그지 않는다** |
 | `stores/auth.test.js` | 로그아웃이 **서버에 토큰 폐기를 요청**한다. 서버 실패 시에도 로컬 세션은 비운다. `clearSession` 은 서버를 부르지 않는다(401 재진입 방지) |
 
 브라우저에서 실제로 도는지는 `tools/browser-verify/` 의 E2E 가 본다 (서버 + Chrome 필요).
