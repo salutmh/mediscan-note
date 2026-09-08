@@ -59,8 +59,10 @@ function initial(nickname) {
       </nav>
 
       <div v-if="isLoggedIn" class="account">
-        <span class="avatar" aria-hidden="true">{{ initial(authState.user?.nickname) }}</span>
-        <span class="nickname">{{ authState.user?.nickname ?? '사용자' }}</span>
+        <RouterLink :to="{ name: 'account' }" class="account-link" title="계정 설정">
+          <span class="avatar" aria-hidden="true">{{ initial(authState.user?.nickname) }}</span>
+          <span class="nickname">{{ authState.user?.nickname ?? '사용자' }}</span>
+        </RouterLink>
         <button class="ghost sm" @click="onLogout">로그아웃</button>
       </div>
     </div>
@@ -113,6 +115,21 @@ function initial(nickname) {
   font-weight: 700;
   font-size: 15.5px;
   letter-spacing: -0.03em;
+}
+
+/* 닉네임을 눌러 계정 설정(탈퇴 포함)으로 간다 */
+.account-link {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  text-decoration: none;
+  color: inherit;
+  border-radius: var(--r-full);
+  padding: 2px 4px;
+}
+
+.account-link:hover {
+  background: var(--gray-50);
 }
 
 .nav {

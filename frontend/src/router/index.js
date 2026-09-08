@@ -35,6 +35,14 @@ const routes = [
     component: () => import('../views/AnalyzeView.vue'),
     meta: { requiresAuth: true },
   },
+  // 계정 설정 (회원 탈퇴). 민감정보를 다루는 서비스라 사용자가 자기 데이터를
+  // 지울 경로가 화면에 있어야 한다.
+  {
+    path: '/account',
+    name: 'account',
+    component: () => import('../views/AccountView.vue'),
+    meta: { requiresAuth: true },
+  },
   // 운영자 화면 (최소 CMS) — 권한 차단은 서버가 한다 (403 ADMIN_REQUIRED).
   // 라우트를 숨기지 않는 이유: 프론트 숨김은 권한이 아니고, 권한 없는 사용자에게는
   // 화면이 "운영자 권한이 필요합니다"를 그대로 보여주는 편이 덜 혼란스럽다.
