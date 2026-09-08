@@ -162,7 +162,7 @@ MEDISCAN_LOG_FORMAT=json     # text(기본) | json — 로그 수집기에 넣�
 
 | 무엇 | 명령 |
 |---|---|
-| 서비스 상태·설정 | `curl /health` (env, cors_origins, db, 모델 상태) |
+| 서비스 상태·설정 | `curl /health` — env, cors_origins, db 드라이버, 모델 상태에 더해 **적용 중인 채점 임계값**(`scoring`), **요청 수 제한 상태**(`rate_limit.mode`: app/external/off), **켜져 있는 개발 전용 스위치**(`dev_only_flags`, production 이면 항상 빈 배열)를 함께 보여준다. 배포 직후 여기부터 본다 |
 | 케이스 상태·오래된 예측 | `python -m scripts.verify_cases` |
 | 학습 지표 | `python -m scripts.learning_report` |
 | 모델 성능 | `python -m scripts.evaluate_model` |

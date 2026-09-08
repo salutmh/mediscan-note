@@ -104,6 +104,23 @@ def assert_valid() -> None:
         )
 
 
+def describe_status() -> dict:
+    """/health 에 실을 현재 제한 상태.
+
+    한도 자체(RULES)는 싣지 않는다 — 어차피 11번 두드리면 알 수 있는 값이라 비밀은
+    아니지만, 굳이 표로 정리해서 내줄 이유도 없다. 운영자가 알아야 하는 것은
+    "지금 제한이 켜져 있는가"와 "왜 꺼져 있는가" 두 가지다.
+    """
+    raw = _raw_enabled()
+    if raw == EXTERNAL:
+        mode = EXTERNAL
+    elif raw in _OFF_VALUES:
+        mode = "off"
+    else:
+        mode = "app"
+    return {"enabled": _enabled(), "mode": mode, "multiplier": _multiplier()}
+
+
 def describe() -> str | None:
     """production 에서 제한을 끈 상태면 기동 로그에 남긴다."""
     if _raw_enabled() == EXTERNAL:

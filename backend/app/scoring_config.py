@@ -89,7 +89,13 @@ def assert_valid() -> None:
 
 
 def thresholds() -> dict:
-    """현재 적용 중인 임계값 (응답·/health 에 노출해 무엇이 적용됐는지 보이게 한다)."""
+    """현재 적용 중인 임계값.
+
+    채점 응답의 `evaluation.thresholds` 와 `/health` 의 `scoring` 양쪽에 실린다 —
+    환경변수로 덮을 수 있는 값이라, 배포된 서버가 **실제로 어떤 기준으로 채점 중인지**
+    눈으로 확인할 수 있어야 한다. validation_status 를 항상 함께 내보내
+    "확정된 의학 기준"으로 읽히지 않게 한다.
+    """
     return {
         "match_dice": match_dice(),
         "partial_dice": partial_dice(),

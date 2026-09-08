@@ -97,6 +97,14 @@ def health():
         "cors_origins": describe_cors(),
         "logging": logging_config.describe(),
         "db": DATABASE_URL.split("://", 1)[0],
+        # 어떤 채점 기준으로 돌고 있는지. 환경변수로 덮을 수 있으므로 배포된 값을
+        # 눈으로 확인할 수 있어야 한다 (validation_status 도 함께 나간다).
+        "scoring": scoring_config.thresholds(),
+        # 요청 수 제한이 켜져 있는지. 꺼져 있다면 왜 꺼졌는지(off/external)까지.
+        "rate_limit": rate_limit_module.describe_status(),
+        # production 에서는 항상 비어 있다 (켜져 있으면 기동이 실패한다).
+        # 개발에서 "왜 이런 결과가 나오지?" 를 빨리 좁히기 위한 값이다.
+        "dev_only_flags": config.describe_dev_only_flags(),
         "models": inference.status(),
         # 무거운 volume 모델은 요청 시 추론하지 않고 미리 계산된 예측을 쓴다
         "precomputed_predictions": model_predictions.summary(),
