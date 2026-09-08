@@ -49,6 +49,9 @@ def delete_account(db: Session, user: User) -> dict:
     logger.info(
         "계정 삭제: user_id=%s consents=%s submissions=%s events=%s",
         user_id, counts["consents"], counts["submissions"], counts["learning_events"],
+        # JSON 포맷(MEDISCAN_LOG_FORMAT=json)일 때 집계할 수 있게 구조화해서도 남긴다.
+        # **이메일·닉네임은 넣지 않는다** — 로그도 개인정보다.
+        extra={"event": "account_deleted", "user_id": user_id, **counts},
     )
     return {
         "deleted": True,

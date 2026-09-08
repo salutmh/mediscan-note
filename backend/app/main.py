@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from app import config, inference, model_predictions
+from app import config, inference, logging_config, model_predictions
 from app.cors import cors_kwargs, describe as describe_cors
 from app.db import DATABASE_URL, init_db
 from app.rate_limit import RateLimitMiddleware
@@ -14,6 +14,9 @@ from app.routers import admin, analyze, auth, cases, consents, wrong_notes
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # 로깅을 가장 먼저 켠다 — 이후 기동 과정(마이그레이션·시드·정리)의 로그를 보기 위해서다.
+    # 설정하지 않으면 app 의 logger.info 가 전부 버려진다 (root 기본 레벨이 WARNING).
+    logging_config.configure()
     # 테이블 생성 + 케이스 시드 (없을 때만). DB 는 DATABASE_URL 로 결정된다 — db.py 참고.
     ensure_dirs()
     init_db()
@@ -65,6 +68,7 @@ def health():
         # 배포에서 설정 실수를 빨리 알아채기 위한 값들 (접속정보·키는 노출하지 않는다)
         "env": config.env(),
         "cors_origins": describe_cors(),
+        "logging": logging_config.describe(),
         "db": DATABASE_URL.split("://", 1)[0],
         "models": inference.status(),
         # 무거운 volume 모델은 요청 시 추론하지 않고 미리 계산된 예측을 쓴다

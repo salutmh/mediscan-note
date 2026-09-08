@@ -86,7 +86,7 @@ npm run build          # dist/ 를 정적 호스팅에 올린다
 | 토큰 폐기 | DB 기반이라 워커가 여러 개여도 정상 동작한다 | — |
 | 예측 sidecar | 모델을 바꾸면 **수동** 재계산 (`run_model_predictions.py` → `verify_cases.py`) | 모델 갱신이 잦아지면 자동화 |
 | 케이스 목록 | 케이스마다 파일 존재 확인이 돈다 (6케이스 13ms, 30케이스 ~50ms) | 100케이스 넘으면 캐시 |
-| 접속기록(감사 로그) | 없음 — 법적 요건 확인 필요 (**BLOCKER-3**) | 규제 검토 후 |
+| 접속기록(감사 로그) | 없음 — 법적 요건 확인 필요 (**BLOCKER-3**). 계정 삭제 등 일부 운영 이벤트는 애플리케이션 로그에 남는다 | 규제 검토 후 |
 | 비밀번호 재설정 | 없음. 분실하면 계정 복구 불가 | 메일 발송 수단 확보 후 |
 
 ---
@@ -111,6 +111,24 @@ python -m scripts.backup_db --out /var/backups/mediscan --keep 14
 **복구 연습을 한 번은 해본다.** 해본 적 없는 백업은 백업이 아니다.
 - SQLite: 서버를 내리고 파일을 제자리에 되돌린다
 - PostgreSQL: `psql -d mediscan -f <덤프파일>`
+
+---
+
+## 4-1. 로그
+
+설정하지 않으면 앱의 INFO 로그가 **전부 버려진다** (root 로거 기본 레벨이 WARNING).
+배포에서는 반드시 켠다 — 문의를 받았을 때 볼 것이 없으면 대응할 수 없다.
+
+```bash
+MEDISCAN_LOG_LEVEL=INFO      # DEBUG | INFO(기본) | WARNING | ERROR
+MEDISCAN_LOG_FORMAT=json     # text(기본) | json — 로그 수집기에 넣을 때
+```
+
+`curl /health` 의 `logging` 항목으로 현재 설정을 확인할 수 있다.
+
+**로그에 남기지 않는 것**: 비밀번호·토큰·요청 본문·업로드 영상.
+사용자 식별은 내부 `user_id` 로만 하고 이메일·닉네임은 남기지 않는다 —
+의료 서비스에서는 로그도 개인정보가 된다. (`tests/test_logging.py` 가 소스에서 검사한다.)
 
 ---
 
