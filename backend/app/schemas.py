@@ -443,3 +443,18 @@ class AnalyzeResult(BaseModel):
     candidate_diseases: list[CandidateDisease] = []
     unavailable_reason: Optional[str] = None
     disclaimer: str
+
+
+class TechnicalReviewInput(BaseModel):
+    """케이스 후보의 **기술 검수** 결과.
+
+    `technical_review_status` 는 "export 파이프라인이 제대로 돌았는가"만 뜻한다.
+    의학적 판단도, 서비스 활성화 승인도 아니다 (`app/review_store.py` 참고).
+
+    전문가 검수 상태와 활성화 상태는 **여기로 받지 않는다** — 받으면 기술 검수 화면에서
+    실수로 바꿀 수 있게 된다.
+    """
+
+    technical_review_status: str  # tech_pass | hold | reject_tech | unreviewed
+    note: Optional[str] = None    # 기술 메모. 의료 소견이 아니다
+    reviewer: Optional[str] = None

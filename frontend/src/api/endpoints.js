@@ -86,3 +86,14 @@ export const adminSaveFindings = (caseId, findings) =>
   api.put(`/admin/cases/${encodeURIComponent(caseId)}/findings`, findings)
 export const adminDeleteFindings = (caseId) =>
   api.delete(`/admin/cases/${encodeURIComponent(caseId)}/findings`)
+
+
+// --- 케이스 후보 기술 검수 (운영자 전용, 로컬 작업용) ------------------------
+// **기술 검수는 의학적 검수가 아니다.** 상태 세 가지의 의미는 app/review_store.py 참고.
+export const listReviewCandidates = () => api.get('/admin/review/candidates')
+export const getReviewSummary = () => api.get('/admin/review/summary')
+export const setTechnicalReview = (caseId, body) =>
+  api.put(`/admin/review/candidates/${encodeURIComponent(caseId)}`, body)
+// 검수 시트는 인증이 필요해 <img src> 로 직접 부를 수 없다 — blob 으로 받아 objectURL 로 쓴다
+export const reviewSheetPath = (caseId) =>
+  `/admin/review/candidates/${encodeURIComponent(caseId)}/sheet`

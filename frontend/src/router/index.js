@@ -52,6 +52,14 @@ const routes = [
     component: () => import('../views/AdminCasesView.vue'),
     meta: { requiresAuth: true },
   },
+  // 케이스 후보 **기술 검수** 화면 (운영자 전용, 로컬 작업용).
+  // 여기서 하는 것은 export 파이프라인 확인이지 의학적 검수가 아니다.
+  {
+    path: '/admin/review',
+    name: 'admin-review',
+    component: () => import('../views/CaseReviewView.vue'),
+    meta: { requiresAuth: true },
+  },
   // 화면 7
   {
     path: '/progress',

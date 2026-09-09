@@ -13,6 +13,7 @@
  * 권한 차단은 **서버가** 한다 (403 ADMIN_REQUIRED). 이 화면의 숨김은 UX 일 뿐이다.
  */
 import { onMounted, ref } from 'vue'
+import { RouterLink } from 'vue-router'
 import {
   adminDeleteFindings,
   adminIssueResetCode,
@@ -201,6 +202,10 @@ onMounted(load)
       <p class="muted">
         운영 메타데이터와 전문가 소견만 다룹니다. 영상·기준 마스크 등록은 파이프라인
         (<code>scripts/import_cases.py</code>)을 거칩니다.
+      </p>
+      <p class="muted">
+        아직 등록 전인 <strong>케이스 후보</strong>의 기술 검수는
+        <RouterLink to="/admin/review">케이스 후보 기술 검수</RouterLink> 화면에서 합니다.
       </p>
     </header>
 

@@ -11,7 +11,7 @@ from app.db import DATABASE_URL, init_db
 from app import rate_limit as rate_limit_module
 from app.rate_limit import RateLimitMiddleware
 from app.static_files import STATIC_DIR, STATIC_URL_PREFIX, ensure_dirs, set_request_base
-from app.routers import admin, analyze, auth, cases, consents, wrong_notes
+from app.routers import admin, analyze, auth, cases, consents, review, wrong_notes
 
 
 @asynccontextmanager
@@ -85,6 +85,8 @@ app.include_router(cases.router)
 app.include_router(wrong_notes.router)
 app.include_router(analyze.router)
 app.include_router(admin.router)
+# 케이스 후보 기술 검수 (운영자 전용 로컬 도구). 등록·활성화는 하지 않는다.
+app.include_router(review.router)
 
 
 @app.get("/health")

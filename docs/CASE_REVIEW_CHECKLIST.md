@@ -33,7 +33,11 @@ GT 가 틀린 채로 올라가면 학습자는 **틀린 기준으로 평가받�
 
 ## 2. 사람이 그림으로 확인하는 것 (의학 지식 불필요)
 
-오버레이 시트(`data/<검수폴더>/<CASE_ID>/review.png`)를 연다.
+**운영자 화면 `/admin/review` 에서 24장을 한 화면에서 볼 수 있다.**
+카드마다 시트·메타데이터·선정 근거·원본 출처가 함께 나오고, PASS/HOLD/REJECT 와
+기술 메모를 남길 수 있다 (`←` `→` 이동, `P`/`H`/`R` 판정, `Enter` 확대).
+
+폴더에서 직접 보려면 오버레이 시트(`data/<검수폴더>/<CASE_ID>/<CASE_ID>_review.png`)를 연다.
 윗줄은 병변 시작·대표·끝 slice 전체 뷰, 아랫줄은 같은 slice 의 병변 주변 확대다.
 
 ### 2.1 마스크가 영상 위에 얹혀 있는가
@@ -107,8 +111,22 @@ GT 가 틀린 채로 올라가면 학습자는 **틀린 기준으로 평가받�
 
 ## 5. 기록 양식
 
-케이스마다 아래를 남긴다 (`data/<검수폴더>/review_log.md` 등, **커밋하지 않는다** —
-`data/` 는 gitignore 다).
+**`/admin/review` 화면을 쓰면 기록은 자동으로 남는다** (`data/<검수폴더>/review_results.json`).
+검수자·검수일·기술 메모가 함께 저장되고, 화면을 새로 열어도 유지된다.
+
+거기서 다루는 상태는 **셋으로 분리**돼 있다. 하나로 합치면 "검수 완료"가 어느 층위의
+검수인지 알 수 없게 된다:
+
+| 상태 | 누가 정하나 | 뜻 |
+|---|---|---|
+| `technical_review_status` | 이 문서 2절대로 사람이 | export 파이프라인이 제대로 돌았는가 |
+| `expert_review_status` | 전문가만 | 의학적으로 옳은가 (기본 `pending`) |
+| `activation_status` | 둘 다 끝난 뒤 운영자가 | 학습자에게 보이는가 |
+
+**`TECH_PASS` 는 "의학적으로 옳다"도 "서비스에 올려도 된다"도 아니다.**
+기술 검수 화면에서는 나머지 두 상태를 바꿀 수 없다.
+
+폴더에서 직접 볼 때는 아래를 남긴다 (`data/` 는 gitignore 라 커밋되지 않는다).
 
 ```
 CASE_ID: VS-SEG-018
@@ -139,8 +157,18 @@ VENV="<학습 venv>/Scripts/python.exe"     # pydicom/rt_utils 가 필요하다
 python -m scripts.make_review_overlays \
     --export-root data/expansion_export --out data/expansion_review
 
-# 3) 사람이 data/expansion_review/*/review.png 를 보고 이 문서로 판단한다
-#    통과한 케이스만 아래로 넘어간다
+# 2-1) 사람이 보기 전에 기계가 셀 수 있는 것부터
+python -m scripts.pre_review_check     --export-root data/expansion_export --json data/expansion_review/pre_review.json
+
+# 3) 사람이 /admin/review 에서 판단한다 (또는 폴더의 시트를 직접 본다)
+#    운영자 계정 필요: python -m scripts.grant_admin --email <이메일>
+#    결과는 data/expansion_review/review_results.json 에 남는다
+
+# 3-1) 검수 결과 패키지 (summary json/csv + 다음 단계 manifest 후보)
+python -m scripts.review_package     --review-root data/expansion_review --export-root data/expansion_export
+
+# 3-2) 기술 통과 후보 사전 검증 (무결성·중복·자산·sidecar). 의료 판단 없음
+python -m scripts.preflight_candidates     --review-root data/expansion_review --export-root data/expansion_export
 
 # 4) 자산 생성 (통과 케이스만)
 python -m scripts.build_vs_seg_case_assets \

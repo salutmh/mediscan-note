@@ -445,6 +445,8 @@ scripts/
   export_vs_seg_npy.py         VS-SEG DICOM -> npy (노트북 로직 그대로 + ROI 안전장치)
   make_review_overlays.py      등록 전 육안 검수 오버레이 시트 (DB 등록 없음)
   pre_review_check.py          육안 검수 **전** 기계 점검 — 사람 검수를 대신하지 않고 볼 순서를 정한다
+  review_package.py            검수 결과 패키지 (summary json/csv + 다음 단계 manifest 후보). 등록·활성화는 하지 않는다
+  preflight_candidates.py      기술 통과 후보 사전 검증 (무결성·중복·자산·sidecar). 의료 판단 없음
   build_vs_seg_case_assets.py  npy -> 표시용 PNG + 마스크 PNG + manifest
   import_cases.py              실제 케이스 등록 CLI (단일 영상 / volume 둘 다)
   verify_cases.py              등록 후 sanity check (Dice=1.0 자가점검 포함)

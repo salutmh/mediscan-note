@@ -130,6 +130,30 @@ export async function apiFetch(path, { method = 'GET', body, auth = true, header
   return data
 }
 
+/**
+ * 인증이 필요한 바이너리(이미지 등)를 objectURL 로 받아온다.
+ *
+ * 검수 시트는 **실제 환자 영상에서 파생된 그림**이라 운영자 인증 뒤에 있다.
+ * 그래서 `<img src>` 로 바로 걸 수 없고 (헤더를 붙일 수 없다) blob 으로 받아 쓴다.
+ *
+ * 반환한 URL 은 쓰고 나면 반드시 `URL.revokeObjectURL` 로 해제한다 —
+ * 24장을 오가며 보는 화면이라 안 풀면 메모리에 계속 쌓인다.
+ */
+export async function fetchObjectUrl(path) {
+  const token = getToken()
+  const res = await fetch(`${BASE}${path}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  })
+  if (!res.ok) {
+    if (res.status === 401) {
+      clearToken()
+      onUnauthorized?.()
+    }
+    throw new ApiError(res.status, `HTTP_${res.status}`, '이미지를 불러오지 못했습니다.')
+  }
+  return URL.createObjectURL(await res.blob())
+}
+
 export const api = {
   get: (path, opts) => apiFetch(path, { ...opts, method: 'GET' }),
   post: (path, body, opts) => apiFetch(path, { ...opts, method: 'POST', body }),

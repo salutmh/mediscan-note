@@ -204,6 +204,9 @@ class UserSession:
     def post(self, path: str, json=None, **kwargs):
         return self._client.post(path, json=json, headers=self.headers, **kwargs)
 
+    def put(self, path: str, json=None, **kwargs):
+        return self._client.request("PUT", path, json=json, headers=self.headers, **kwargs)
+
     def patch(self, path: str, json=None, **kwargs):
         return self._client.request("PATCH", path, json=json, headers=self.headers, **kwargs)
 

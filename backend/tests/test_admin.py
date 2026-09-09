@@ -61,6 +61,12 @@ ADMIN_ENDPOINTS = [
     ("DELETE", f"/api/admin/cases/{CASE_ID}/findings", None),
     ("GET", "/api/admin/learning-summary", None),
     ("POST", "/api/admin/password-reset", {"email": "someone@example.com"}),
+    # 케이스 후보 기술 검수 — 검수 시트는 실제 환자 영상에서 파생된 그림이다
+    ("GET", "/api/admin/review/candidates", None),
+    ("GET", f"/api/admin/review/candidates/{CASE_ID}", None),
+    ("GET", f"/api/admin/review/candidates/{CASE_ID}/sheet", None),
+    ("PUT", f"/api/admin/review/candidates/{CASE_ID}", {"technical_review_status": "tech_pass"}),
+    ("GET", "/api/admin/review/summary", None),
 ]
 
 
