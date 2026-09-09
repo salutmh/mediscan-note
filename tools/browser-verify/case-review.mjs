@@ -211,6 +211,25 @@ const firstCase = listed.firstCase
 
 // ------------------------------------------------------------ 2) 판단 저장
 console.log('2) PASS 저장 — 전문가·활성화 상태는 그대로여야 한다')
+
+// 검수 결과는 파일에 남으므로 **이전 실행 상태를 물려받는다.**
+// 절대값(미검수 23건 등)으로 검사하면 두 번째 실행부터 실패한다 —
+// 그건 제품 문제가 아니라 검사가 상태에 의존하는 것이다. 변화량으로 본다.
+const readCounts = () =>
+  evaluate(`
+    (() => {
+      const stats = [...document.querySelectorAll('.progress .stat')].map((s) => [
+        s.querySelector('.k').textContent.trim(),
+        Number(s.querySelector('.n').textContent),
+      ])
+      return Object.fromEntries(stats)
+    })()
+  `)
+const countsBefore = await readCounts()
+const firstStatusBefore = await evaluate(
+  `document.querySelector('.case-card .badge').textContent.trim()`,
+)
+
 await evaluate(`
   (() => {
     const card = document.querySelector('.case-card')
@@ -259,17 +278,25 @@ check(stored.activation_status === 'candidate', '서버에서도 활성화되지
 // 새로고침 없이도 상단 현황이 따라가야 한다.
 // (처음 만들었을 때 서버 스냅샷을 그대로 써서 "24건 중 24건 미검수"가 계속 보였다 —
 //  검수 중 진행률을 보는 것이 헤더의 존재 이유인데 그게 멈춰 있었다.)
-const liveCounts = await evaluate(`
-  (() => {
-    const stats = [...document.querySelectorAll('.progress .stat')].map((s) => [
-      s.querySelector('.k').textContent.trim(),
-      Number(s.querySelector('.n').textContent),
-    ])
-    return Object.fromEntries(stats)
-  })()
-`)
-check(liveCounts['TECH PASS'] === 1, '새로고침 없이 헤더가 즉시 갱신된다', JSON.stringify(liveCounts))
-check(liveCounts['미검수'] === 23, '미검수 수도 함께 줄어든다', String(liveCounts['미검수']))
+const countsAfter = await readCounts()
+const wasUnreviewed = firstStatusBefore === '미검수'
+const expectedPass = countsBefore['TECH PASS'] + (firstStatusBefore === 'TECH PASS' ? 0 : 1)
+
+check(
+  countsAfter['TECH PASS'] === expectedPass,
+  '새로고침 없이 헤더가 즉시 갱신된다',
+  `${countsBefore['TECH PASS']} -> ${countsAfter['TECH PASS']}`,
+)
+check(
+  countsAfter['미검수'] === countsBefore['미검수'] - (wasUnreviewed ? 1 : 0),
+  '미검수 수도 함께 줄어든다',
+  `${countsBefore['미검수']} -> ${countsAfter['미검수']}`,
+)
+check(
+  countsAfter['전체'] === countsBefore['전체'],
+  '전체 수는 변하지 않는다',
+  String(countsAfter['전체']),
+)
 
 await shoot('r02-after-pass')
 
@@ -302,7 +329,11 @@ const progress = await evaluate(`
 const byKey = Object.fromEntries(progress.stats.map((s) => [s.k, s.n]))
 check(byKey['전체'] >= 20, '전체 수가 보인다', String(byKey['전체']))
 check(byKey['TECH PASS'] >= 1, 'PASS 수가 반영된다', String(byKey['TECH PASS']))
-check(byKey['전문가 검수 대기'] >= 1, '전문가 검수 대기 수가 따로 보인다', String(byKey['전문가 검수 대기']))
+check(
+  byKey['전문가 검수 대기'] === byKey['TECH PASS'],
+  '**기술 통과한 만큼 전문가 검수가 밀려 있다**',
+  `PASS ${byKey['TECH PASS']} / 전문가 대기 ${byKey['전문가 검수 대기']}`,
+)
 check(progress.filters.length === 5, '필터 5종이 있다', progress.filters.join(' / '))
 
 await evaluate(`

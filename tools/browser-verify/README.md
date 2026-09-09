@@ -58,6 +58,9 @@ node tools/browser-verify/slice-navigation.mjs ./out/slices 9333
 node tools/browser-verify/screenshot-all.mjs ./out/shots 9333
 node tools/browser-verify/a11y-audit.mjs ./out/a11y 9333
 node tools/browser-verify/responsive-check.mjs ./out/responsive 9333
+# 케이스 후보 기술 검수 화면 (운영자 계정이 먼저 필요하다)
+#   python -m scripts.grant_admin --email <이메일>
+node tools/browser-verify/case-review.mjs ./out/review 9333 <운영자이메일>
 ```
 
 ## 참고
@@ -120,3 +123,24 @@ node tools/browser-verify/responsive-check.mjs ./out/responsive 9333
 레이아웃 자체는 390px 까지 멀쩡했다 — 가로 스크롤도, 화면 밖 요소도 0건이었다.
 실제 문제는 **터치 대상 크기**였고, 그중 판독훈련의 slice 이동 화살표(`‹` `›`)가
 27px 폭이었던 것이 핵심이다. 핵심 조작에서 헛누르면 학습 흐름이 끊긴다.
+
+
+---
+
+## case-review.mjs — 케이스 후보 기술 검수 화면
+
+**가장 중요한 검사: TECH_PASS 를 눌러도 전문가 검수와 활성화 상태가 바뀌지 않는가.**
+기술 검수가 활성화로 번지면 검수되지 않은 GT 가 학습자의 채점 기준이 된다.
+화면과 서버 응답 **양쪽에서** 확인한다 (화면만 바뀐 것이 아닌지).
+
+함께 확인: 인증 뒤에 있는 검수 시트가 실제로 로드되는가(blob), 판단이 새로고침 후에도
+남는가, 헤더 현황이 즉시 갱신되는가, 필터·단축키가 동작하는가.
+
+운영자 계정이 필요하다. **자동 승격은 하지 않는다** — 웹으로 스스로 운영자가 되는 경로를
+만들지 않는다는 규칙 때문이다.
+
+### 상태에 의존하지 않게 만든 것
+
+검수 결과는 파일(`review_results.json`)에 남으므로 **이전 실행 상태를 물려받는다.**
+처음에는 "미검수 23건" 같은 절대값으로 검사해서 두 번째 실행부터 실패했다 —
+그건 제품 문제가 아니라 검사가 상태에 의존한 것이다. 지금은 **변화량**으로 본다.
