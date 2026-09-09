@@ -289,10 +289,24 @@
 {
   "deleted": true,
   "user_id": "u_001",
-  "deleted_counts": { "consents": 6, "submissions": 3 },
-  "deleted_scopes": ["account", "consents", "submissions"]
+  "deleted_counts": {
+    "consents": 6,
+    "submissions": 3,
+    "learning_events": 12,
+    "revoked_tokens_detached": 2
+  },
+  "deleted_scopes": ["account", "consents", "submissions", "learning_events"]
 }
 ```
+
+> `revoked_tokens_detached` 는 **삭제 건수가 아니라 연결을 끊은 건수**다.
+> 그래서 `deleted_scopes` 에 들어가지 않는다.
+>
+> 폐기된 토큰 기록(`revoked_tokens`)은 계정을 지워도 **남는다** —
+> 지우면 만료 전 토큰이 다시 유효해지기 때문이다(계정이 없어 어차피 401 이지만,
+> 이 테이블의 목적은 방어선을 겹치는 것이다).
+> 대신 `user_id` 를 비워 **계정을 지운 뒤에 "이 사람이 언제 로그아웃했는가"가
+> 남지 않게** 한다. 폐기 판정은 `jti` 만으로 하므로 효력은 그대로다.
 
 > 탈퇴 시 동의 이력까지 지울지(파기 의무)와 증빙으로 남길지(보존)는 법률 판단이 필요하다.
 > 현재는 **전부 삭제**이고, 정책이 바뀌면 `app/account.py::delete_account` 한 곳만 고치면 된다.

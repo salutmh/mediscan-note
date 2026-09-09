@@ -48,7 +48,7 @@
     모델을 바꾸면 반드시 `alembic revision --autogenerate` 로 마이그레이션을 만든다.
   - 실제 케이스 등록: `python -m scripts.import_cases <manifest>` — 영상·기준마스크·해설을 함께 등록.
     실제 데이터 파일은 커밋하지 않는다 (`backend/data/`, `app/static/cases/` gitignore).
-  - 테스트: 백엔드 pytest **1008개** (`cd backend && pytest`) — **SQLite·PostgreSQL 양쪽에서 통과**
+  - 테스트: 백엔드 pytest **1011개** (`cd backend && pytest`) — **SQLite·PostgreSQL 양쪽에서 통과**
     (`scripts/verify_postgres.py --with-tests`). 프론트 vitest **108개** (`cd frontend && npm test`).
     브라우저 검증은 `tools/browser-verify/` — E2E 7종(user-flow / slice-navigation /
     consent-and-sns / screenshot-all / error-paths / case-review / admin-ux)

@@ -22,12 +22,14 @@ import logging
 
 from sqlalchemy.orm import Session
 
+from app import token_revocation
 from app.models import User
 
 logger = logging.getLogger(__name__)
 
 # 응답으로 무엇이 지워졌는지 알려준다 (사용자가 확인할 수 있어야 한다).
 DELETED_SCOPES = ["account", "consents", "submissions", "learning_events"]
+# 폐기 토큰은 "삭제"가 아니라 "연결 해제"다 — 위 목록과 성격이 달라 따로 둔다.
 
 
 def delete_account(db: Session, user: User) -> dict:
@@ -42,13 +44,19 @@ def delete_account(db: Session, user: User) -> dict:
     }
     user_id = user.user_id
 
+    # 폐기된 토큰 기록은 **지우지 않고 연결만 끊는다.**
+    # 지우면 만료 전 토큰이 다시 유효해지고, 그대로 두면 계정을 지운 뒤에도
+    # "이 사람이 언제 로그아웃했는가"가 남는다 (token_revocation.detach_user 참고).
+    counts["revoked_tokens_detached"] = token_revocation.detach_user(db, user_id)
+
     db.delete(user)
     db.commit()
 
     # 개인 식별 정보는 로그에 남기지 않는다 (이메일·닉네임 금지, 내부 ID 만).
     logger.info(
-        "계정 삭제: user_id=%s consents=%s submissions=%s events=%s",
+        "계정 삭제: user_id=%s consents=%s submissions=%s events=%s 폐기토큰연결해제=%s",
         user_id, counts["consents"], counts["submissions"], counts["learning_events"],
+        counts["revoked_tokens_detached"],
         # JSON 포맷(MEDISCAN_LOG_FORMAT=json)일 때 집계할 수 있게 구조화해서도 남긴다.
         # **이메일·닉네임은 넣지 않는다** — 로그도 개인정보다.
         extra={"event": "account_deleted", "user_id": user_id, **counts},

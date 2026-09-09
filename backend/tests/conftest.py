@@ -198,6 +198,15 @@ class UserSession:
     def headers(self) -> dict:
         return {"Authorization": f"Bearer {self.token}"}
 
+    def login(self):
+        """다시 로그인해 새 토큰을 받는다 (로그아웃 뒤 이어서 볼 때)."""
+        response = self._client.post(
+            "/api/auth/login", json={"email": self.email, "password": self.password}
+        )
+        assert response.status_code == 200, response.text
+        self.token = response.json()["access_token"]
+        return self
+
     def get(self, path: str, **kwargs):
         return self._client.get(path, headers=self.headers, **kwargs)
 

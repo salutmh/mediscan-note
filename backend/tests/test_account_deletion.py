@@ -142,3 +142,64 @@ def test_social_account_can_delete_without_password(client):
     res = client.request("DELETE", "/api/auth/me", headers=headers)
     assert res.status_code == 200
     assert _counts(signup.json()["user_id"])["user"] is False
+
+
+# ---------------------------------------------------------------------------
+# 폐기 토큰 — **효력은 남기고 연결만 끊는다**
+# ---------------------------------------------------------------------------
+# 통째로 지우면 만료 전 토큰이 다시 유효해진다.
+# 그대로 두면 계정을 지운 뒤에도 "이 사람이 언제 로그아웃했는가"가 남는다.
+def test_deleting_an_account_detaches_revoked_tokens(client, make_user):
+    from sqlalchemy import select
+
+    from app.db import SessionLocal
+    from app.models import RevokedToken
+
+    user = make_user()
+    user_id = user.user_id
+    user.post("/api/auth/logout")
+
+    # 다시 로그인해 폐기 기록이 남은 상태로 탈퇴한다
+    user.login()
+    body = user.delete("/api/auth/me", json={"password": user.password}).json()
+
+    assert body["deleted_counts"]["revoked_tokens_detached"] >= 1
+
+    with SessionLocal() as db:
+        linked = db.scalars(
+            select(RevokedToken).where(RevokedToken.user_id == user_id)
+        ).all()
+        assert linked == [], "탈퇴 뒤에도 사용자와 연결된 폐기 기록이 남아 있다"
+
+
+def test_the_revocation_itself_survives_deletion(client, make_user):
+    """**기록을 지우면 안 된다.** 만료 전 토큰이 다시 유효해진다."""
+    from sqlalchemy import select
+
+    from app.db import SessionLocal
+    from app.models import RevokedToken
+
+    user = make_user()
+    revoked_token = user.token
+    user.post("/api/auth/logout")
+
+    with SessionLocal() as db:
+        before = len(db.scalars(select(RevokedToken)).all())
+
+    user.login()
+    user.delete("/api/auth/me", json={"password": user.password})
+
+    with SessionLocal() as db:
+        after = len(db.scalars(select(RevokedToken)).all())
+    assert after >= before, "폐기 기록이 사라졌다 — 만료 전 토큰이 되살아난다"
+
+    # 그 토큰으로는 여전히 들어올 수 없다
+    response = client.get("/api/auth/me", headers={"Authorization": f"Bearer {revoked_token}"})
+    assert response.status_code == 401
+
+
+def test_deletion_scopes_do_not_claim_to_delete_revoked_tokens():
+    """**"지웠다"고 말하지 않는다.** 연결을 끊었을 뿐이다."""
+    from app.account import DELETED_SCOPES
+
+    assert "revoked_tokens" not in DELETED_SCOPES

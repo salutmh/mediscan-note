@@ -209,4 +209,62 @@ def test_stated_backend_test_counts_are_close_to_reality(request):
         f"문서의 테스트 수가 실제({actual})와 크게 다르다: "
         + ", ".join(f"{doc}={value}" for doc, value in drifted)
         + f"\n(허용 오차 {tolerance})"
+        + "\n손으로 고치지 말고: cd backend && python -m scripts.update_test_counts --write"
+    )
+
+
+# ---------------------------------------------------------------------------
+# 수치 갱신 도구 — **사람이 네 곳을 손으로 고치는 구조를 없앤다**
+# ---------------------------------------------------------------------------
+# 백엔드 수치가 문서 네 곳에 흩어져 있어서, 한 곳만 고치면 나머지가 남아
+# 위 드리프트 테스트가 매번 걸렸다. `scripts/update_test_counts.py` 가 실제로
+# 세어서 전부 고친다. 이 테스트는 **그 도구가 제 일을 하는지** 본다.
+def test_the_updater_rewrites_every_stated_backend_count():
+    from scripts.update_test_counts import apply
+
+    text = "백엔드 pytest **830개** 와 backend suite **830 passed** 두 곳"
+    updated, changed = apply(text, backend=1011, frontend=None)
+
+    assert changed == 2
+    assert "830" not in updated
+    assert updated.count("1011") == 2
+
+
+def test_the_updater_leaves_matching_numbers_alone():
+    from scripts.update_test_counts import apply
+
+    _, changed = apply("백엔드 **1011개**", backend=1011, frontend=None)
+    assert changed == 0
+
+
+def test_the_updater_does_not_touch_unrelated_numbers():
+    """**아무 숫자나 바꾸면 안 된다.** 케이스 수·포트 번호까지 덮어쓰면 문서가 망가진다."""
+    from scripts.update_test_counts import apply
+
+    text = "케이스 **6개**, 포트 **8010**, 마이그레이션 **8단계**"
+    updated, changed = apply(text, backend=1011, frontend=108)
+    assert changed == 0
+    assert updated == text
+
+
+def test_the_updater_skips_frontend_when_it_cannot_count():
+    """**셀 수 없는 값을 적어 두면 그게 곧 드리프트다.**"""
+    from scripts.update_test_counts import apply
+
+    text = "프론트 vitest **108개**"
+    updated, changed = apply(text, backend=1011, frontend=None)
+    assert changed == 0
+    assert updated == text
+
+
+def test_every_doc_with_a_stated_count_is_managed_by_the_updater():
+    """**도구가 모르는 곳에 숫자를 적어 두면 영영 안 고쳐진다.**"""
+    from scripts.update_test_counts import DOCS
+
+    managed = {p.name for p in DOCS}
+    stated = set(_stated_test_counts())
+    unmanaged = stated - managed
+    assert not unmanaged, (
+        f"수치를 적었지만 갱신 도구가 모르는 문서: {sorted(unmanaged)} — "
+        "scripts/update_test_counts.py 의 DOCS 에 추가하세요"
     )

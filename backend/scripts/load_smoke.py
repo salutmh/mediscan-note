@@ -90,16 +90,34 @@ def _request(url: str, *, method: str = "GET", body=None, token=None, timeout=30
         return 0, f"{type(exc).__name__}: {exc}"
 
 
-def signup(base: str) -> str | None:
-    email = f"load{uuid.uuid4().hex[:10]}@example.com"
+PASSWORD = "pw12345678"
+
+
+def signup(base: str, domain: str) -> tuple[str, str] | None:
+    """(토큰, 이메일). 실패하면 None.
+
+    **도메인을 인자로 받는 이유**: 스테이징 DB 를 상대로 돌릴 때는
+    `@staging.invalid` 를 써야 한다. `@example.com` 계정이 남으면
+    `verify_remote_db --expect-staging` 의 순수성 검사가 실패한다 —
+    그 검사는 "운영 데이터가 섞였는가"를 보는 장치라 무디게 만들면 안 된다.
+    """
+    email = f"load{uuid.uuid4().hex[:10]}{domain}"
     status, body = _request(
         f"{base}/api/auth/signup",
         method="POST",
-        body={"email": email, "password": "pw12345678", "nickname": "부하", "consents": CONSENTS},
+        body={"email": email, "password": PASSWORD, "nickname": "부하", "consents": CONSENTS},
     )
     if status != 200 or not isinstance(body, dict):
         return None
-    return body.get("access_token")
+    return body.get("access_token"), email
+
+
+def delete_account(base: str, token: str) -> bool:
+    """만든 계정을 지운다. **잔여물을 남기지 않는다.**"""
+    status, _ = _request(
+        f"{base}/api/auth/me", method="DELETE", token=token, body={"password": PASSWORD}
+    )
+    return status in (200, 204)
 
 
 def main() -> int:
@@ -109,6 +127,14 @@ def main() -> int:
     parser.add_argument("--users", type=int, default=10, help="동시 사용자 수")
     parser.add_argument("--rounds", type=int, default=2, help="각 사용자가 제출하는 횟수")
     parser.add_argument("--case", default="VS-SEG-202")
+    parser.add_argument(
+        "--email-domain",
+        default="@example.com",
+        help="만들 계정의 도메인. 스테이징 DB 상대로 돌릴 때는 @staging.invalid 를 쓴다",
+    )
+    parser.add_argument(
+        "--cleanup", action="store_true", help="끝나고 만든 계정을 지운다 (스테이징 권장)"
+    )
     args = parser.parse_args()
 
     status, _ = _request(f"{args.base}/health")
@@ -120,8 +146,9 @@ def main() -> int:
     print(f"대상: {args.base} / 동시 {args.users}명 x {args.rounds}회")
     print("가입 중...")
     with ThreadPoolExecutor(max_workers=args.users) as pool:
-        tokens = list(pool.map(lambda _: signup(args.base), range(args.users)))
+        accounts = list(pool.map(lambda _: signup(args.base, args.email_domain), range(args.users)))
 
+    tokens = [a[0] if a else None for a in accounts]
     failed_signups = tokens.count(None)
     tokens = [t for t in tokens if t]
     if failed_signups:
@@ -180,11 +207,24 @@ def main() -> int:
         print()
         print("※ 'database is locked' 가 보이면 SQLite 의 단일 쓰기 제약이다.")
         print("  운영에서는 PostgreSQL 을 쓴다 (docs/DEPLOYMENT.md 0절).")
+        _cleanup(args, tokens)
         return 1
 
     print()
     print("전체 성공 - 이 규모의 동시 쓰기에서 오류가 발생하지 않았습니다.")
+    _cleanup(args, tokens)
     return 0
+
+
+def _cleanup(args, tokens) -> None:
+    if not args.cleanup:
+        return
+    alive = [t for t in tokens if t]
+    with ThreadPoolExecutor(max_workers=max(1, len(alive))) as pool:
+        removed = sum(pool.map(lambda t: delete_account(args.base, t), alive))
+    print(f"정리: 계정 {removed}/{len(alive)}개 삭제")
+    if removed != len(alive):
+        print("  일부가 남았습니다 — verify_remote_db --expect-staging 로 확인하세요.")
 
 
 if __name__ == "__main__":

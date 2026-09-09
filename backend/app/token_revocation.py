@@ -78,6 +78,26 @@ def is_revoked(db: Session, jti: str | None) -> bool:
     return db.scalar(select(RevokedToken.jti).where(RevokedToken.jti == jti)) is not None
 
 
+def detach_user(db: Session, user_id: str) -> int:
+    """계정이 삭제될 때 **폐기 효력은 남기고 사용자 연결만 끊는다.**
+
+    폐기 기록을 통째로 지우면 안 된다 — 그 토큰이 만료 전이면 다시 유효해진다
+    (계정이 없으니 어차피 401 이지만, 두 방어선을 겹쳐 두는 것이 이 테이블의 목적이다).
+
+    반대로 `user_id` 를 그대로 두면, 계정을 지운 뒤에도 "이 사람이 언제
+    로그아웃했는가"가 남는다. jti 만으로 폐기 판정은 그대로 되므로
+    연결만 끊는 것이 삭제 범위와 보안을 둘 다 지키는 방법이다.
+
+    반환값은 연결을 끊은 행 수.
+    """
+    rows = db.scalars(
+        select(RevokedToken).where(RevokedToken.user_id == user_id)
+    ).all()
+    for row in rows:
+        row.user_id = None
+    return len(rows)
+
+
 def purge_expired(db: Session, now: datetime | None = None) -> int:
     """이미 만료된 토큰의 폐기 기록을 지운다.
 

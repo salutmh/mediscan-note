@@ -23,6 +23,11 @@ from app.models import RevokedToken
 from tests.conftest import REQUIRED_CONSENTS
 
 
+def _jti(token: str) -> str:
+    """토큰의 폐기 식별자. 계정이 지워진 뒤에도 기록을 찾으려면 이 값이 필요하다."""
+    return security.decode_access_token(token)["jti"]
+
+
 def _logout(session):
     return session.post("/api/auth/logout")
 
@@ -110,13 +115,24 @@ def test_relogin_issues_a_working_token(client, user_a):
 
 # ---------------------------------------------------------------- 탈퇴와의 관계
 def test_account_deletion_also_revokes_the_token(user_a):
-    """계정이 사라지면 어차피 401 이지만, 폐기 기록도 남겨 방어선을 겹친다."""
+    """계정이 사라지면 어차피 401 이지만, 폐기 기록도 남겨 방어선을 겹친다.
+
+    **다만 사용자와의 연결은 끊는다.** 그대로 두면 계정을 지운 뒤에도
+    "이 사람이 언제 로그아웃했는가"가 남는다 (token_revocation.detach_user).
+    폐기 효력은 jti 만으로 판정되므로 연결을 끊어도 그대로다.
+    """
+    jti_before = _jti(user_a.token)
     user_a.delete("/api/auth/me", json={"password": user_a.password})
 
     with SessionLocal() as db:
-        rows = db.scalars(select(RevokedToken).where(RevokedToken.user_id == user_a.user_id)).all()
-    assert len(rows) == 1
-    # 사용자 행이 지워져도 폐기 기록은 남아야 한다 (외래키를 걸지 않은 이유)
+        linked = db.scalars(
+            select(RevokedToken).where(RevokedToken.user_id == user_a.user_id)
+        ).all()
+        kept = db.get(RevokedToken, jti_before)
+
+    assert linked == [], "탈퇴 뒤에도 사용자와 연결된 폐기 기록이 남아 있다"
+    assert kept is not None, "폐기 기록 자체가 사라졌다 — 만료 전 토큰이 되살아난다"
+    assert kept.user_id is None
     assert user_a.get("/api/auth/me").status_code == 401
 
 
