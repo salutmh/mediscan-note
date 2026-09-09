@@ -10,22 +10,16 @@
 | 항목 | 값 |
 |---|---|
 | 최종 갱신 | 2026-09-09 |
-| 시작 커밋 | `ef56005` (docs: add public project README) |
-| 현재 커밋 | `fc75161` — **origin/main 보다 앞서 있다 (push 미승인)** |
+| 현재 커밋 | `ebaafce` — **origin/main 과 동기 (push 완료)** |
 | 현재 브랜치 | `main` |
+| 원격 | `https://github.com/salutmh/mediscan-note.git` (Public) |
 | 현재 모드 | **지속 자율 개발 루프** (Phase 1~8 은 최초 백로그였고 전부 완료) |
 | STATUS | `IN_PROGRESS` — 사이클마다 제품 재평가 → 최고가치 작업 선정 |
-| 마지막 전체 검증 | 백엔드 **563 passed** (SQLite·PostgreSQL 양쪽) / 프론트 **59 passed** / E2E 4종 / 접근성 점검 0건 / `verify_cases` 6케이스 |
+| 마지막 전체 검증 | 백엔드 **563 passed** (SQLite·PostgreSQL 양쪽) / 프론트 **59 passed** / E2E 4종 / 접근성·좁은화면 점검 0건 / `verify_cases` 6케이스 / 동시 쓰기 30명 정상 |
 
-> **push 는 사용자 승인이 필요하다.** 지금까지 쌓인 커밋은 전부 로컬에만 있다.
-
----|---|
-| 최종 갱신 | 2026-09-08 |
-| 시작 커밋 | `ef56005` (docs: add public project README) |
-| 현재 브랜치 | `main` (origin/main과 동기) |
-| 현재 모드 | **지속 자율 개발 루프** (Phase 1~8 은 최초 백로그였고 전부 완료) |
-| STATUS | `IN_PROGRESS` — 사이클마다 제품 재평가 → 최고가치 작업 선정 |
-| 마지막 전체 테스트 | 백엔드 **475 passed** (SQLite·PostgreSQL 양쪽 재검증) (SQLite·PostgreSQL 양쪽) / 프론트 **40 passed** / E2E 4종 |
+> **push 는 매번 사용자 승인이 필요하다.** 2026-09-09 에 42개 커밋을 fast-forward 로 push했다
+> (`ef56005..ebaafce`). 그 이후 쌓이는 커밋은 다시 승인을 받아야 한다.
+> force push / rebase / reset --hard / history rewrite 는 하지 않는다.
 
 ---
 

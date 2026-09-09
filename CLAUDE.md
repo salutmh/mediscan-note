@@ -48,8 +48,11 @@
     모델을 바꾸면 반드시 `alembic revision --autogenerate` 로 마이그레이션을 만든다.
   - 실제 케이스 등록: `python -m scripts.import_cases <manifest>` — 영상·기준마스크·해설을 함께 등록.
     실제 데이터 파일은 커밋하지 않는다 (`backend/data/`, `app/static/cases/` gitignore).
-  - 테스트: 백엔드 pytest **417개** (`cd backend && pytest`) — **SQLite·PostgreSQL 양쪽에서 통과**.
-    프론트 vitest **22개** (`cd frontend && npm test`). 브라우저 E2E 4종은 `tools/browser-verify/`.
+  - 테스트: 백엔드 pytest **563개** (`cd backend && pytest`) — **SQLite·PostgreSQL 양쪽에서 통과**
+    (`scripts/verify_postgres.py --with-tests`). 프론트 vitest **59개** (`cd frontend && npm test`).
+    브라우저 검증은 `tools/browser-verify/` — E2E 4종(user-flow / slice-navigation /
+    consent-and-sns / screenshot-all) + 접근성 점검(`a11y-audit`) + 좁은 화면 점검(`responsive-check`).
+    동시 쓰기 스모크는 `scripts/load_smoke.py`.
   - 보안: production 에서 `MEDISCAN_SECRET_KEY`/`MEDISCAN_CORS_ORIGINS`/`DATABASE_URL` 이
     없으면 **기동이 실패한다**. 인증 엔드포인트 rate limit, 로그아웃 시 서버측 토큰 폐기,
     회원 탈퇴(화면 포함)까지 구현됐다.
@@ -83,8 +86,10 @@
     1. 케이스별 영상 소견 전문가 검토(`case_findings`) — 지금은 null, 검토자·검토일 없이는 등록하지 않는다
     2. 화면 5 용 단일 이미지 2D 모델 (확보 전까지 `model_unavailable` 유지)
     3. 다른 부위 확장 — 팀원들이 `models/_template/` 복사해서 추가
-    4. 배포 하드닝 — `MEDISCAN_SECRET_KEY` 주입, CORS 좁히기, PostgreSQL 전환 검증,
-       SNS provider_token 실검증 (현재는 **개발용 예시 로그인**이지 실제 OAuth 가 아니다)
+    4. **SNS provider_token 실검증** — 현재는 **개발용 예시 로그인**이지 실제 OAuth 가 아니다.
+       (배포 하드닝의 나머지는 완료: production 에서 `MEDISCAN_SECRET_KEY`/`MEDISCAN_CORS_ORIGINS`/
+       `DATABASE_URL` 미설정 시 **기동 실패**, 개발 전용 스위치 3종도 production 에서 기동을 막는다.
+       PostgreSQL 전환은 `scripts/verify_postgres.py` 로 검증 완료.)
 
 ## 기술 스택
 
@@ -137,7 +142,7 @@ medscannote/
     alembic/            마이그레이션 — **스키마의 기준은 create_all 이 아니라 마이그레이션이다**
     scripts/            실데이터 파이프라인 CLI (export / 검수 / 자산생성 / 등록 / 점검 / 삭제)
     data/               실데이터 작업 폴더 (gitignore, manifest.example.json 만 커밋)
-  frontend/           Vue 3 + Vite. 화면 0~7 + 계정(/account)·운영자(/admin/cases). vitest 22개
+  frontend/           Vue 3 + Vite. 화면 0~7 + 계정(/account)·운영자(/admin/cases). vitest 59개
   models/
     brain_mri_vs/      전정신경초종 추론 wrapper (inference.py) — **연결됨**(volume 입력,
                        미리 계산한 sidecar 를 참고 정보로만 서비스)
@@ -170,7 +175,8 @@ medscannote/
    분석은 단일 이미지 2D 모델 확보 전까지 `model_unavailable` 이다
 6. 다른 부위 모델은 `models/_template/inference.py` 를 복사해서 추가 —
    백엔드 코드 수정 불필요 (`models/README.md` 참고)
-7. 배포 하드닝 (시크릿 주입 / CORS / PostgreSQL / SNS 실검증) — `review_bundle.md` 8~9절 참고
+7. 배포 — **`docs/DEPLOYMENT.md` 가 런북이다** (0절 체크리스트부터). 시크릿 주입·CORS·PostgreSQL 은
+   가드와 검증이 붙어 있고, 남은 것은 SNS 실검증이다. 준비 상태는 `docs/RELEASE_READINESS.md`.
 
 ## 참고 문서
 
