@@ -256,6 +256,28 @@ def check_content(report: Report) -> None:
         elif active:
             report.ok("케이스 자산 파일", "DB 가 가리키는 파일이 전부 있다")
 
+        # **자산이 서명 보호 밖에 있으면 정답이 그대로 열린다.**
+        # `/static/cases/` 만 서명을 검사한다 (app/asset_urls.PROTECTED_PREFIX).
+        # `/static/images/` `/static/results/` 는 합성 fixture 전용이라 일부러 열어 뒀는데,
+        # 실제 케이스가 그 경로로 등록되면 **기준 마스크를 아무나 받아갈 수 있다.**
+        # 그러면 학습자가 판독 전에 정답을 볼 수 있다 — 훈련이 성립하지 않는다.
+        from app.asset_urls import PROTECTED_PREFIX
+
+        unprotected = [
+            f"{case.case_id}:{url[len(STATIC_URL_PREFIX):]}"
+            for case in active
+            for url in (case.image_url, case.reference_mask_url)
+            if url and url.startswith(STATIC_URL_PREFIX) and not url.startswith(PROTECTED_PREFIX)
+        ]
+        if unprotected:
+            report.block(
+                "자산 접근 보호",
+                f"{len(unprotected)}건이 서명 검사 밖({PROTECTED_PREFIX} 아님)에 있다 — "
+                f"기준 마스크가 그대로 열린다 ({', '.join(unprotected[:3])}…)",
+            )
+        elif active:
+            report.ok("자산 접근 보호", f"활성 케이스 자산이 전부 {PROTECTED_PREFIX} 아래에 있다")
+
         # 전문가 소견 (막지는 않는다 — 없으면 없다고 표시된다)
         without_findings = [c for c in active if c.findings_status != "approved"]
         if without_findings:

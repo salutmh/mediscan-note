@@ -245,3 +245,36 @@ def test_the_block_message_says_why_it_matters(monkeypatch):
     detail = report.rows[-1]["detail"]
     assert "설치" in detail, "무엇을 하면 되는지"
     assert "학습 이력" in detail, "왜 중요한지"
+
+
+# ---------------------------------------------------------------------------
+# 자산 접근 보호 — **정답이 서명 검사 밖에 있으면 안 된다**
+# ---------------------------------------------------------------------------
+# `/static/cases/` 만 서명을 검사한다. `/static/images/` `/static/results/` 는
+# 합성 fixture 전용이라 일부러 열어 뒀는데, 실제 케이스가 그 경로로 등록되면
+# 기준 마스크를 아무나 받아갈 수 있다 — 학습자가 판독 전에 정답을 본다.
+def _preflight_content_report():
+    report = pre.Report()
+    pre.check_content(report)
+    return report
+
+
+def test_mock_seeded_cases_are_flagged_as_unprotected(client):
+    """테스트 DB 는 합성 케이스를 쓴다 (`/static/images/`, `/static/results/`).
+
+    **그래서 이 검사가 실제로 걸려야 한다.** 안 걸리면 검사가 놀고 있는 것이다.
+    """
+    report = _preflight_content_report()
+    rows = [r for r in report.rows if r["check"] == "자산 접근 보호"]
+    assert rows, "자산 접근 보호 검사가 아예 돌지 않았다"
+    assert rows[-1]["level"] == "block"
+    assert "기준 마스크가 그대로 열린다" in rows[-1]["detail"]
+
+
+def test_the_check_names_the_protected_prefix():
+    """무엇을 기준으로 판단했는지 밝혀야 사람이 고칠 수 있다."""
+    from app.asset_urls import PROTECTED_PREFIX
+
+    report = _preflight_content_report()
+    rows = [r for r in report.rows if r["check"] == "자산 접근 보호"]
+    assert PROTECTED_PREFIX in rows[-1]["detail"]
