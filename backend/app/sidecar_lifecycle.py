@@ -239,7 +239,15 @@ def build_plan(evaluations: list[dict], *, export_root: Path | None = None) -> d
     missing = [e for e in evaluations if STALE_MISSING in e["reasons"]]
     fine = [e for e in evaluations if not e["needs_recompute"] and STALE_MISSING not in e["reasons"]]
 
-    case_ids = [e["case_id"] for e in recompute]
+    # **sidecar 가 아예 없는 케이스도 계산 대상이다.**
+    # 예전에는 stale 만 명령에 넣어서, 6케이스 모두 sidecar 가 없는 상태에서
+    # "재계산할 케이스가 없다"고 안내했다 — 운영자는 할 일이 없다고 읽지만
+    # 실제로는 **어떤 케이스에도 AI 예측이 없는** 상태였다.
+    # 둘은 성격이 다르므로(오래됨 vs 처음부터 없음) 명령에서는 합치되 문구로 구분한다.
+    stale_ids = [e["case_id"] for e in recompute]
+    missing_ids = [e["case_id"] for e in missing]
+    case_ids = stale_ids + [cid for cid in missing_ids if cid not in stale_ids]
+
     command = None
     if case_ids:
         root = export_root or Path("data/vs_seg_export")
@@ -278,7 +286,7 @@ def build_plan(evaluations: list[dict], *, export_root: Path | None = None) -> d
         },
         "steps": [
             "1) 학습 venv 에서 추론을 돌려 **스테이징 폴더**에 결과를 만든다",
-            f"   {command}" if command else "   (재계산할 케이스가 없다)",
+            f"   {command}" if command else "   (계산할 케이스가 없다 — 전부 최신이다)",
             "2) python -m scripts.sidecar_manage validate --staging <스테이징폴더>",
             "3) 검증을 통과한 것만: python -m scripts.sidecar_manage promote --staging <스테이징폴더>",
         ],

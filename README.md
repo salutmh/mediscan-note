@@ -96,8 +96,8 @@ npm run dev
 
 | 검증 | 결과 |
 |---|---|
-| `cd backend && pytest` | **1057 passed** |
-| 같은 백엔드 스위트를 PostgreSQL 로 | **1057 passed** (`scripts/verify_postgres.py` — 마이그레이션 up/down/up 포함) |
+| `cd backend && pytest` | **1060 passed** |
+| 같은 백엔드 스위트를 PostgreSQL 로 | **1060 passed** (`scripts/verify_postgres.py` — 마이그레이션 up/down/up 포함) |
 | `cd frontend && npm test` | **108 passed** (vitest) |
 | `cd frontend && npm run build` | **통과** |
 | `cd backend && python -m scripts.verify_cases` | **VS-SEG 6케이스 통과** (등록 상태 + 오래된 예측 sidecar 점검) |

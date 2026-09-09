@@ -15,7 +15,7 @@
 | 원격 | `https://github.com/salutmh/mediscan-note.git` (Public) |
 | 현재 모드 | **지속 자율 개발 루프** (Phase 1~8 은 최초 백로그였고 전부 완료) |
 | STATUS | `IN_PROGRESS` — 사이클마다 제품 재평가 → 최고가치 작업 선정 |
-| 마지막 전체 검증 | 백엔드 **1057 passed** (SQLite·PostgreSQL 양쪽) / 프론트 **108 passed** / E2E 7종 / 접근성·좁은화면 점검 0건 / `verify_cases` 6케이스 |
+| 마지막 전체 검증 | 백엔드 **1060 passed** (SQLite·PostgreSQL 양쪽) / 프론트 **108 passed** / E2E 7종 / 접근성·좁은화면 점검 0건 / `verify_cases` 6케이스 |
 
 > **push 는 매번 사용자 승인이 필요하다.**
 > force push / rebase / reset --hard / history rewrite 는 하지 않는다.
@@ -54,6 +54,40 @@
 ---
 
 ## 3. 완료된 작업
+
+### 자율 루프 #21 — 학습 무결성·문구·운영 도구 점검
+
+**첫 화면이 제품을 잘못 설명하고 있었다.**
+로그인 태그라인이 "AI 기준과 비교해 학습하는 서비스" 였다. 채점 기준은
+전문가 GT 이고 AI 는 참고 정보다 — **첫 화면이 이걸 잘못 말하면 학습자는
+AI 를 정답으로 여긴다.** 고치고 `tests/test_user_facing_copy.py` 로 고정했다.
+(화면 5는 실제 AI 기능이라 대상에서 뺐다. 모든 AI 언급을 막으면
+준비 중임을 알리는 정직한 안내까지 막힌다.)
+
+**제출 전 GT 노출을 불변조건으로 고정했다** (`test_gt_not_leaked_before_submit.py`).
+지금은 새지 않는다 — 케이스 상세에 마스크·병변범위·편측성·해설이 없고,
+`/static/cases/` 는 무서명·위조·만료 서명 모두 403, 정당한 서명은 통과한다.
+**잠재 구멍 하나**: 서명 검사는 경로 접두사(`/static/cases/`)로만 걸린다.
+실제 케이스가 `/static/results/` 같은 곳에 등록되면 기준 마스크가 그대로 열린다.
+`deploy_preflight` 에 "자산 접근 보호"를 추가해 차단한다.
+
+**탈퇴 뒤에도 "이 사람이 언제 로그아웃했는가"가 남았다.**
+Supabase 부하 스모크 후 계정을 지웠는데 `revoked_tokens` 가 남아 발견했다.
+지우면 만료 전 토큰이 되살아나므로, **효력은 남기고 `user_id` 만 비운다.**
+
+**sidecar 계획이 할 일을 숨기고 있었다.**
+6케이스 모두 sidecar 가 없는데 "재계산할 케이스가 없다"고 안내했다 —
+stale 만 명령에 넣고 "처음부터 없음"은 뺐기 때문이다. 운영자는 할 일이 없다고
+읽지만 실제로는 **어떤 케이스에도 AI 예측이 없는** 상태였다.
+
+**문서 수치 갱신을 자동화했다** (`scripts/update_test_counts.py`).
+네 문서에 흩어진 수치를 실제로 세어 고친다. 관련 없는 숫자는 건드리지 않고,
+프론트를 셀 수 없으면 적지 않는다. 드리프트 실패 메시지가 이 명령을 안내한다.
+
+**PostgreSQL 재검증**: 문서가 830 을 주장하고 있었다. 일회용 컨테이너에서
+마이그레이션 up/down/up + 전체 스위트를 실제로 다시 돌렸다.
+
+---
 
 ### 자율 루프 #20 — 제품 UX 전면 개선 + 스테이징 실사용 검증
 
@@ -912,7 +946,7 @@ cd backend && alembic revision --autogenerate -m "<설명>"
 
 | 무엇 | 명령 | 결과 |
 |---|---|---|
-| 백엔드 (SQLite) | `cd backend && pytest` | **1057 passed** |
+| 백엔드 (SQLite) | `cd backend && pytest` | **1060 passed** |
 | 백엔드 (PostgreSQL) | `python -m scripts.verify_postgres --url ... --with-tests` | 마이그레이션 up/down/up + 전체 테스트 통과 |
 | 케이스 | `python -m scripts.verify_cases` | 6케이스 통과 |
 | 프론트 단위 | `cd frontend && npx vitest run` | **108 passed** |

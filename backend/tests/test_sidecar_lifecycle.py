@@ -160,6 +160,46 @@ def test_plan_explains_reasons_in_words(tmp_path):
     assert "전문가 GT 가 바뀌었다" in plan["recompute"][0]["reason_text"][0]
 
 
+def test_the_command_covers_cases_that_have_no_sidecar_at_all(tmp_path):
+    """**"오래됨"과 "처음부터 없음"은 둘 다 계산 대상이다.**
+
+    예전에는 stale 만 명령에 넣었다. 6케이스 모두 sidecar 가 없는 상태에서
+    "재계산할 케이스가 없다"고 안내했고, 운영자는 할 일이 없다고 읽는다 —
+    실제로는 **어떤 케이스에도 AI 예측이 없는** 상태였다.
+    """
+    evaluations = [
+        {"case_id": "A", "needs_recompute": False, "reasons": [life.STALE_MISSING],
+         "details": {}, "unchecked": []},
+        {"case_id": "B", "needs_recompute": False, "reasons": [life.STALE_MISSING],
+         "details": {}, "unchecked": []},
+    ]
+    plan = life.build_plan(evaluations)
+
+    step = next(s for s in plan["steps"] if "run_model_predictions" in s)
+    assert "A" in step and "B" in step
+    assert "재계산할 케이스가 없다" not in " ".join(plan["steps"])
+
+
+def test_a_case_that_is_both_stale_and_missing_appears_once(tmp_path):
+    """명령에 같은 케이스를 두 번 넣으면 그대로 두 번 계산한다."""
+    evaluations = [
+        {"case_id": "A", "needs_recompute": True,
+         "reasons": [life.STALE_MISSING, life.STALE_MODEL_VERSION], "details": {}, "unchecked": []},
+    ]
+    step = next(s for s in life.build_plan(evaluations)["steps"] if "run_model_predictions" in s)
+    assert step.count("A") == 1
+
+
+def test_nothing_to_do_is_said_plainly(tmp_path):
+    """**할 일이 없을 때만** 없다고 말해야 한다."""
+    evaluations = [
+        {"case_id": "A", "needs_recompute": False, "reasons": [], "details": {}, "unchecked": []},
+    ]
+    plan = life.build_plan(evaluations)
+    assert any("전부 최신이다" in s for s in plan["steps"])
+    assert not any("run_model_predictions" in s for s in plan["steps"])
+
+
 def test_plan_states_that_predictions_are_not_grading(tmp_path):
     plan = life.build_plan([])
     assert "채점 기준이 아닙니다" in plan["note"]
