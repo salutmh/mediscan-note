@@ -25,6 +25,7 @@ AI 보조 피드백(참고) → 오답 재학습.
 | 영역 | 확인 내용 | 근거 |
 |---|---|---|
 | 인증 | scrypt 해싱, HMAC-SHA256 서명 + 만료 토큰, 401 강제 | `app/security.py`, `app/deps.py` |
+| SNS 로그인 | 토큰을 각 사에 되물어 **바뀌지 않는 식별자**를 저장. 미설정 제공자는 production 에서 거부 | `app/social_auth.py` |
 | 동의 | 필수 5 + 선택 1, **append-only** 이력(버전·시각) | `app/routers/auth.py:49`, `app/models.py:38` |
 | 채점 | **reference mask 전용** Dice/IoU/location_score. 보정 없음 | `app/grading.py:190`, `app/masks.py:103` |
 | 채점 거부 | 기준 마스크 없으면 422 `CASE_NOT_GRADABLE` + **이력 미생성** | `app/routers/cases.py:41` |
@@ -37,7 +38,7 @@ AI 보조 피드백(참고) → 오답 재학습.
 | 스키마 | Alembic이 기준, 기동 시 자동 upgrade + 레거시 DB 감지 | `app/db.py:47` |
 | 정적 자산 | 요청 주소 기준 절대 URL 생성 + **케이스 영상·마스크는 서명 URL 로만** (인증 없이 받을 수 없다) | `app/static_files.py`, `app/asset_urls.py` |
 | 보안 헤더 | nosniff / X-Frame-Options DENY / Referrer-Policy / COOP / Permissions-Policy. CSP 는 **추측해서 만들지 않는다**(MEDISCAN_CSP 로 지정) | `app/security_headers.py` |
-| 테스트 | 백엔드 **786개**(SQLite·PostgreSQL 양쪽) + 프론트 **74개** + E2E 7종 + 접근성·좁은화면 점검 | `backend/tests/`, `frontend/src/**/*.test.js` |
+| 테스트 | 백엔드 **806개**(SQLite·PostgreSQL 양쪽) + 프론트 **74개** + E2E 7종 + 접근성·좁은화면 점검 | `backend/tests/`, `frontend/src/**/*.test.js` |
 
 **이미 해결된 것은 다시 만들지 않는다.** 위 항목은 재구현 대상이 아니다.
 

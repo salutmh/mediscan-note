@@ -74,6 +74,12 @@
 | `INVALID_DIFFICULTY` / `INVALID_FINDINGS_STATUS` | 422 | 허용되지 않은 값 |
 | `NO_CHANGES` | 400 | PATCH 에 변경할 항목이 없음 |
 
+| `SOCIAL_NOT_CONFIGURED` | 503 | 해당 SNS 제공자의 실검증이 설정되지 않음 (production 에서만) |
+| `SOCIAL_INVALID` | 401 | SNS 토큰이 유효하지 않음 |
+| `SOCIAL_WRONG_AUDIENCE` | 401 | **다른 앱에서 발급된** SNS 토큰 |
+| `SOCIAL_PROVIDER_UNAVAILABLE` | 503 | SNS 제공자 서버에 연결하지 못함 (잠시 뒤 재시도) |
+| `SOCIAL_NO_SUBJECT` | 401 | SNS 응답에 사용자 식별자가 없음 |
+| `SOCIAL_UNSUPPORTED` | 401 | 지원하지 않는 제공자 |
 | `ASSET_URL_UNSIGNED` | 403 | 케이스 영상·마스크를 서명 없는 URL 로 요청 |
 | `ASSET_URL_INVALID` | 403 | 자산 URL 서명이 올바르지 않음 |
 | `ASSET_URL_EXPIRED` | 403 | 자산 URL 유효기간 만료 (화면을 새로 고치면 된다) |

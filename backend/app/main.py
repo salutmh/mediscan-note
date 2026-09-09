@@ -5,7 +5,16 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from app import asset_urls, config, inference, logging_config, model_predictions, scoring_config, security_headers
+from app import (
+    asset_urls,
+    config,
+    inference,
+    logging_config,
+    model_predictions,
+    scoring_config,
+    security_headers,
+    social_auth,
+)
 from app.cors import cors_kwargs, describe as describe_cors
 from app.db import DATABASE_URL, init_db
 from app import rate_limit as rate_limit_module
@@ -117,6 +126,8 @@ def health():
         # 배포 후 보안 헤더가 실제로 붙었는지 확인할 수 있어야 한다
         "security_headers": security_headers.describe(),
         "asset_urls": asset_urls.describe(),
+        # SNS 실검증 여부. 미설정 제공자는 production 에서 거부된다.
+        "social_login": social_auth.describe(),
         "models": inference.status(),
         # 무거운 volume 모델은 요청 시 추론하지 않고 미리 계산된 예측을 쓴다
         "precomputed_predictions": model_predictions.summary(),

@@ -20,7 +20,7 @@ from fastapi import APIRouter, HTTPException
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
-from app import password_reset, token_revocation
+from app import password_reset, social_auth, token_revocation
 from app.account import delete_account
 from app.deps import CurrentTokenPayload, CurrentUser, DbSession
 from app.models import Consent, User, utcnow
@@ -129,15 +129,30 @@ def login(payload: LoginRequest, db: DbSession):
 
 @router.post("/social-login")
 def social_login(payload: SocialLoginRequest, db: DbSession):
+    # production 에서 실검증이 설정되지 않은 제공자는 거부한다.
+    # 검증이 없으면 토큰 값만 아는 사람이 그 계정으로 들어간다 (계정 탈취 경로).
+    try:
+        social_auth.assert_usable(payload.provider)
+        # **토큰이 아니라 각 사가 알려준 식별자를 계정 키로 쓴다.**
+        # 토큰을 키로 쓰면 갱신될 때마다 같은 사람이 새 계정이 되어 학습 이력이 갈린다.
+        subject, verified = social_auth.resolve_subject(payload.provider, payload.provider_token)
+    except social_auth.SocialAuthError as exc:
+        status = social_auth.ERROR_STATUS.get(exc.reason, social_auth.DEFAULT_ERROR_STATUS)
+        code = social_auth.ERROR_CODES.get(exc.reason, "SOCIAL_INVALID")
+        raise _error(status, code, str(exc)) from exc
+
     user = db.scalar(
         select(User).where(
             User.provider == payload.provider,
-            User.provider_subject == payload.provider_token,
+            User.provider_subject == subject,
         )
     )
     if user:
         # 기존 사용자 재로그인 — consents 는 무시 (api-spec.md 1-3)
-        return _auth_response(user, is_new_user=False)
+        response = _auth_response(user, is_new_user=False)
+        if not verified:
+            response["provider_verified"] = False
+        return response
 
     # 신규 가입 — 동의 없이는 계정을 만들지 않는다
     missing = payload.consents.missing_required() if payload.consents else None
@@ -156,7 +171,7 @@ def social_login(payload: SocialLoginRequest, db: DbSession):
         user_id=_new_user_id(),
         nickname=f"{payload.provider}유저",
         provider=payload.provider,
-        provider_subject=payload.provider_token,
+        provider_subject=subject,
     )
     db.add(user)
     _save_consents(db, user.user_id, payload.consents)
@@ -170,14 +185,18 @@ def social_login(payload: SocialLoginRequest, db: DbSession):
         existing = db.scalar(
             select(User).where(
                 User.provider == payload.provider,
-                User.provider_subject == payload.provider_token,
+                User.provider_subject == subject,
             )
         )
         if existing is None:
             raise
         return _auth_response(existing, is_new_user=False)
     db.refresh(user)
-    return _auth_response(user, is_new_user=True)
+    response = _auth_response(user, is_new_user=True)
+    if not verified:
+        # 예시 로그인이라는 사실을 응답에도 남긴다 (화면이 숨기지 않게)
+        response["provider_verified"] = False
+    return response
 
 
 @router.get("/me")

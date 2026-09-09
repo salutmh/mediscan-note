@@ -332,11 +332,33 @@ def check_operations(report: Report, backup_dir: Path | None) -> None:
 
 
 # ------------------------------------------------- 사람이 판단할 항목
+def check_social_login(report: Report) -> None:
+    """검증 없는 SNS 로그인이 열려 있지 않은지.
+
+    검증이 없으면 토큰 값만 아는 사람이 그 계정으로 들어간다. production 에서는
+    앱이 거부하지만, 배포 전에 **어떤 제공자가 쓸 수 있는지** 알고 있어야 한다.
+    """
+    from app import social_auth
+
+    state = social_auth.describe()
+    if state["verified"]:
+        report.ok("SNS 실검증", f"설정됨: {', '.join(state['verified'])}")
+    if state["unverified"]:
+        report.warn(
+            "SNS 실검증",
+            f"미설정: {', '.join(state['unverified'])} — production 에서 503 으로 거부된다 "
+            "(계정 탈취를 막기 위해서다). 쓰려면 각 사 앱 ID 를 설정한다",
+        )
+
+
 def add_human_checks(report: Report) -> None:
     report.unknown("데이터셋·모델 이용 조건", "외부 사용자에게 열어도 되는지 (BLOCKER-1)")
     report.unknown("전문가 GT 검수", "마스크가 의학적으로 옳은지 (BLOCKER-2)")
     report.unknown("개인정보·규제 검토", "동의 이력 보관·접속기록 범위 (BLOCKER-3)")
-    report.unknown("SNS 실인증", "현재는 개발용 예시 로그인이다 (provider_token 미검증)")
+    report.unknown(
+        "SNS 앱 등록",
+        "각 사(카카오·구글·네이버)에 앱을 등록하고 ID 를 받아야 실검증을 켤 수 있다",
+    )
 
 
 def main() -> int:
@@ -366,6 +388,7 @@ def main() -> int:
         ("DB", lambda: check_database(report)),
         ("콘텐츠", lambda: check_content(report)),
         ("예측 sidecar", lambda: check_sidecars(report)),
+        ("SNS 로그인", lambda: check_social_login(report)),
         ("운영", lambda: check_operations(report, Path(args.backup_dir) if args.backup_dir else None)),
     ):
         try:

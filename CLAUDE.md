@@ -86,7 +86,10 @@
     1. 케이스별 영상 소견 전문가 검토(`case_findings`) — 지금은 null, 검토자·검토일 없이는 등록하지 않는다
     2. 화면 5 용 단일 이미지 2D 모델 (확보 전까지 `model_unavailable` 유지)
     3. 다른 부위 확장 — 팀원들이 `models/_template/` 복사해서 추가
-    4. **SNS provider_token 실검증** — 현재는 **개발용 예시 로그인**이지 실제 OAuth 가 아니다.
+    4. **SNS 앱 등록** — 토큰 실검증 로직은 구현됐다(`app/social_auth.py`).
+       각 사(카카오·구글·네이버)에 앱을 등록하고 ID 를 환경변수로 넣으면 켜진다.
+       **설정 전까지 production 은 SNS 로그인을 503 으로 거부한다** — 검증 없는
+       SNS 로그인은 토큰 값만 아는 사람이 그 계정으로 들어가는 계정 탈취 경로다.
        (배포 하드닝의 나머지는 완료: production 에서 `MEDISCAN_SECRET_KEY`/`MEDISCAN_CORS_ORIGINS`/
        `DATABASE_URL` 미설정 시 **기동 실패**, 개발 전용 스위치 3종도 production 에서 기동을 막는다.
        PostgreSQL 전환은 `scripts/verify_postgres.py` 로 검증 완료.)
@@ -158,8 +161,11 @@ medscannote/
 5개 필수 동의 + 마케팅 수신(선택) 1개를 반드시 받는다. 동의 없이는 계정이 생성되지 않도록 백엔드에서
 강제 검증한다 (`backend/app/routers/auth.py`의 `missing_required()` 체크 참고). 간편가입은 SNS(카카오/구글/네이버)
 + 이메일 로그인을 함께 지원하고, SNS 최초 가입도 동의 화면을 반드시 거치게 한다.
-**SNS 는 현재 개발용 예시 로그인이다** — `provider_token` 을 각 사 서버에 검증하지 않으므로
-실제 OAuth 가 아니며, 실서비스 전에 반드시 실검증을 붙여야 한다. 자세한 내용은
+**SNS 토큰 실검증은 구현돼 있다** (`app/social_auth.py`) — 각 사에 토큰을 되물어
+**바뀌지 않는 사용자 식별자**를 받아 계정 키로 쓴다. 각 사 앱 ID 만 환경변수로 넣으면 켜지고,
+설정 전까지 **production 은 SNS 로그인을 거부한다**(개발에서는 예시 로그인이 그대로 동작).
+검증 없이 토큰을 식별자로 쓰면 (a) 토큰 값만 아는 사람이 그 계정에 들어가고
+(b) 토큰이 갱신될 때마다 같은 사람이 새 계정이 된다. 자세한 내용은
 `docs/api-spec.md` 1장 참고.
 
 ## 시작 순서 (권장)

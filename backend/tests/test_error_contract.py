@@ -57,6 +57,11 @@ def _codes_in_source() -> set[str]:
         text = path.read_text(encoding="utf-8")
         for pattern in patterns:
             codes.update(pattern.findall(text))
+    # 정규식으로 못 잡는 것: 소스가 코드를 **레지스트리로 선언**하는 경우.
+    # 정규식만 늘리면 관계없는 대문자 문자열까지 걸린다 — 선언을 직접 읽는 편이 정확하다.
+    from app import social_auth
+
+    codes.update(social_auth.ERROR_CODES.values())
     return codes - NOT_ERROR_CODES
 
 

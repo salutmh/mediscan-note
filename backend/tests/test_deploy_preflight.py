@@ -190,7 +190,9 @@ def test_human_judgement_items_are_never_marked_ok():
     assert "데이터셋·모델 이용 조건" in names
     assert "전문가 GT 검수" in names
     assert "개인정보·규제 검토" in names
-    assert "SNS 실인증" in names
+    # 실검증 로직은 구현됐고 기계가 설정 여부를 확인한다.
+    # 남은 사람 판단은 "각 사에 앱을 등록하고 ID 를 받는 것"이다.
+    assert "SNS 앱 등록" in names
 
 
 def test_unknown_does_not_count_as_blocking():
