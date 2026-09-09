@@ -12,7 +12,7 @@
  *
  * 권한 차단은 **서버가** 한다 (403 ADMIN_REQUIRED). 이 화면의 숨김은 UX 일 뿐이다.
  */
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import {
   adminDeleteFindings,
@@ -25,6 +25,12 @@ import {
 
 const cases = ref([])
 const loading = ref(true)
+// 케이스가 늘면(24건 확장 예정) 스크롤로 찾게 된다. 검색·필터를 미리 둔다.
+const query = ref('')
+const filter = ref('all')
+// 숨김은 되돌릴 수 있지만 그 사이 학습자는 케이스를 잃는다.
+// 제출 이력이 쌓인 케이스는 특히 그렇다 — 확인을 한 번 거친다.
+const confirmingHide = ref(null)
 const error = ref('')
 const notice = ref('')
 const forbidden = ref(false)
@@ -51,6 +57,45 @@ const STATUS_LABEL = {
  * 집계만 오고 개인 학습 내용은 나오지 않는다.
  */
 const summary = ref(null)
+
+const FILTERS = [
+  { key: 'all', label: '전체' },
+  { key: 'active', label: '노출 중' },
+  { key: 'hidden', label: '숨김' },
+  { key: 'no_findings', label: '소견 없음' },
+  { key: 'not_gradable', label: '채점 불가' },
+]
+
+const visibleCases = computed(() => {
+  const text = query.value.trim().toLowerCase()
+  return cases.value.filter((c) => {
+    if (text) {
+      const haystack = `${c.case_id} ${c.body_part ?? ''} ${c.disease ?? ''}`.toLowerCase()
+      if (!haystack.includes(text)) return false
+    }
+    if (filter.value === 'active') return c.is_active
+    if (filter.value === 'hidden') return !c.is_active
+    if (filter.value === 'no_findings') return !c.has_case_findings
+    if (filter.value === 'not_gradable') return !c.gradable
+    return true
+  })
+})
+
+const filterCount = (key) => {
+  if (key === 'all') return cases.value.length
+  if (key === 'active') return cases.value.filter((c) => c.is_active).length
+  if (key === 'hidden') return cases.value.filter((c) => !c.is_active).length
+  if (key === 'no_findings') return cases.value.filter((c) => !c.has_case_findings).length
+  return cases.value.filter((c) => !c.gradable).length
+}
+
+/**
+ * 소견이 없으면 `검토 완료`로 바꿀 수 없다 (서버가 422 FINDINGS_REQUIRED 로 거부).
+ *
+ * 예전에는 화면에서 고를 수 있게 해놓고 서버가 실패시켰다 — 사용자가 고른 뒤에야
+ * 안 된다는 것을 알게 되는 구조다. 고를 수 없게 하고 **왜 안 되는지 함께 보여준다.**
+ */
+const statusOptionDisabled = (c, value) => value === 'approved' && !c.has_case_findings
 
 async function load() {
   loading.value = true
@@ -88,12 +133,28 @@ async function patchCase(caseId, patch, message) {
   }
 }
 
-const toggleActive = (c) =>
-  patchCase(
+/**
+ * 노출/숨김 전환.
+ *
+ * **숨기는 쪽은 확인을 거친다.** 되돌릴 수는 있지만 그 사이 학습자는 케이스를 잃고,
+ * 복습노트의 재도전 경로도 막힌다. 제출 이력이 쌓인 케이스일수록 영향이 크다.
+ * 다시 노출하는 쪽은 확인하지 않는다 — 되돌리는 방향이라 위험하지 않다.
+ */
+function requestToggle(c) {
+  if (!c.is_active) return applyToggle(c)
+  confirmingHide.value = c.case_id
+  notice.value = ''
+  error.value = ''
+}
+
+function applyToggle(c) {
+  confirmingHide.value = null
+  return patchCase(
     c.case_id,
     { is_active: !c.is_active },
     c.is_active ? `${c.case_id} 을(를) 숨겼습니다.` : `${c.case_id} 을(를) 다시 노출했습니다.`,
   )
+}
 
 const changeDifficulty = (c, value) =>
   patchCase(c.case_id, { difficulty: value }, `${c.case_id} 난이도를 변경했습니다.`)
@@ -283,7 +344,29 @@ onMounted(load)
         </dl>
       </section>
 
-      <table v-if="!loading" class="admin-table">
+      <!-- 케이스가 늘면 스크롤로 찾게 된다. 지금 6개지만 24건 확장이 예정돼 있다. -->
+      <div v-if="!loading && cases.length" class="toolbar">
+        <label class="search">
+          <span class="muted tiny">케이스 찾기</span>
+          <input v-model="query" type="search" placeholder="케이스 ID · 부위 · 질환" />
+        </label>
+        <div class="segmented">
+          <button
+            v-for="f in FILTERS"
+            :key="f.key"
+            :class="{ active: filter === f.key }"
+            @click="filter = f.key"
+          >
+            {{ f.label }} <small>{{ filterCount(f.key) }}</small>
+          </button>
+        </div>
+      </div>
+
+      <p v-if="!loading && cases.length && !visibleCases.length" class="muted card">
+        조건에 맞는 케이스가 없습니다.
+      </p>
+
+      <table v-if="!loading && visibleCases.length" class="admin-table">
         <thead>
           <tr>
             <th>케이스</th>
@@ -295,7 +378,7 @@ onMounted(load)
           </tr>
         </thead>
         <tbody>
-          <template v-for="c in cases" :key="c.case_id">
+          <template v-for="c in visibleCases" :key="c.case_id">
             <tr :class="{ inactive: !c.is_active }">
               <td>
                 <strong>{{ c.case_id }}</strong>
@@ -303,8 +386,26 @@ onMounted(load)
                 <div v-if="!c.gradable" class="sub warn">기준 마스크 없음 (채점 불가)</div>
               </td>
               <td>
-                <button class="sm" @click="toggleActive(c)">
+                <!--
+                  버튼에는 **동작**을 적는다. 예전에는 "노출 중"이라고 적혀 있었는데
+                  그건 상태라서, 누르면 노출된다고 읽힐 수 있었다.
+                  현재 상태는 옆의 표시로 따로 보여준다.
+                -->
+                <span class="state-tag" :class="{ on: c.is_active }">
                   {{ c.is_active ? '노출 중' : '숨김' }}
+                </span>
+                <template v-if="confirmingHide === c.case_id">
+                  <div class="confirm">
+                    <p class="tiny">
+                      숨기면 학습자 목록과 복습노트 재도전에서 사라집니다.
+                      <strong v-if="c.submission_count">제출 {{ c.submission_count }}건</strong>
+                    </p>
+                    <button class="sm danger" @click="applyToggle(c)">숨기기</button>
+                    <button class="sm ghost" @click="confirmingHide = null">취소</button>
+                  </div>
+                </template>
+                <button v-else class="sm" @click="requestToggle(c)">
+                  {{ c.is_active ? '숨기기' : '다시 노출' }}
                 </button>
               </td>
               <td>
@@ -323,10 +424,23 @@ onMounted(load)
                   :disabled="c.has_case_findings"
                   @change="changeStatus(c, $event.target.value)"
                 >
-                  <option v-for="(label, value) in STATUS_LABEL" :key="value" :value="value">
-                    {{ label }}
+                  <!--
+                    소견이 없으면 `검토 완료` 를 고를 수 없다 (서버가 422 로 거부한다).
+                    예전에는 고를 수 있게 해놓고 실패시켰다 — 고른 뒤에야 안 된다는 것을
+                    알게 되는 구조였다.
+                  -->
+                  <option
+                    v-for="(label, value) in STATUS_LABEL"
+                    :key="value"
+                    :value="value"
+                    :disabled="statusOptionDisabled(c, value)"
+                  >
+                    {{ label }}{{ statusOptionDisabled(c, value) ? ' (소견 필요)' : '' }}
                   </option>
                 </select>
+                <div v-if="!c.has_case_findings" class="sub muted tiny">
+                  검토 완료로 표시하려면 소견을 먼저 등록합니다
+                </div>
               </td>
               <td class="tnum">{{ c.submission_count }}</td>
               <td>
@@ -428,6 +542,63 @@ onMounted(load)
 </template>
 
 <style scoped>
+/* ---- 검색·필터 (케이스가 늘었을 때 찾기 위한 것) ---- */
+.toolbar {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin: 16px 0 12px;
+}
+.search {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 240px;
+}
+.search input {
+  min-height: 36px;
+}
+
+/* ---- 노출 상태와 동작을 분리해 보여준다 ---- */
+.state-tag {
+  display: inline-block;
+  margin-bottom: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  background: var(--gray-100, #eceef2);
+  color: var(--ink-muted, #667);
+}
+.state-tag.on {
+  background: #e8f6ef;
+  color: #1a7f5a;
+}
+
+/* ---- 숨기기 확인 ---- */
+.confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid #f0c9c4;
+  border-radius: 8px;
+  background: #fdf6f5;
+}
+.confirm p {
+  margin: 0;
+  color: #8a3b2f;
+}
+.btn.sm.danger,
+button.sm.danger {
+  background: #c0392b;
+  color: #fff;
+  border-color: #c0392b;
+}
+.tiny {
+  font-size: 0.75rem;
+}
+
 .page {
   max-width: 1040px;
   margin: 0 auto;

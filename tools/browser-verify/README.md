@@ -62,6 +62,7 @@ node tools/browser-verify/responsive-check.mjs ./out/responsive 9333
 #   python -m scripts.grant_admin --email <이메일>
 node tools/browser-verify/case-review.mjs ./out/review 9333 <운영자이메일>
 node tools/browser-verify/error-paths.mjs ./out/errors 9333
+node tools/browser-verify/admin-ux.mjs ./out/admin 9333 <운영자이메일>
 ```
 
 ## 참고
@@ -167,3 +168,19 @@ node tools/browser-verify/error-paths.mjs ./out/errors 9333
 
 백엔드 연결 실패는 **실제 서버를 죽이지 않고** `window.fetch` 를 실패시켜 재현한다 —
 같은 세션의 다른 검증에 영향을 주지 않기 위해서다.
+
+
+---
+
+## admin-ux.mjs — 운영자 화면
+
+**운영자가 실수로 학습자에게 영향을 주지 않는가**를 본다:
+
+- 검색·필터가 목록을 좁히는가 (케이스가 늘면 스크롤로 못 찾는다)
+- 버튼이 **동작**을 말하는가 (예전엔 "노출 중"이라 상태였다 — 누르면 노출된다고 읽힌다)
+- 숨기기 전에 확인을 거치고, **무엇이 사라지는지·제출 이력 몇 건인지** 알려주는가
+- 소견 없이 `검토 완료` 를 **고를 수 없는가** (예전엔 고를 수 있게 해놓고 서버가 422 로 실패시켰다)
+- 숨기면 학습자 목록에서 실제로 사라지는가 (그리고 되돌리면 돌아오는가)
+
+마지막 검사는 케이스를 잠시 숨겼다가 **되돌린다** — 검증이 데이터를 남기지 않게 한다.
+운영자 계정이 필요하다: `python -m scripts.grant_admin --email <이메일>`
