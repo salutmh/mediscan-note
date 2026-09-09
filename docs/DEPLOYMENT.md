@@ -149,13 +149,26 @@ python -m scripts.backup_db --out /var/backups/mediscan --keep 14
 > ⚠️ **백업 파일에는 계정·동의 이력·학습 이력이 들어 있다.** 원본 DB 와 같은 수준으로 보호한다.
 > git·공개 저장소·공유 폴더에 두지 않는다.
 
-**복구 연습을 한 번은 해본다.** 해본 적 없는 백업은 백업이 아니다.
+**복구 연습은 자동화돼 있다.** 해본 적 없는 백업은 백업이 아니다.
+
+```bash
+python -m scripts.restore_drill --backup /var/backups/mediscan/mediscan-<시각>.sqlite
+```
+
+백업을 **격리된 임시 위치**로 되돌리고, 마이그레이션을 최신까지 올린 뒤,
+**앱을 실제로 띄워** 가입 → 케이스 목록 → 케이스 상세가 도는지 확인한다.
+운영 DB 는 건드리지 않는다 (이 스크립트에는 운영 DB 로 되돌리는 경로가 없다).
+실패하면 종료코드 1 이므로 백업 cron 과 함께 주기적으로 돌릴 수 있다.
+
+수동으로 할 때는:
 - SQLite: 서버를 내리고 파일을 제자리에 되돌린다
 - PostgreSQL: `psql -d mediscan -f <덤프파일>`
 - 보관 중인 백업만 다시 검사: `python -m scripts.backup_db --verify-only /var/backups/mediscan/mediscan-<시각>.sqlite`
 
-> 검증은 "이 파일을 읽을 수 있고 안에 데이터가 있다" 까지만 확인한다.
-> **실제로 되돌려 서비스가 뜨는지는 사람이 한 번 해봐야 한다.**
+> `backup_db.py` 의 검증은 "이 파일을 읽을 수 있고 안에 데이터가 있다" 까지다.
+> **되돌려서 서비스가 뜨는지는 `restore_drill.py` 가 확인한다** — 잘린 파일과
+> 옛 스키마 백업 둘 다 실제로 잡히는 것을 확인했다.
+> 다만 **실제 복구 작업(서버 내리고 파일 되돌리기)은 여전히 사람이 한다.**
 
 ---
 
@@ -188,6 +201,7 @@ MEDISCAN_LOG_FORMAT=json     # text(기본) | json — 로그 수집기에 넣�
 | 모델 성능 | `python -m scripts.evaluate_model` |
 | 운영자 목록 | `python -m scripts.grant_admin --list` |
 | 동시 쓰기 확인 | `python -m scripts.load_smoke --users 30` — 오류 없이 끝나야 한다 |
+| 복구 훈련 | `python -m scripts.restore_drill --backup <최근 백업>` — 되돌린 DB 로 앱이 떠야 한다 |
 
 콘텐츠 관리(활성/비활성, 난이도, 전문가 소견)는 운영자 계정으로 `/admin/cases` 화면에서 한다.
 
