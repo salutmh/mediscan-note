@@ -10,15 +10,14 @@
 | 항목 | 값 |
 |---|---|
 | 최종 갱신 | 2026-09-09 |
-| 현재 커밋 | `ebaafce` — **origin/main 과 동기 (push 완료)** |
+| 현재 커밋 | `3c9ea47` |
 | 현재 브랜치 | `main` |
 | 원격 | `https://github.com/salutmh/mediscan-note.git` (Public) |
 | 현재 모드 | **지속 자율 개발 루프** (Phase 1~8 은 최초 백로그였고 전부 완료) |
 | STATUS | `IN_PROGRESS` — 사이클마다 제품 재평가 → 최고가치 작업 선정 |
-| 마지막 전체 검증 | 백엔드 **563 passed** (SQLite·PostgreSQL 양쪽) / 프론트 **59 passed** / E2E 4종 / 접근성·좁은화면 점검 0건 / `verify_cases` 6케이스 / 동시 쓰기 30명 정상 |
+| 마지막 전체 검증 | 백엔드 **701 passed** / 프론트 **59 passed** / E2E 5종 / 접근성·좁은화면 점검 0건 / `verify_cases` 6케이스 |
 
-> **push 는 매번 사용자 승인이 필요하다.** 2026-09-09 에 42개 커밋을 fast-forward 로 push했다
-> (`ef56005..ebaafce`). 그 이후 쌓이는 커밋은 다시 승인을 받아야 한다.
+> **push 는 매번 사용자 승인이 필요하다.**
 > force push / rebase / reset --hard / history rewrite 는 하지 않는다.
 
 ---
@@ -603,20 +602,74 @@ Phase 백로그가 끝난 뒤 스스로 선정해서 진행한 작업들이다.
 
 ---
 
-## 5. 아직 하지 않은 작업
+## 5. 케이스 검수 워크플로 · 운영 자동화 (2026-09-09, 루프 #35~39)
 
-- **케이스 확장** — 후보 24건 선별 완료. 다음은 **육안 검수**(사람)
-- **`case_findings` 내용** — 구조는 완성, 전문가 입력 대기 (BLOCKER-2)
-- **이메일 인증** — 메일 발송 수단 필요 (BLOCKER-4)
-- **접속기록(감사 로그)** — 범위 판단 필요 (BLOCKER-3)
-- **예측 sidecar 재계산 자동화** — 지금은 수동 3단계. `verify_cases` 가 오래된 예측을 잡아주므로 급하지 않다
-- **키보드만으로 ROI 그리기** — 포인터 자유곡선이라 별도 입력 수단이 필요 (RELEASE_READINESS L4)
-- **부하 테스트** — 동시성 정확성은 확인했지만 부하는 미실시
-- **`Submission.explanation` 노출** — 저장은 되는데 아직 어디에도 안 보인다 (L5)
+사용자 요청으로 케이스 검수 UI 를 만들고, 이어서 운영 자동화 백로그를 진행했다.
+
+### 케이스 후보 기술 검수 (`/admin/review`)
+
+**핵심 설계: 검수 상태를 셋으로 분리했다.** 하나로 합치면 "검수 완료"가 어느 층위의
+검수인지 알 수 없게 되고, 결국 검수되지 않은 GT 가 학습자의 채점 기준이 된다.
+
+| 상태 | 누가 정하나 | 뜻 |
+|---|---|---|
+| `technical_review_status` | 운영자 (이 화면) | export 파이프라인이 제대로 돌았는가 |
+| `expert_review_status` | 전문가만 | 의학적으로 옳은가 (기본 `pending`) |
+| `activation_status` | 둘 다 끝난 뒤 | 학습자에게 보이는가 |
+
+**`TECH_PASS` 로는 나머지 둘을 바꿀 수 없다** — API 스키마가 아예 받지 않고,
+테스트가 화면·서버 양쪽에서 고정한다. AI 예측은 GT 와 다른 색·점선 블록으로 분리한다.
+
+관련: `app/review_store.py` · `app/review_candidates.py` · `app/routers/review.py` ·
+`frontend/src/views/CaseReviewView.vue` · `docs/CASE_REVIEW_CHECKLIST.md`
+
+### 운영 자동화 (이번에 추가한 스크립트)
+
+| 스크립트 | 무엇 | 안전 규칙 |
+|---|---|---|
+| `review_package.py` | 검수 결과 summary + 다음 단계 manifest **후보** | 등록·활성화하지 않는다. 난이도·소견은 비운다 |
+| `preflight_candidates.py` | 기술 통과 후보 사전 검증 | 의료 판단 없음 |
+| `sidecar_manage.py` | 예측 sidecar status/plan/validate/promote | **검증 실패분은 승격하지 않는다.** 승격 전 백업 |
+| `restore_drill.py` | 백업을 되돌려 **앱이 실제로 뜨는지** | 운영 DB 로 되돌리는 경로가 없다 |
+| `deploy_preflight.py` | 배포 직전 점검 | 사람 판단 항목은 **"확인못함"** 으로 남긴다 |
+
+### 이번에 고친 실제 결함
+
+| 무엇이 잘못돼 있었나 |
+|---|
+| 검수 화면에서 PASS 해도 **상단 진행 현황이 갱신되지 않았다** (서버 스냅샷을 그대로 씀) |
+| **케이스 등록이 전체 한 트랜잭션**이라 20번째에서 실패하면 앞 19건이 날아가고, DB 는 롤백되는데 **static 에 파일은 남았다** |
+| `pre_review_check` 에서 **빈 마스크가 경고 없이 통과**했다 |
+| `restore_drill` 서브프로세스 출력을 cp949 로 읽어 한국어 로그에서 UnicodeDecodeError |
+| `deploy_preflight` 에서 DB 연결 실패가 **전체 점검을 중단**시켜 환경 설정 결과까지 잃었다 |
 
 ---
 
-## 6. 변경된 주요 파일
+## 6. 아직 하지 않은 작업
+
+**사람이 있어야 하는 것**
+- **케이스 24건 육안 검수** — `/admin/review` 에서 판단하면 된다. 준비는 전부 끝났다
+  (export · 검수 시트 · 사전점검 · 기록 저장). 이게 제품을 가장 크게 바꾼다
+- **`case_findings` 입력** — 구조 완성, 전문가 대기 (BLOCKER-2)
+
+**코드로 가능한 것 (남은 백로그)**
+- error-path E2E (오류 화면·복구 경로를 브라우저에서)
+- security review 2차
+- API error contract 정리
+- Admin UX
+- dependency/license inventory
+- documentation drift 자동 점검
+- 키보드로 ROI 입력할 수단 (설계 필요)
+- `Submission.explanation` 스냅샷을 어디에 보여줄지
+
+**외부 수단·판단이 필요한 것**
+- 이메일 인증 (BLOCKER-4)
+- 접속기록(감사 로그) 범위 (BLOCKER-3)
+- SNS 실인증 연동 — **CLAUDE.md 가 "실서비스 전 반드시"라고 적은 유일한 하드닝 잔여 항목**
+
+---
+
+## 7. 변경된 주요 파일
 
 **Phase 2**
 - 신규: `backend/app/config.py`, `backend/app/cors.py`, `backend/app/rate_limit.py`, `backend/app/account.py`
@@ -628,7 +681,7 @@ Phase 백로그가 끝난 뒤 스스로 선정해서 진행한 작업들이다.
 
 ---
 
-## 7. Migration 여부
+## 8. Migration 여부
 
 마이그레이션 3건 추가 (**전부 추가 전용, 데이터 파괴 없음**):
 - `e81bbce560b5` cases.findings_status (Phase 4)
@@ -643,13 +696,13 @@ cd backend && alembic revision --autogenerate -m "<설명>"
 
 ---
 
-## 8~10. 테스트
+## 9~10. 테스트
 
 **마지막 전체 검증 (자율 루프 #32 이후)**
 
 | 무엇 | 명령 | 결과 |
 |---|---|---|
-| 백엔드 (SQLite) | `cd backend && pytest` | **563 passed** |
+| 백엔드 (SQLite) | `cd backend && pytest` | **701 passed** |
 | 백엔드 (PostgreSQL) | `python -m scripts.verify_postgres --url ... --with-tests` | 마이그레이션 up/down/up + 전체 테스트 통과 |
 | 케이스 | `python -m scripts.verify_cases` | 6케이스 통과 |
 | 프론트 단위 | `cd frontend && npx vitest run` | **59 passed** |
@@ -666,7 +719,8 @@ cd backend && alembic revision --autogenerate -m "<설명>"
 | Phase 1 (시작) | 241 | 0 |
 | Phase 8 | 382 | 0 |
 | 자율 #19 | 475 | 40 |
-| 자율 #32 (현재) | **563** | **59** |
+| 자율 #32 | 563 | 59 |
+| 루프 #39 (현재) | **701** | **59** |
 
 **테스트를 돌릴 때 알아둘 것**
 - E2E 는 백엔드를 `MEDISCAN_RATE_LIMIT=0` 으로 띄운다 (반복 실행하면 한도에 걸린다).
@@ -692,63 +746,75 @@ cd backend && alembic revision --autogenerate -m "<설명>"
 
 ## 13. NEXT STEP — 다음 세션이 가장 먼저 할 일
 
-> **Phase 1~8 과 자율 루프 #1~32 가 전부 끝났다. 이미 있는 것을 다시 만들지 말 것.**
-> 4절(자율 루프 #20~32)과 `docs/RELEASE_READINESS.md` 3~6절을 먼저 보고 이어간다.
+> **Phase 1~8 과 자율 루프가 전부 끝났다. 이미 있는 것을 다시 만들지 말 것.**
+> 4·5절과 `docs/RELEASE_READINESS.md` 3~6절을 먼저 본다.
 >
-> **1순위 — 사람이 있어야 진행되는 것 (지금 제품을 가장 크게 바꾼다)**
-> - [ ] **케이스 확장**: 후보 24건이 선별돼 있다 (좌우 12:12 / 크기 8:8:8).
->       `scripts/screen_vs_seg_dataset.py` 로 목록을 다시 얻고,
->       export → **육안 검수** → 자산 → import → verify 순서로 등록한다.
->       육안 검수는 사람이 오버레이를 보는 자리라 건너뛸 수 없다.
->       지금 6케이스로는 학습 분량이 부족하다 — **이게 제품을 가장 크게 바꾼다.**
-> - [ ] **`case_findings` 입력**: 구조는 완성돼 있다. 전문가가 `/admin/cases` 에서 입력한다.
->       열람률 지표(#32)가 쌓이면 "쓸 가치가 있는가"를 숫자로 볼 수 있다.
+> **1순위 — 사람이 있어야 진행되는 것**
+> - [ ] **케이스 24건 육안 검수**: `/admin/review` 에서 카드를 보고 PASS/HOLD/REJECT.
+>       준비는 전부 끝났다 (export · 검수 시트 · 기계 사전점검 · 기록 저장 · 단축키).
+>       운영자 계정이 필요하다: `python -m scripts.grant_admin --email <이메일>`
+>       판단 기준은 `docs/CASE_REVIEW_CHECKLIST.md` 2절.
+>       **6케이스로는 학습 분량이 부족하다 — 이게 제품을 가장 크게 바꾼다.**
+> - [ ] **`case_findings` 입력**: 전문가가 `/admin/cases` 에서 (BLOCKER-2)
 >
-> **2순위 — 코드로 가능한 것 (남은 것이 많지 않다)**
-> - [ ] 예측 sidecar 재계산 자동화 (수동 3단계. `verify_cases` 가 오래된 예측을 잡아주므로 급하지 않다)
-> - [ ] 키보드로 ROI 를 입력할 수단 (자유곡선 대체 — 격자 선택 등. 설계가 필요하다)
-> - [ ] `Submission.explanation` 스냅샷을 어디에 보여줄지 (지금은 저장만 된다)
-> - [ ] 부하 테스트 (동시성 **정확성**은 #26·#27 에서 확인했다. 부하는 별개다)
+> 검수가 끝나면 이어지는 것은 전부 준비돼 있다:
+> ```bash
+> python -m scripts.review_package --review-root data/expansion_review --export-root data/expansion_export
+> python -m scripts.preflight_candidates --review-root data/expansion_review --export-root data/expansion_export
+> # 통과분만 자산 생성 -> import_cases (is_active=false 로 들어간다)
+> ```
 >
-> **3순위 — 외부 수단·판단이 필요한 것**
-> - [ ] 이메일 인증 (BLOCKER-4). Closed Beta 규모에서는 현재 운영자 발급으로 충분하다고 봤다
-> - [ ] 접속기록(감사 로그) 범위 (BLOCKER-3)
-> - [ ] SNS 실인증 연동
+> **2순위 — 코드로 가능한 것 (사용자가 준 백로그 순서)**
+> - [ ] error-path E2E — 오류 화면·복구 경로를 브라우저에서 확인
+> - [ ] security review 2차
+> - [ ] API error contract 정리
+> - [ ] Admin UX
+> - [ ] dependency / license inventory
+> - [ ] documentation drift 자동 점검
+>
+> **3순위 — 외부 수단·판단**
+> - [ ] SNS 실인증 (CLAUDE.md 가 "실서비스 전 반드시"라고 적은 유일한 하드닝 잔여 항목)
+> - [ ] 이메일 인증 (BLOCKER-4) / 접속기록 범위 (BLOCKER-3)
 >
 > ---
 >
 > **작업 규칙 (실제로 사고가 났던 것들)**
 >
 > *검증*
-> - 테이블을 추가하면 **PostgreSQL 검증을 다시 돌린다** (두 번 돌려 두 번 다 문제를 잡았다)
-> - 백엔드를 고쳤으면 **uvicorn 을 다시 띄운다** (옛 프로세스가 포트를 잡으면 새 엔드포인트가 404)
-> - **점검 도구는 무엇을 봤는지 함께 출력한다.** 접근성 점검을 만들 때 두 번 틀렸고
->   둘 다 "통과"로 보였다 (로그인한 채로 로그인 화면을 열어 리다이렉트, `?tab=` 으로
->   안 바뀌는 탭). 0건이 "제대로 봤는데 없음"인지 "아무것도 못 봤음"인지 구분되어야 한다
-> - 어떤 동작을 새로 만들면 **켜지는 것과 안 켜지는 것을 모두 확인한다.** 해설 열람은
->   "스크롤하면 기록된다"와 "스크롤 안 하면 기록 안 한다"를 둘 다 봤다
+> - 테이블을 추가하면 **PostgreSQL 검증을 다시 돌린다**
+> - 백엔드를 고쳤으면 **uvicorn 을 다시 띄운다** (옛 프로세스가 포트를 잡으면 404)
+> - **점검 도구는 무엇을 봤는지 함께 출력한다.** 0건 지적이 "제대로 봤는데 없음"인지
+>   "아무것도 못 봤음"인지 구분되어야 한다 (접근성 점검에서 두 번 틀렸고 둘 다 통과로 보였다)
+> - 어떤 동작을 새로 만들면 **켜지는 것과 안 켜지는 것을 모두 확인한다**
+> - **"전부 통과"가 나오면 일부러 깨뜨려 본다.** 그렇게 해서 빈 마스크가 경고 없이
+>   통과하던 것과 sidecar 자기모순을 찾았다
+> - **점검 도구는 한 항목이 터져도 나머지를 계속한다** (deploy_preflight 에서 겪었다)
 >
 > *설계*
-> - 관리 화면에서 설정하는 값이 **학습자 경로까지 실제로 가는지** 확인한다.
->   이번 세션에 반쪽 기능을 3건 더 찾았다 (회차·소요시간·해설 열람)
-> - 정책(비밀번호 길이 등)을 바꾸면 **그 정책을 쓰는 모든 곳**을 찾는다 (E2E 스크립트 포함)
+> - 관리 화면에서 설정하는 값이 **학습자 경로까지 실제로 가는지** 확인한다
 > - 개발 편의 스위치를 추가하면 **production 에서 막을지 정한다** (`config.DEV_ONLY_FLAGS`)
-> - 설정을 읽을 때 **잘못된 값을 기본값으로 되돌리지 않는다.** 그게 "조용히 잘못됨"이다
-> - 없는 값을 0 으로 채우지 않는다 (첫 시도의 이전 점수, 제출 없을 때의 열람률)
-> - UI 문자열에 API 경로·내부 필드명·문서 참조·실행 방법이 새지 않게 한다
+> - 설정을 읽을 때 **잘못된 값을 기본값으로 되돌리지 않는다** — 그게 "조용히 잘못됨"이다
+> - 없는 값을 0 으로 채우지 않는다
+> - **확인하지 못한 것을 "이상 없음"으로 뭉개지 않는다** (unchecked / 확인못함으로 남긴다)
+> - DB 와 파일을 함께 바꾸는 작업은 **케이스 단위로 원자화**한다 (import_cases 참고)
+> - UI 문자열에 API 경로·내부 필드명·실행 방법이 새지 않게 한다
+>
+> *의료 안전*
+> - **기술 검수 ≠ 전문가 검수 ≠ 서비스 활성 승인.** 상태를 합치지 않는다
+> - AI 예측은 GT 와 시각적으로 완전히 분리한다 (VS-SEG-204 가 반례다)
+> - 난이도·소견을 자동으로 채우지 않는다. 비워 두는 것이 정답이다
 >
 > *테스트*
 > - admin 엔드포인트를 추가하면 `tests/test_admin.py` 의 `ADMIN_ENDPOINTS` 에도 넣는다
 > - 사용자 데이터 테이블을 추가하면 `conftest._clean_user_data` 에도 넣는다
 > - 동시성은 **스레드 대신 인터리빙을 결정적으로 만들어** 테스트한다
->   (스레드로는 재현될 때도 있고 아닐 때도 있어 회귀 테스트가 못 된다)
 > - E2E 반복 실행은 `MEDISCAN_RATE_LIMIT=0` 으로 띄운 백엔드에서 (개발 전용)
+> - 테스트가 실제 `static/` 을 건드리지 않게 `CASES_DIR` 을 monkeypatch 한다
 >
 > *셸*
-> - 파이썬/JS 파일을 bash heredoc 으로 쓰면 이스케이프가 깨진다. 파일 작성은 전용 도구를,
->   기존 파일 수정은 파이썬 스크립트를 쓴다
-> - 콘솔이 cp949 라 `print()` 에 em-dash 를 넣으면 죽는다. `PYTHONIOENCODING=utf-8` 을 쓰거나
->   출력에는 `-` 를 쓴다
+> - 파이썬/JS 파일을 bash heredoc 으로 쓰면 이스케이프가 깨진다 — 전용 도구를 쓴다
+> - 콘솔이 cp949 라 `PYTHONIOENCODING=utf-8` 을 붙인다.
+>   서브프로세스 출력도 `encoding="utf-8"` 로 읽는다
 
 ---
 
