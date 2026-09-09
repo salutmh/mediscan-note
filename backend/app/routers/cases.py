@@ -14,11 +14,13 @@ from app.grading import InvalidRoi, NotGradable, evaluate_submission, is_gradabl
 from app.models import Case, CaseSlice, Submission
 from app.repository import (
     best_dice,
+    case_progress_map,
     has_matched_case_ids,
     needs_review_case_ids,
     previous_attempt,
 )
 from app.static_files import absolute_url
+from app.timefmt import to_kst_iso
 
 router = APIRouter(prefix="/api/cases", tags=["cases"])
 
@@ -57,7 +59,7 @@ def _progress(attempt: int, previous, previous_best, current_dice) -> dict:
         else {
             "dice": previous.dice,
             "grade": previous.grade,
-            "submitted_at": previous.submitted_at.isoformat() if previous.submitted_at else None,
+            "submitted_at": to_kst_iso(previous.submitted_at),
         },
         # 직전보다 나빠도 지금까지의 최고는 남는다 (학습자가 뒤로 갔다고 느끼지 않게)
         "best_dice": previous_best if previous_best is not None else current_dice,
@@ -135,6 +137,10 @@ def list_cases(user: CurrentUser, db: DbSession, body_part: str | None = None):
 
     matched = has_matched_case_ids(db, user.user_id)
     review = needs_review_case_ids(db, user.user_id)
+    # **시도 요약을 함께 내려보낸다.** 목록이 has_matched/needs_review 두 boolean 만
+    # 받던 시절에는 "몇 번 풀었는지"를 화면에 보여줄 수 없었다 — 데이터는
+    # submissions 에 다 있었는데 화면까지 가지 못했다. 사용자당 한 번에 모아 온다.
+    progress = case_progress_map(db, user.user_id)
     return {
         "cases": [
             {
@@ -148,10 +154,33 @@ def list_cases(user: CurrentUser, db: DbSession, body_part: str | None = None):
                 # 전문가가 지정한 난이도. 미지정이면 null 이고 화면에서 아무것도 표시하지 않는다
                 # (추측해서 채우지 않는다 — CONTENT_GUIDELINES 6절).
                 "difficulty": c.difficulty,
+                # 한 번도 풀지 않았으면 **null 이다.** 0 으로 채우지 않는다 —
+                # "0점"과 "아직 안 풀었음"은 완전히 다른 상태다.
+                "progress": _case_progress(progress.get(c.case_id)),
             }
             for c in cases
         ]
     }
+
+
+def _case_progress(entry: dict | None) -> dict | None:
+    """목록 카드가 쓸 시도 요약. 없는 값은 넣지 않는다."""
+    if not entry:
+        return None
+    return {
+        "attempts": entry.get("attempts", 0),
+        "best_dice": entry.get("best_dice"),
+        "latest_dice": entry.get("latest_dice"),
+        "latest_grade": entry.get("latest_grade"),
+        "best_location_score": entry.get("best_location_score"),
+        "last_attempt_at": _iso(entry.get("last_attempt_at")),
+        "first_attempt_at": _iso(entry.get("first_attempt_at")),
+    }
+
+
+def _iso(value):
+    # offset 없는 문자열을 내보내면 브라우저가 로컬 시간으로 읽는다 (app/timefmt.py)
+    return to_kst_iso(value)
 
 
 @router.post("/{case_id}/explanation-viewed", status_code=200)

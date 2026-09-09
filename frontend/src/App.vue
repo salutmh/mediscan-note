@@ -21,6 +21,7 @@ async function onLogout() {
 }
 
 const NAV = [
+  { name: 'home', label: '홈', prefix: '/', exact: true },
   { name: 'cases', label: '케이스', prefix: '/cases' },
   { name: 'wrong-notes', label: '복습노트', prefix: '/wrong-notes' },
   { name: 'analyze', label: '내 영상 분석', prefix: '/analyze' },
@@ -33,6 +34,9 @@ const NAV = [
  * 판독 중에도 지금 어느 메뉴에 있는지 보이게 한다.
  */
 function isActive(item) {
+  // 홈은 `/` 라서 접두사 비교를 그대로 쓰면 **모든 경로에 걸린다.**
+  // (`'/cases'.startsWith('/')` 는 참이다.)
+  if (item.exact) return route.path === item.prefix
   return route.path === item.prefix || route.path.startsWith(item.prefix + '/')
 }
 
@@ -45,7 +49,7 @@ function initial(nickname) {
 <template>
   <header class="topbar">
     <div class="topbar-inner">
-      <RouterLink to="/cases" class="brand">
+      <RouterLink to="/" class="brand">
         <span class="mark" aria-hidden="true">
           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="11" cy="11" r="7" />
@@ -96,7 +100,7 @@ function initial(nickname) {
 }
 
 .topbar-inner {
-  max-width: 1080px;
+  max-width: var(--page-width);
   margin: 0 auto;
   display: flex;
   align-items: center;
@@ -208,7 +212,7 @@ function initial(nickname) {
 }
 
 .page {
-  max-width: 1080px;
+  max-width: var(--page-width);
   margin: 0 auto;
   padding: var(--sp-8) var(--sp-5) var(--sp-12);
 }

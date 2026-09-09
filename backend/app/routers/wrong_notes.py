@@ -4,8 +4,6 @@
 최신 제출이 match 가 아닌 케이스만 내려간다. 재도전해서 맞히면 목록에서 빠진다.
 재도전 채점·저장은 submit(2-3)과 완전히 동일한 경로를 쓴다 (cases.grade_and_store).
 """
-from datetime import timedelta, timezone
-
 from fastapi import APIRouter, HTTPException
 from sqlalchemy import select
 
@@ -13,19 +11,13 @@ from app.deps import CurrentUser, DbSession
 from app.models import Case
 from app.repository import wrong_note_items
 from app.routers.cases import grade_and_store
+from app.timefmt import to_kst_iso
 
 router = APIRouter(prefix="/api/wrong-notes", tags=["wrong-notes"])
 
-KST = timezone(timedelta(hours=9))
-
-
-def _to_kst_iso(value) -> str | None:
-    """api-spec.md 0절: 날짜는 ISO 8601 (예: 2026-09-10T14:00:00+09:00)."""
-    if value is None:
-        return None
-    if value.tzinfo is None:  # SQLite 는 tz 정보를 잃을 수 있다
-        value = value.replace(tzinfo=timezone.utc)
-    return value.astimezone(KST).isoformat()
+# 이 처리는 원래 여기에만 있었다. 다른 라우터가 따라가지 않아 화면마다 시각
+# 기준이 달랐다 — 그래서 app/timefmt.py 로 옮겼다.
+_to_kst_iso = to_kst_iso
 
 
 @router.get("")

@@ -6,6 +6,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { listCases } from '../api/endpoints'
 import { bodyPartLabel, diseaseLabel } from '../labels'
+import ScoreBar from '../components/ScoreBar.vue'
 
 const selected = ref('')
 const cases = ref([])
@@ -68,9 +69,57 @@ const availableDifficulties = computed(() => {
   return ['', 'easy', 'medium', 'hard'].filter((d) => d === '' || present.has(d))
 })
 
-const visibleCases = computed(() =>
-  difficulty.value ? cases.value.filter((c) => c.difficulty === difficulty.value) : cases.value,
-)
+/**
+ * 학습 상태 필터. 케이스가 늘어나면 "복습필요만 보기"가 가장 자주 쓰인다.
+ * 이건 **사용자 자신의 진행 상태**로 거르는 것이지 난이도와 무관하다.
+ */
+const STATUS_FILTERS = [
+  { code: '', label: '전체' },
+  { code: 'not_started', label: '미시도' },
+  { code: 'needs_review', label: '복습필요' },
+  { code: 'matched', label: '학습완료' },
+]
+const status = ref('')
+
+function statusOf(c) {
+  if (c.needs_review) return 'needs_review'
+  if (c.has_matched) return 'matched'
+  return c.progress ? 'needs_review' : 'not_started'
+}
+
+const query = ref('')
+
+const visibleCases = computed(() => {
+  let list = cases.value
+  if (difficulty.value) list = list.filter((c) => c.difficulty === difficulty.value)
+  if (status.value) list = list.filter((c) => statusOf(c) === status.value)
+  const q = query.value.trim().toLowerCase()
+  if (q) list = list.filter((c) => c.case_id.toLowerCase().includes(q))
+  return list
+})
+
+const statusCounts = computed(() => {
+  const counts = { '': cases.value.length, not_started: 0, needs_review: 0, matched: 0 }
+  for (const c of cases.value) counts[statusOf(c)] += 1
+  return counts
+})
+
+const summary = computed(() => ({
+  total: cases.value.length,
+  matched: statusCounts.value.matched,
+  review: statusCounts.value.needs_review,
+}))
+
+/** 카드의 행동 문구 — **상태가 아니라 다음 행동을 쓴다.** */
+function actionLabel(c) {
+  if (c.needs_review) return '복습하기'
+  if (c.has_matched) return '다시 풀기'
+  return '판독하기'
+}
+
+function percent(value) {
+  return value == null ? null : Math.round(value * 100)
+}
 
 function onThumbError(event) {
   event.target.style.visibility = 'hidden'
@@ -81,9 +130,33 @@ function onThumbError(event) {
   <header class="head">
     <div>
       <h1>케이스 목록</h1>
-      <p class="lead">판독할 케이스를 선택하세요.</p>
+      <p class="lead">
+        전문가가 검수한 기준 마스크와 비교하며 판독을 연습합니다.
+      </p>
+    </div>
+    <div v-if="summary.total" class="head-summary">
+      <span class="tnum head-num">{{ summary.matched }}</span>
+      <span class="head-of">/ {{ summary.total }} 학습완료</span>
     </div>
   </header>
+
+  <div v-if="cases.length" class="toolbar">
+    <div class="segmented">
+      <button
+        v-for="f in STATUS_FILTERS"
+        :key="f.code || 'all'"
+        :class="{ active: status === f.code }"
+        @click="status = f.code"
+      >
+        {{ f.label }}
+        <span class="count">{{ statusCounts[f.code] }}</span>
+      </button>
+    </div>
+    <label class="search">
+      <span class="sr-only">케이스 검색</span>
+      <input v-model="query" type="search" placeholder="케이스 ID 검색" />
+    </label>
+  </div>
 
   <div v-if="availableDifficulties.length" class="segmented filters">
     <button
@@ -119,8 +192,17 @@ function onThumbError(event) {
   </ul>
 
   <div v-else-if="!visibleCases.length && !errorMessage" class="card empty">
-    <p>해당 부위의 케이스가 없습니다.</p>
-    <p class="muted">지금은 뇌 MRI(전정신경초종) 케이스만 등록되어 있습니다.</p>
+    <template v-if="cases.length">
+      <p>조건에 맞는 케이스가 없습니다.</p>
+      <p class="muted">필터나 검색어를 바꿔 보세요.</p>
+      <button class="ghost sm" @click="status = ''; difficulty = ''; query = ''">
+        필터 지우기
+      </button>
+    </template>
+    <template v-else>
+      <p>해당 부위의 케이스가 없습니다.</p>
+      <p class="muted">지금은 뇌 MRI(전정신경초종) 케이스만 등록되어 있습니다.</p>
+    </template>
   </div>
 
   <ul v-else class="grid">
@@ -145,8 +227,33 @@ function onThumbError(event) {
             <span class="dot">·</span>
             {{ diseaseLabel(c.disease) }}
           </p>
+
+          <!-- **진행 상태.** 한 번도 안 풀었으면 progress 가 null 이고,
+               0% 대신 안내 문구를 보여준다 — 0점과 미시도는 다른 상태다. -->
+          <div v-if="c.progress" class="progress">
+            <div class="progress-top">
+              <span class="progress-label">최고 일치도</span>
+              <span class="tnum progress-value">{{ percent(c.progress.best_dice) }}%</span>
+            </div>
+            <ScoreBar
+              :value="percent(c.progress.best_dice)"
+              :tone="c.has_matched ? 'match' : 'partial_match'"
+            />
+            <p class="progress-sub">
+              {{ c.progress.attempts }}회 시도
+              <template v-if="c.progress.latest_dice != null">
+                <span class="dot">·</span> 최근 {{ percent(c.progress.latest_dice) }}%
+              </template>
+            </p>
+          </div>
+          <!-- progress 가 없는데 상태 뱃지는 붙어 있는 경우가 있다 (구버전 응답).
+               그때 "아직 풀지 않았습니다"라고 쓰면 뱃지와 본문이 서로 다른 말을 한다. -->
+          <p v-else-if="c.has_matched || c.needs_review" class="progress-empty">
+            시도 기록을 불러오지 못했습니다
+          </p>
+          <p v-else class="progress-empty">아직 풀지 않았습니다</p>
         </div>
-        <span class="go">판독하기 →</span>
+        <span class="go">{{ actionLabel(c) }} →</span>
       </RouterLink>
     </li>
   </ul>
@@ -155,6 +262,81 @@ function onThumbError(event) {
 <style scoped>
 .head {
   margin-bottom: var(--sp-5);
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  flex-wrap: wrap;
+}
+
+.head-summary {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.head-num {
+  font-size: 26px;
+  font-weight: 700;
+}
+.head-of {
+  color: var(--ink-muted);
+  font-size: 13.5px;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  margin-bottom: var(--sp-5);
+  flex-wrap: wrap;
+}
+.toolbar .count {
+  margin-left: 5px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.65;
+  font-size: 12px;
+}
+.search input {
+  width: 220px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  font: inherit;
+  background: var(--surface);
+}
+.search input:focus-visible {
+  outline: 2px solid var(--brand-300);
+  outline-offset: 1px;
+  border-color: var(--brand-300);
+}
+
+.progress {
+  margin-top: var(--sp-3);
+}
+.progress-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 5px;
+}
+.progress-label {
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+.progress-value {
+  font-size: 14px;
+  font-weight: 700;
+}
+.progress-sub {
+  margin: 5px 0 0;
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+.progress-empty {
+  margin: var(--sp-3) 0 0;
+  font-size: 12.5px;
+  color: var(--ink-muted);
 }
 
 .head h1 {

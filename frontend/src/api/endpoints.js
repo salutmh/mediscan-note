@@ -26,6 +26,11 @@ export const getMe = () => api.get('/auth/me')
 // 브라우저에서 지우는 것만으로는 부족하다 (공용 PC 에서 토큰이 만료까지 살아 있으면 안 된다).
 export const logoutRequest = () => api.post('/auth/logout')
 
+// --- 학습 대시보드 ----------------------------------------------------------
+// 홈 화면이 쓰는 요약. **전부 사용자 자신의 제출 이력에서 나온 값이다** —
+// 의료적 난이도나 소견은 여기 없다.
+export const getDashboard = () => api.get('/me/dashboard')
+
 // --- 2. 케이스 / 판독 -------------------------------------------------------
 // 2-1. 케이스 목록
 export const listCases = (bodyPart) =>

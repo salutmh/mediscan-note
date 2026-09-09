@@ -23,7 +23,16 @@ from app.rate_limit import RateLimitMiddleware
 from app.asset_urls import SignedAssetMiddleware
 from app.security_headers import SecurityHeadersMiddleware
 from app.static_files import STATIC_DIR, STATIC_URL_PREFIX, ensure_dirs, set_request_base
-from app.routers import admin, analyze, auth, cases, consents, review, wrong_notes
+from app.routers import (
+    admin,
+    analyze,
+    auth,
+    cases,
+    consents,
+    dashboard,
+    review,
+    wrong_notes,
+)
 
 
 @asynccontextmanager
@@ -99,6 +108,7 @@ app.mount(STATIC_URL_PREFIX, StaticFiles(directory=STATIC_DIR), name="static")
 app.include_router(auth.router)
 app.include_router(consents.router)
 app.include_router(cases.router)
+app.include_router(dashboard.router)
 app.include_router(wrong_notes.router)
 app.include_router(analyze.router)
 app.include_router(admin.router)

@@ -2,7 +2,9 @@ import { createRouter, createWebHistory } from 'vue-router'
 import { authState } from '../stores/auth'
 
 const routes = [
-  { path: '/', redirect: '/cases' },
+  // 홈 = 학습 대시보드. 예전에는 여기서 바로 /cases 로 넘겼는데, 그러면
+  // 앱을 열었을 때 "내가 어디까지 했는지"가 어디에도 보이지 않았다.
+  { path: '/', name: 'home', component: () => import('../views/HomeView.vue'), meta: { requiresAuth: true } },
   // 화면 0
   { path: '/login', name: 'login', component: () => import('../views/LoginView.vue') },
   // 화면 1
