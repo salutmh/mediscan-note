@@ -28,6 +28,7 @@ import json
 import os
 import shutil
 import subprocess
+import tempfile
 import sys
 from pathlib import Path
 
@@ -213,12 +214,95 @@ def create(args) -> int:
     return staging_secret.main(["run", "--"] + argv)
 
 
+# --------------------------------------------------------------- 연결 정보
+# Direct 연결의 사용자·포트·DB 이름은 Supabase 가 문서로 고정한 형태다.
+# **host 만은 지어내지 않고 CLI 가 준 값을 쓴다** (`database.host`).
+DIRECT_URL_SHAPE = "postgresql://postgres@{host}:5432/postgres"
+PROJECTS_LIST_SOURCE = "supabase projects list --output json -> database.host"
+POOLER_SOURCE = "supabase link -> supabase/.temp/pooler-url"
+
+
+def _project_record(cli: list[str]) -> dict:
+    projects = _run(cli + ["projects", "list", "--output", "json"])
+    if _looks_logged_out(projects):
+        raise SystemExit(LOGIN_INSTRUCTIONS)
+    found = _find_project(_parse_json_list(projects.stdout))
+    if not found:
+        raise SystemExit(
+            "`{}` 를 찾지 못했습니다. 먼저 `create` 로 만드세요.".format(PROJECT_NAME))
+    return found
+
+
+def _pooler_url(cli: list[str], ref: str) -> str | None:
+    """`supabase link` 가 남기는 공식 pooler URL 을 읽는다.
+
+    **임시 디렉터리에서 link 한다.** 저장소에 `supabase/` 를 만들면
+    우리가 쓰지도 않는 로컬 개발 스택 설정이 따라 들어온다.
+    """
+    with tempfile.TemporaryDirectory() as workdir:
+        init = _run(cli + ["init", "--workdir", workdir, "--yes"])
+        if init.returncode != 0:
+            print("   supabase init 실패:", (init.stderr or init.stdout)[:200])
+            return None
+        # 비밀번호는 staging_secret 이 넣고 화면에는 *** 로 찍는다
+        code = staging_secret.main([
+            "run", "--",
+            *cli, "link", "--project-ref", ref, "-p", staging_secret.SECRET_TOKEN,
+            "--workdir", workdir,
+        ])
+        if code != 0:
+            return None
+        path = Path(workdir) / "supabase" / ".temp" / "pooler-url"
+        return path.read_text(encoding="utf-8").strip() if path.exists() else None
+
+
+def connect(args) -> int:
+    """연결 문자열을 CLI 에서 받아 로컬 secret 에 보관한다."""
+    cli = cli_command()
+    if not cli:
+        raise SystemExit("Supabase CLI 를 찾을 수 없습니다.")
+    if not staging_secret.SECRET_PATH.exists():
+        raise SystemExit("먼저 `python -m scripts.staging_secret init` 을 실행하세요.")
+
+    project = _project_record(cli)
+    ref = project["ref"]
+    host = (project.get("database") or {}).get("host")
+    print("프로젝트 {}  region={}  status={}  postgres={}".format(
+        PROJECT_NAME, project.get("region"), project.get("status"),
+        (project.get("database") or {}).get("version", "?")))
+
+    if host:
+        staging_secret.main([
+            "set-url", "--mode", "direct", "--ref", ref,
+            "--source", PROJECTS_LIST_SOURCE,
+            "--url", DIRECT_URL_SHAPE.format(host=host) + "?sslmode=require",
+        ])
+
+    print("\nSession pooler URL 을 CLI 에서 받습니다...")
+    pooler = _pooler_url(cli, ref)
+    if pooler:
+        separator = "&" if "?" in pooler else "?"
+        staging_secret.main([
+            "set-url", "--mode", "session_pooler", "--ref", ref,
+            "--source", POOLER_SOURCE,
+            "--url", pooler + separator + "sslmode=require",
+        ])
+    else:
+        print("  받지 못했습니다. Connect 화면에서 복사해 `set-url` 로 넣으세요.")
+
+    print()
+    return staging_secret.main(["check"])
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="Supabase 스테이징 준비 점검")
     sub = parser.add_subparsers(dest="cmd", required=True)
 
     sub.add_parser("preflight", help="CLI·로그인·조직·프로젝트·secret 상태").set_defaults(
         func=preflight)
+
+    sub.add_parser("connect", help="연결 문자열을 CLI 에서 받아 보관한다").set_defaults(
+        func=connect)
 
     p_create = sub.add_parser("create", help="스테이징 프로젝트를 만든다")
     p_create.add_argument("--org-id", required=True)

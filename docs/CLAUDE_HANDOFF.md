@@ -10,7 +10,7 @@
 | 항목 | 값 |
 |---|---|
 | 최종 갱신 | 2026-09-09 |
-| 현재 커밋 | `3c9ea47` |
+| 현재 커밋 | `cc57808` (이후 작업 진행 중) |
 | 현재 브랜치 | `main` |
 | 원격 | `https://github.com/salutmh/mediscan-note.git` (Public) |
 | 현재 모드 | **지속 자율 개발 루프** (Phase 1~8 은 최초 백로그였고 전부 완료) |
@@ -54,6 +54,59 @@
 ---
 
 ## 3. 완료된 작업
+
+### 자율 루프 #19 — Supabase 스테이징 **실제 연결 완료**
+
+프로젝트를 만들고 실제로 붙였다. 추측이 아니라 측정 결과다.
+
+| 항목 | 결과 |
+|---|---|
+| 프로젝트 | `mediscan-note-staging` / `ap-northeast-2` / `ACTIVE_HEALTHY` |
+| 서버 | PostgreSQL **17.6**, UTC |
+| Direct connection | **연결 불가** (아래) |
+| Session pooler | **연결 성공** (~600ms) |
+| 마이그레이션 | 8개 전부 적용, head `6e96eba1720d` |
+| 왕복 검증 | head → base → head, 테이블 8개·리비전 동일 복원 |
+| 데이터 | cases 6, case_slices 103, users 2(스테이징 전용), consents 10 |
+| 비파괴 검증 | 13항목 전부 통과 (실패 0 / 주의 0) |
+
+**Direct 가 안 붙은 이유는 설정이 아니라 네트워크다.**
+`db.<ref>.supabase.co` 에 **A 레코드가 없다 — AAAA(IPv6) 뿐이다.**
+이 PC 는 IPv4 전용이라 DNS 해석 단계에서 실패한다
+(`getaddrinfo failed`, IPv6 직접 연결은 `WinError 10051`).
+IPv4 add-on 은 유료라 **BLOCKED(결제)** 로 두고 Session pooler 를 쓴다.
+세션 풀러는 연결이 세션 동안 유지돼 Direct 처럼 동작하므로 문제 없다.
+
+**pooler URL 은 우리가 조립하지 않는다.** `supabase link` 가 남기는
+`supabase/.temp/pooler-url` 이 공식 출처다. `supabase_staging.py connect` 가
+임시 디렉터리에서 link 하고 그 값을 자리표시자로 바꿔 보관하며,
+**어디서 받았는지도 함께 기록한다**(`connection_sources`).
+
+새 도구
+- `scripts/verify_remote_db.py` — **아무것도 바꾸지 않는** 원격 DB 검증 13항목.
+  `verify_postgres.py` 는 downgrade 를 하므로 원격에 쓰면 안 된다 — 그 자리를 메운다.
+- `scripts/migration_roundtrip.py` — head→base→head. **행이 하나라도 있으면 거부**하고
+  우회 옵션은 두지 않았다.
+
+이번에 찾아 고친 것
+- **`.gitignore` 앵커링 구멍**: `supabase/.temp/` 는 저장소 루트에만 걸린다.
+  `backend/` 에서 CLI 를 돌리면 `backend/supabase/.temp/` 가 생기는데 **안 걸렸다.**
+  `**/supabase/.temp/` 로 고치고 테스트에 하위 경로를 추가했다.
+- **검사기 자신의 버그**: `to_regclass()` 는 PostgreSQL 전용이라 같은 스크립트를
+  SQLite 로 돌리면 마이그레이션 검사가 죽었다. 점검 도구가 환경 때문에 죽으면
+  "확인 못함"이 "이상 없음"으로 보인다. inspector 로 바꿨다.
+- **가드 순서**: production 가드가 행 수 가드 뒤에 있어, 운영 DB 를 가리켰을 때
+  "데이터가 있다"로만 막혀 production 가드가 도는지 확인할 수 없었다. 앞으로 옮겼다.
+- **fixture 가 조용히 skip**: 결함 주입 테스트 13개가 subprocess 환경 부족으로
+  전부 skip 됐는데 **skip 은 초록색으로 보인다.** skip 대신 assert 로 바꿨다.
+
+검사기가 실제로 잡는지 fault injection 으로 확인했다 (손으로 추가한 컬럼,
+head 뒤처짐, alembic_version 삭제, 테이블 삭제, 운영 계정 혼입 — 전부 잡는다).
+
+환경 메모: 한국어 Windows 에서 psycopg2 연결 실패는 `OperationalError` 가 아니라
+`UnicodeDecodeError` 로 나온다 (OS 오류 문자열이 cp949). 서버에서는 발생하지 않는다.
+
+---
 
 ### 자율 루프 #18 — Supabase 스테이징 준비 (사용자 로그인에서 대기)
 
@@ -860,12 +913,8 @@ cd backend && alembic revision --autogenerate -m "<설명>"
 > 4·5절과 `docs/RELEASE_READINESS.md` 3~6절을 먼저 본다.
 >
 > **1순위 — 사람이 있어야 진행되는 것**
-> - [ ] **Supabase 로그인** (스테이징 구축의 유일한 차단점):
->       `npx supabase@latest login` → 브라우저 인증 → 돌아와서
->       `cd backend && python -m scripts.supabase_staging preflight`
->       그 뒤 프로젝트 생성부터는 자동으로 이어진다. 준비는 전부 끝났다
->       (비밀번호 생성·보관, 연결 모드 판별, 시드, 검증 스크립트).
->       **조직 플랜/프로젝트 수 제한에 걸리면 그건 사용자 판단이라 멈춘다.**
+> - [x] ~~Supabase 로그인~~ → **완료. 스테이징이 실제로 붙었다** (자율 루프 #19).
+>       상태 확인: `cd backend && python -m scripts.supabase_staging preflight`
 > - [ ] **케이스 24건 육안 검수**: `/admin/review` 에서 카드를 보고 PASS/HOLD/REJECT.
 >       준비는 전부 끝났다 (export · 검수 시트 · 기계 사전점검 · 기록 저장 · 단축키).
 >       운영자 계정이 필요하다: `python -m scripts.grant_admin --email <이메일>`
@@ -949,6 +998,18 @@ cd backend && alembic revision --autogenerate -m "<설명>"
 ---
 
 ## BLOCKERS
+
+### BLOCKER-6 — Supabase Direct connection 용 IPv4 add-on (`NEEDS_USER_DECISION` / 결제)
+- **무엇이 문제인가**: Supabase Direct connection 호스트(`db.<ref>.supabase.co`)에는
+  **A 레코드가 없고 AAAA(IPv6)만 있다.** 개발 PC 가 IPv4 전용이라 접속 자체가 불가능하다
+  (DNS 해석에서 실패). 포트·비밀번호 문제가 아니다.
+- **지금 어떻게 하고 있나**: **Session pooler 로 정상 동작한다.** 세션 풀러는 연결이
+  세션 동안 유지돼 Direct 처럼 동작하므로, 마이그레이션·백업 포함 모든 작업이 된다.
+  실제로 마이그레이션 8개 적용과 head→base→head 왕복 검증까지 통과했다.
+- **선택지**: (a) 그대로 Session pooler 사용 (b) Supabase IPv4 add-on 구매
+  (c) 배포 서버가 IPv6 를 지원하면 거기서는 Direct 사용.
+- **추천**: (a). 지금 막히는 것이 없다. (b)는 **결제가 필요해 진행하지 않았다.**
+- **영향**: 없음. 문서상 "Direct 우선" 원칙의 예외 사유로 기록해 둘 뿐이다.
 
 ### BLOCKER-1 — VS-SEG 데이터셋 / VS_Seg 가중치 이용 조건 (`NEEDS_LICENSE_REVIEW`)
 - **무엇이 필요한가**: 데이터셋과 pretrained 가중치를 Closed Beta(외부 사용자 대상)에서 쓸 수 있는지 확인.

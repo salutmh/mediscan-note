@@ -107,6 +107,95 @@ python -m scripts.supabase_staging create --org-id <preflight 가 보여준 id>
 
 ---
 
+## 1-3. **실제로 연결해 보고 알게 된 것** (2026-09-09 검증)
+
+스테이징 프로젝트를 실제로 만들어 붙여 본 결과다. 추측이 아니라 측정값이다.
+
+| 항목 | 값 |
+|---|---|
+| 프로젝트 | `mediscan-note-staging` (region `ap-northeast-2`, `ACTIVE_HEALTHY`) |
+| 서버 | PostgreSQL **17.6**, 타임존 UTC |
+| **Direct connection** | **연결 불가** — 아래 참고 |
+| **Session pooler** | **연결 성공** (약 600ms, `current_user=postgres`, port 5432) |
+
+### Direct 가 안 붙었다 — 포트나 비밀번호 문제가 아니다
+
+```
+$ nslookup -type=A  db.<ref>.supabase.co     ->  A 레코드 없음
+$ nslookup -type=AAAA db.<ref>.supabase.co   ->  2406:da12:...  (IPv6만)
+```
+
+**Direct 호스트에는 A 레코드가 아예 없다.** IPv4 전용 네트워크에서는
+DNS 해석 단계에서 실패하므로 접속 자체가 불가능하다.
+(`socket.getaddrinfo` → `getaddrinfo failed`, IPv6 직접 연결 → `WinError 10051`)
+
+그래서 이 프로젝트의 스테이징은 **Session pooler 를 쓴다.**
+문서 1절의 "Direct 우선" 원칙은 유효하지만, **IPv4 전용 환경에서는
+Session pooler 가 유일한 선택지**이고 그래도 무방하다 —
+세션 풀러는 연결이 세션 동안 유지돼 Direct 처럼 동작한다.
+
+> Direct 를 꼭 써야 한다면 Supabase 의 IPv4 add-on 이 필요하다 (유료).
+> **결제가 필요한 항목이라 진행하지 않았다.**
+
+### pooler URL 은 CLI 가 준다 — 우리가 조립하지 않는다
+
+```bash
+npx supabase@latest init --workdir <임시폴더>
+npx supabase@latest link --project-ref <ref> -p <비밀번호> --workdir <임시폴더>
+cat <임시폴더>/supabase/.temp/pooler-url
+```
+
+`scripts/supabase_staging.py connect` 가 이 과정을 대신하고,
+받은 값을 `[YOUR-PASSWORD]` 자리표시자로 바꿔 로컬 secret 에 보관한다.
+**어디서 받았는지도 함께 기록한다** (`connection_sources`).
+
+> `supabase link` 를 저장소 안에서 실행하면 `<cwd>/supabase/.temp/` 가 생긴다.
+> `.gitignore` 는 `**/supabase/.temp/` 로 막아 뒀다 — `**/` 가 없으면
+> `backend/supabase/.temp/` 는 걸리지 않는다 (실제로 그렇게 새어 나올 뻔했다).
+
+### 한국어 Windows 에서 연결 오류를 못 읽는다
+
+Direct 연결 실패 시 psycopg2 가 OS 오류 문자열(cp949)을 UTF-8 로 읽으려다
+`UnicodeDecodeError` 를 던진다 — **`OperationalError` 가 아니다.**
+연결이 실패한 것은 맞지만 이유를 읽을 수 없다.
+서버(Linux/UTF-8)에서는 발생하지 않지만, 로컬에서 원인을 찾을 때 헷갈린다.
+
+---
+
+## 1-4. 검증 결과 (스테이징에서 실제로 돌린 것)
+
+```bash
+cd backend
+python -m scripts.staging_secret run --mode session_pooler --     python -m scripts.verify_remote_db --expect-staging
+```
+
+```
+[정보] 연결 방식  — Supabase Session pooler (Supavisor)  (port 5432, sslmode require)
+[정보] 서버      — PostgreSQL 17.6
+[OK] 서버 타임존  — UTC
+[OK] 마이그레이션 — head 와 일치 (6e96eba1720d)
+[OK] 테이블      — 8개 모두 존재
+[OK] 스키마 드리프트 — 모델과 일치 (diff 없음)
+[OK] 제약 (PK/FK/UNIQUE) — 모두 존재
+[정보] 행 수     — case_slices=103, cases=6, consents=10, users=2
+[OK] 스테이징 순수성 — 모든 계정이 @staging.invalid
+[OK] 재연결      — 끊긴 연결 뒤에도 정상 (pool_pre_ping 동작)
+13건 검사 — 실패 0 / 주의 0
+```
+
+**마이그레이션 왕복도 실제 PostgreSQL 17 에서 확인했다** (DB 가 비어 있을 때):
+
+```bash
+python -m scripts.staging_secret run --mode session_pooler --     python -m scripts.migration_roundtrip
+# head -> base -> head, 테이블 8개와 리비전이 동일하게 복원
+```
+
+> `migration_roundtrip` 은 **행이 하나라도 있으면 거부한다.** downgrade 가
+> 테이블을 지우기 때문이다. 우회 옵션은 일부러 두지 않았다.
+> `verify_remote_db` 는 **아무것도 바꾸지 않으므로** 데이터가 있어도 안전하다.
+
+---
+
 ## 2. Dashboard 에서 값 받기
 
 1. Supabase 프로젝트 → **Connect** (상단 버튼)

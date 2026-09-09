@@ -139,13 +139,56 @@ def test_set_url_rewrites_a_url_that_already_has_the_password(secret_file):
     assert password not in _stored(secret_file)["connection_urls"]["direct"]
 
 
-def test_set_url_rejects_a_string_without_a_placeholder(secret_file):
-    """자리표시자가 없으면 Connect 에서 복사한 값이 아니다 — 조용히 받지 않는다."""
+def test_set_url_rejects_a_string_with_someone_elses_password(secret_file):
+    """우리 비밀번호가 아닌 값이 박혀 있으면 조용히 받지 않는다.
+
+    그대로 보관하면 나중에 "왜 인증이 안 되지" 를 헤맨다.
+    """
     ss.main(["init"])
     with pytest.raises(SystemExit) as exc:
         ss.main(["set-url", "--mode", "direct", "--url",
                  f"postgresql://postgres:mypw@db.{REF}.supabase.co:5432/postgres"])
-    assert "자리표시자" in str(exc.value)
+    assert "비밀번호 자리" in str(exc.value)
+
+
+# ------------------------------------------- CLI 가 주는 형태 (비밀번호 없음)
+CLI_POOLER_URL = (
+    f"postgresql://postgres.{REF}@{REGION}.pooler.supabase.com:5432/postgres"
+)
+
+
+def test_a_url_without_any_password_slot_gets_a_placeholder(secret_file):
+    """**`supabase link` 가 남기는 `pooler-url` 이 이 형태다.**
+
+    사용자명만 있고 비밀번호 자리가 아예 없다. 그대로 저장하면 나중에
+    치환할 곳이 없어서 인증 없이 붙으려다 실패한다.
+    """
+    ss.main(["init"])
+    ss.main(["set-url", "--mode", "session_pooler", "--url", CLI_POOLER_URL])
+    stored = _stored(secret_file)["connection_urls"]["session_pooler"]
+    assert "[YOUR-PASSWORD]" in stored
+    assert ss._database_url(_stored(secret_file), "session_pooler").count("@") == 1
+
+
+def test_ensure_placeholder_leaves_an_existing_placeholder_alone():
+    assert ss.ensure_placeholder(DIRECT_TEMPLATE) == DIRECT_TEMPLATE
+
+
+def test_ensure_placeholder_leaves_an_existing_password_alone():
+    url = "postgresql://user:pw@host:5432/db"
+    assert ss.ensure_placeholder(url) == url
+
+
+def test_ensure_placeholder_ignores_a_url_it_cannot_parse():
+    assert ss.ensure_placeholder("not-a-url") == "not-a-url"
+
+
+def test_the_source_of_a_url_is_recorded(secret_file):
+    """**이 host 를 우리가 지어냈는지** 나중에 확인할 수 있어야 한다."""
+    ss.main(["init"])
+    ss.main(["set-url", "--mode", "session_pooler", "--url", CLI_POOLER_URL,
+             "--source", "supabase link -> supabase/.temp/pooler-url"])
+    assert "pooler-url" in _stored(secret_file)["connection_sources"]["session_pooler"]
 
 
 def test_set_url_flags_a_mode_mismatch(secret_file, capsys):

@@ -168,8 +168,12 @@ def cmd_status(args) -> int:
     print("project_ref: {}".format("저장됨" if data.get("project_ref") else "아직 없음"))
     urls = data.get("connection_urls") or {}
     print("연결 문자열:")
+    sources = data.get("connection_sources") or {}
     for mode in MODES:
-        print("  {:<20} {}".format(mode, "저장됨" if urls.get(mode) else "-"))
+        if urls.get(mode):
+            print("  {:<20} 저장됨  (출처: {})".format(mode, sources.get(mode, "?")))
+        else:
+            print("  {:<20} -".format(mode))
     if not urls:
         print("    (Supabase 의 Connect 에서 받아 `set-url` 로 넣으세요)")
     return 0 if ignored else 1
@@ -186,13 +190,17 @@ def cmd_set_url(args) -> int:
         # 이미 비밀번호를 끼워 넣은 문자열을 붙였다 — 자리표시자로 되돌려 저장한다
         url = url.replace(data["db_password"], PLACEHOLDERS[0])
         print("문자열에 비밀번호가 들어 있어 자리표시자로 바꿔 저장합니다.")
+    url = ensure_placeholder(url)
     if not any(p in url for p in PLACEHOLDERS):
         raise SystemExit(
-            "자리표시자가 없습니다. Connect 에서 복사한 문자열에는 "
+            "비밀번호 자리를 찾지 못했습니다. Connect 에서 복사한 문자열에는 "
             "보통 {} 가 들어 있습니다. 그대로 붙여 넣으세요.".format(PLACEHOLDERS[0])
         )
 
     data.setdefault("connection_urls", {})[args.mode] = url
+    # **이 값이 어디서 왔는지 남긴다.** 나중에 "이 host 를 우리가 지어낸 건가?"
+    # 를 확인할 수 있어야 한다.
+    data.setdefault("connection_sources", {})[args.mode] = args.source or "수동 입력"
     if args.ref:
         data["project_ref"] = args.ref
     _save(data)
@@ -212,6 +220,26 @@ def _substitute(url: str, password: str) -> str:
     for placeholder in PLACEHOLDERS:
         url = url.replace(placeholder, password)
     return url
+
+
+def ensure_placeholder(url: str) -> str:
+    """비밀번호 자리가 비어 있는 URL 에 자리표시자를 넣는다.
+
+    **CLI 는 비밀번호 없이 준다.** `supabase link` 가 남기는 `pooler-url` 은
+    `postgresql://postgres.<ref>@host:5432/postgres` 형태다 — 사용자명만 있고
+    비밀번호 자리가 아예 없다. 그 자리에 자리표시자를 넣어 보관 형식을 맞춘다.
+
+    이미 자리표시자가 있거나 비밀번호가 들어 있으면 그대로 둔다.
+    """
+    if any(placeholder in url for placeholder in PLACEHOLDERS):
+        return url
+    scheme, _, rest = url.partition("://")
+    if not rest or "@" not in rest:
+        return url
+    userinfo, _, hostpart = rest.rpartition("@")
+    if ":" in userinfo:
+        return url  # 이미 비밀번호가 있다
+    return "{}://{}:{}@{}".format(scheme, userinfo, PLACEHOLDERS[0], hostpart)
 
 
 def _database_url(data: dict, mode: str) -> str:
@@ -313,6 +341,7 @@ def main(argv=None) -> int:
     p_url.add_argument("--mode", required=True, choices=MODES)
     p_url.add_argument("--url", required=True)
     p_url.add_argument("--ref", help="project ref (선택)")
+    p_url.add_argument("--source", help="이 문자열을 어디서 받았는지 (출처 기록용)")
     p_url.set_defaults(func=cmd_set_url)
 
     p_run = sub.add_parser("run", help="비밀번호를 노출하지 않고 명령을 실행한다")

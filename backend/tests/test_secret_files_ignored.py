@@ -38,6 +38,13 @@ MUST_BE_IGNORED = [
     ".supabase-secrets.json",
     "supabase/.temp/project-ref",
     "supabase/.branches/x",
+    # **하위 디렉터리도 막혀야 한다.** `supabase/.temp/` 처럼 슬래시가 들어간
+    # 패턴은 .gitignore 위치에 고정된다 — `backend/` 에서 CLI 를 돌리면
+    # `backend/supabase/.temp/` 가 생기는데, 그건 안 걸렸다.
+    "backend/supabase/.temp/project-ref",
+    "backend/supabase/.temp/linked-project.json",
+    "backend/supabase/.branches/x",
+    "frontend/supabase/.temp/project-ref",
     "server.key",
     "client.pem",
     "gcp-service-account.json",

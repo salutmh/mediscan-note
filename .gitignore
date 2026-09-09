@@ -65,9 +65,12 @@ prediction_mask.npy
 !/frontend/.env.development
 !/frontend/.env.production
 
-# Supabase CLI 작업 산출물 — 프로젝트 참조·임시 파일이 들어간다
-supabase/.temp/
-supabase/.branches/
+# Supabase CLI 작업 산출물 — 프로젝트 참조·임시 파일이 들어간다.
+# **`**/` 가 필요하다.** 슬래시가 들어간 패턴은 이 파일 위치(저장소 루트)에
+# 고정되므로, `supabase/.temp/` 만 적으면 `backend/supabase/.temp/` 는 안 걸린다.
+# CLI 를 backend/ 에서 실행하면 거기에 생긴다 — 실제로 그렇게 새어 나올 뻔했다.
+**/supabase/.temp/
+**/supabase/.branches/
 .supabase-secrets*
 *.pem
 *.key
