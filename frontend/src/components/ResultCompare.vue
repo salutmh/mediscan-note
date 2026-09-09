@@ -12,6 +12,7 @@
  * 겹쳐 보여주는 방식으로 자동 폴백한다.
  */
 import { computed, onMounted, ref, watch } from 'vue'
+import ScoreBar from './ScoreBar.vue'
 
 const props = defineProps({
   result: { type: Object, required: true },
@@ -76,6 +77,64 @@ const FEEDBACK_TONE = {
 function feedbackTone(code) {
   return FEEDBACK_TONE[code] ?? 'neutral'
 }
+
+/**
+ * 영역 분석 — **학습자가 다음에 무엇을 고쳐야 하는지**로 바꿔 놓는다.
+ *
+ * 서버가 주는 것은 비율이다. 그대로 나열하면 "gt_coverage 0.42" 같은
+ * 지표 목록이 되고, 학습자는 **무엇을 고쳐야 할지** 알 수 없다.
+ * 그래서 세 덩어리로 나눈다: 맞춘 / 놓친 / 과하게 표시한.
+ *
+ * 여기서 하는 것은 **산술 변환뿐이다.** 새로운 의학적 주장을 만들지 않는다
+ * (`1 - gt_coverage` 는 "놓친 비율"이지 "이 병변을 놓쳤다"가 아니다).
+ */
+const areaBreakdown = computed(() => {
+  const m = spatialFeedback.value?.metrics
+  if (!m || m.gt_coverage == null || m.user_precision == null) return null
+  const coverage = m.gt_coverage
+  const precision = m.user_precision
+  return [
+    {
+      key: 'matched',
+      label: '기준과 겹친 부분',
+      hint: '기준 영역 중 표시한 비율',
+      percent: Math.round(coverage * 100),
+      tone: 'match',
+    },
+    {
+      key: 'missed',
+      label: '놓친 부분',
+      hint: '기준 영역 중 표시하지 않은 비율',
+      percent: Math.round((1 - coverage) * 100),
+      tone: 'mismatch',
+    },
+    {
+      key: 'excess',
+      label: '과하게 표시한 부분',
+      hint: '표시한 영역 중 기준 밖 비율',
+      percent: Math.round((1 - precision) * 100),
+      tone: 'partial_match',
+    },
+  ]
+})
+
+/** 화면 맨 위에 놓는 **하나의** 숫자. 여러 지표를 동등하게 나열하지 않는다. */
+const headlinePercent = computed(() =>
+  props.result?.dice == null ? null : Math.round(props.result.dice * 100),
+)
+
+const centroidDistance = computed(() => spatialFeedback.value?.metrics?.centroid_distance_px ?? null)
+
+/** 넓이 비교 — "얼마나 크게/작게 잡았나"는 위치와 다른 종류의 실수다. */
+const areaComparison = computed(() => {
+  const m = spatialFeedback.value?.metrics
+  if (!m || !m.reference_area_px || m.user_area_px == null) return null
+  return {
+    user: m.user_area_px,
+    reference: m.reference_area_px,
+    ratio: m.area_ratio,
+  }
+})
 
 /** 비율은 백분율로 보여준다 — 0.7412 보다 74% 가 학습자에게 읽힌다 */
 const coverageMetrics = computed(() => {
@@ -228,31 +287,21 @@ function ratio(value, max = 1) {
       점수를 학습 판단 근거로 쓰지 마세요.
     </p>
 
-    <!-- 판정 + 수치 -->
+    <!-- 1. 핵심 결과 — **하나의 판정과 하나의 숫자.**
+         Dice/IoU/위치점수를 동등하게 나열하면 학습자는 무엇을 봐야 할지 모른다.
+         세부 지표는 아래에 접어 둔다. -->
     <div class="verdict" :class="result.grade">
       <div class="verdict-head">
-        <strong class="grade">{{ GRADE_LABEL[result.grade] ?? result.grade }}</strong>
-        <p>{{ GRADE_DESC[result.grade] ?? '' }}</p>
+        <div class="verdict-text">
+          <strong class="grade">{{ GRADE_LABEL[result.grade] ?? result.grade }}</strong>
+          <p>{{ spatialFeedback?.primary_message ?? GRADE_DESC[result.grade] ?? '' }}</p>
+        </div>
+        <div v-if="headlinePercent != null" class="headline">
+          <span class="tnum headline-num">{{ headlinePercent }}</span>
+          <span class="headline-unit">%</span>
+          <span class="headline-label">기준과 일치</span>
+        </div>
       </div>
-      <dl class="metrics">
-        <div>
-          <dt>Dice</dt>
-          <dd class="metric-value">{{ result.dice }}</dd>
-          <div class="track"><div class="fill" :style="{ width: ratio(result.dice) + '%' }"></div></div>
-        </div>
-        <div>
-          <dt>IoU</dt>
-          <dd class="metric-value">{{ result.iou }}</dd>
-          <div class="track"><div class="fill" :style="{ width: ratio(result.iou) + '%' }"></div></div>
-        </div>
-        <div>
-          <dt>위치 점수</dt>
-          <dd class="metric-value">{{ result.location_score }}<small>/100</small></dd>
-          <div class="track">
-            <div class="fill" :style="{ width: ratio(result.location_score, 100) + '%' }"></div>
-          </div>
-        </div>
-      </dl>
 
       <!-- 재도전 경과 (v0.7).
            같은 케이스를 다시 푼 사람은 "나아졌는지"를 가장 알고 싶어 한다.
@@ -280,30 +329,62 @@ function ratio(value, max = 1) {
         <h3>표시한 영역 분석</h3>
         <span class="chip chip-geometry">위치·범위 비교</span>
       </div>
+
+      <!-- 2. 맞춘 / 놓친 / 과하게 표시한 —
+           **다음에 무엇을 고쳐야 하는지**로 나눈다. -->
+      <ul v-if="areaBreakdown" class="breakdown">
+        <li v-for="part in areaBreakdown" :key="part.key">
+          <div class="breakdown-top">
+            <span class="breakdown-label">{{ part.label }}</span>
+            <span class="tnum breakdown-value">{{ part.percent }}%</span>
+          </div>
+          <ScoreBar :value="part.percent" :tone="part.tone" />
+          <p class="breakdown-hint">{{ part.hint }}</p>
+        </li>
+      </ul>
+
+      <!-- 3. 위치 차이 / 넓이 차이 — 겹침 비율과 다른 종류의 실수다 -->
+      <div v-if="centroidDistance != null || areaComparison" class="offsets">
+        <div v-if="centroidDistance != null" class="offset">
+          <span class="offset-label">중심 위치 차이</span>
+          <span class="tnum offset-value">{{ centroidDistance }}px</span>
+        </div>
+        <div v-if="areaComparison" class="offset">
+          <span class="offset-label">표시 넓이 (기준 대비)</span>
+          <span class="tnum offset-value">
+            {{ areaComparison.user.toLocaleString() }}px
+            <small>/ 기준 {{ areaComparison.reference.toLocaleString() }}px</small>
+          </span>
+        </div>
+      </div>
+
       <ul class="feedback-list">
         <li v-for="item in spatialFeedback.items" :key="item.code" :class="feedbackTone(item.code)">
           {{ item.message }}
         </li>
       </ul>
-      <dl v-if="coverageMetrics" class="feedback-metrics">
-        <div>
-          <dt>기준 영역 중 표시한 비율</dt>
-          <dd class="tnum">{{ coverageMetrics.coverage }}%</dd>
-        </div>
-        <div>
-          <dt>표시한 영역 중 기준 안쪽</dt>
-          <dd class="tnum">{{ coverageMetrics.precision }}%</dd>
-        </div>
-        <div>
-          <dt>중심 거리</dt>
-          <dd class="tnum">{{ coverageMetrics.distance }}px</dd>
-        </div>
-      </dl>
+
       <p class="feedback-note">
         위 내용은 표시한 영역과 기준 영역의 <strong>위치·넓이만 비교</strong>한 결과입니다.
         영상 소견은 아래 해설을 확인하세요.
       </p>
     </div>
+
+    <!-- 세부 지표는 접어 둔다. 필요한 사람은 열어 보고, 나머지는 방해받지 않는다.
+         **`spatial_feedback` 블록 안에 두면 안 된다** — 좌표 근사 채점처럼
+         공간 피드백이 없는 경우 수치가 통째로 사라진다 (테스트가 잡아냈다). -->
+    <details class="raw-metrics">
+      <summary>세부 지표 (Dice · IoU · 위치 점수)</summary>
+      <dl>
+        <div><dt>Dice</dt><dd class="tnum">{{ result.dice }}</dd></div>
+        <div><dt>IoU</dt><dd class="tnum">{{ result.iou }}</dd></div>
+        <div><dt>위치 점수</dt><dd class="tnum">{{ result.location_score }}/100</dd></div>
+        <div v-if="coverageMetrics">
+          <dt>표시한 영역 중 기준 안쪽</dt>
+          <dd class="tnum">{{ coverageMetrics.precision }}%</dd>
+        </div>
+      </dl>
+    </details>
 
     <!-- 오버레이 -->
     <div class="viewer-frame overlay-frame">
@@ -393,6 +474,9 @@ function ratio(value, max = 1) {
 }
 
 .attempt {
+  /* verdict 가 wrap 하는 flex 라 이 줄은 새 행으로 내려간다.
+     폭을 100% 로 잡지 않으면 구분선이 글자 길이만큼만 그어져 깨져 보인다. */
+  flex: 1 1 100%;
   margin: 14px 0 0;
   padding-top: 12px;
   border-top: 1px solid var(--line, rgba(0, 0, 0, 0.08));
@@ -445,7 +529,144 @@ function ratio(value, max = 1) {
 }
 
 .verdict-head {
-  flex: 1 1 200px;
+  flex: 1 1 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-5);
+  flex-wrap: wrap;
+}
+
+.verdict-text {
+  flex: 1 1 260px;
+}
+
+/* **하나의 숫자만 크게.** 여러 지표를 같은 크기로 두면 무엇을 봐야 할지 모른다. */
+.headline {
+  display: flex;
+  align-items: baseline;
+  gap: 3px;
+  flex: 0 0 auto;
+}
+.headline-num {
+  font-size: 46px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.03em;
+}
+.headline-unit {
+  font-size: 20px;
+  font-weight: 600;
+}
+.headline-label {
+  margin-left: var(--sp-2);
+  font-size: 13px;
+  color: var(--ink-secondary);
+}
+.verdict.match .headline-num,
+.verdict.match .headline-unit {
+  color: var(--match-ink);
+}
+.verdict.partial_match .headline-num,
+.verdict.partial_match .headline-unit {
+  color: var(--partial-ink);
+}
+.verdict.mismatch .headline-num,
+.verdict.mismatch .headline-unit {
+  color: var(--mismatch-ink);
+}
+
+/* --- 맞춘 / 놓친 / 과하게 표시한 ------------------------------------- */
+.breakdown {
+  list-style: none;
+  margin: 0 0 var(--sp-4);
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--sp-4);
+}
+.breakdown-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 5px;
+}
+.breakdown-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-secondary);
+}
+.breakdown-value {
+  font-size: 18px;
+  font-weight: 700;
+}
+.breakdown-hint {
+  margin: 5px 0 0;
+  font-size: 11.5px;
+  color: var(--ink-muted);
+}
+
+.offsets {
+  display: flex;
+  gap: var(--sp-6);
+  flex-wrap: wrap;
+  padding: var(--sp-3) 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  margin-bottom: var(--sp-4);
+}
+.offset {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.offset-label {
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+.offset-value {
+  font-size: 15px;
+  font-weight: 600;
+}
+.offset-value small {
+  font-weight: 400;
+  color: var(--ink-muted);
+  margin-left: 4px;
+}
+
+.raw-metrics {
+  margin-top: var(--sp-4);
+  font-size: 13px;
+}
+.raw-metrics summary {
+  cursor: pointer;
+  color: var(--ink-muted);
+  padding: 4px 0;
+}
+.raw-metrics summary:focus-visible {
+  outline: 2px solid var(--brand-300);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.raw-metrics dl {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--sp-3);
+  margin: var(--sp-3) 0 0;
+}
+.raw-metrics dt {
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+.raw-metrics dd {
+  margin: 2px 0 0;
+  font-weight: 600;
+}
+
+@media (max-width: 720px) {
+  .breakdown {
+    grid-template-columns: 1fr;
+  }
 }
 
 .grade {

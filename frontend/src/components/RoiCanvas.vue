@@ -10,7 +10,7 @@
  *
  * 도구 막대는 영상 위(다크 바)에 붙인다 — 판독 중 시선이 영상을 벗어나지 않게.
  */
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 const props = defineProps({
   imageUrl: { type: String, default: null },
@@ -41,6 +41,12 @@ const brushSize = ref(24)
 const points = ref([]) // api-spec.md 2-3 roi.points — 원본 픽셀 좌표
 const strokeCount = ref(0)
 const imageBroken = ref(false)
+
+/** 화면에는 사람이 읽을 문장만 두고, 진단에 필요한 주소는 콘솔로 보낸다. */
+function onImageError() {
+  imageBroken.value = true
+  console.warn('[RoiCanvas] 영상을 불러오지 못했습니다:', props.imageUrl)
+}
 
 const hasInput = computed(() => points.value.length > 0 || strokeCount.value > 0)
 
@@ -78,7 +84,10 @@ function initCanvases() {
 
   points.value = []
   strokeCount.value = 0
+  history.value = []
+  historyIndex.value = -1
   notify()
+  pushHistory() // 빈 상태도 되돌아갈 수 있는 지점이다
 }
 
 onMounted(() => {
@@ -160,6 +169,7 @@ function onPointerDown(event) {
     drawDot(p)
     points.value.push([p.x, p.y])
     notify()
+    pushHistory()
     return
   }
 
@@ -196,6 +206,9 @@ function onPointerUp(event) {
   drawing = false
   last = null
   viewCanvas.value.releasePointerCapture?.(event.pointerId)
+  // **획 단위로 되돌린다.** 픽셀 단위로 쌓으면 되돌리기가 한 번에
+  // 눈에 띄는 변화를 만들지 못해 쓸모가 없다.
+  pushHistory()
 }
 
 function clear() {
@@ -205,11 +218,100 @@ function clear() {
   points.value = []
   strokeCount.value = 0
   notify()
+  pushHistory()
 }
+
+/* ---------------------------------------------------------------------
+   되돌리기 / 다시하기
+   ---------------------------------------------------------------------
+   **여기 없던 것 중 가장 아쉬웠던 기능.** 실수를 되돌릴 방법이
+   "전체 지우기" 뿐이라, 마지막 한 획이 틀리면 처음부터 다시 칠해야 했다.
+   판독 훈련에서 그건 학습이 아니라 노동이다.
+
+   스냅샷은 **마스크 PNG 문자열**로 보관한다.
+   `ImageData` 로 들고 있으면 512×512 한 장이 1MB 라 20단계면 20MB 다.
+   마스크는 대부분이 투명이라 PNG 로는 몇 KB 로 줄어든다.
+   화면용 캔버스는 마스크에서 색만 입혀 되살릴 수 있으므로 따로 저장하지 않는다.
+--------------------------------------------------------------------- */
+const HISTORY_LIMIT = 25
+const history = ref([])
+const historyIndex = ref(-1)
+const canUndo = computed(() => historyIndex.value > 0)
+const canRedo = computed(() => historyIndex.value < history.value.length - 1)
+
+function pushHistory() {
+  if (!maskCanvas) return
+  // 되돌린 뒤 새로 그리면 그 앞의 "다시하기" 가지는 버린다 (일반적인 편집기 동작)
+  history.value = history.value.slice(0, historyIndex.value + 1)
+  history.value.push({
+    mask: maskCanvas.toDataURL('image/png'),
+    points: points.value.map(([x, y]) => [x, y]),
+    strokeCount: strokeCount.value,
+  })
+  if (history.value.length > HISTORY_LIMIT) history.value.shift()
+  historyIndex.value = history.value.length - 1
+}
+
+function repaintViewFromMask() {
+  const w = viewCanvas.value.width
+  const h = viewCanvas.value.height
+  viewCtx.clearRect(0, 0, w, h)
+  viewCtx.save()
+  viewCtx.drawImage(maskCanvas, 0, 0)
+  // 마스크(흰색)를 화면용 반투명 파랑으로 물들인다
+  viewCtx.globalCompositeOperation = 'source-in'
+  viewCtx.fillStyle = 'rgba(47, 98, 232, 0.55)'
+  viewCtx.fillRect(0, 0, w, h)
+  viewCtx.restore()
+}
+
+async function applySnapshot(snapshot) {
+  points.value = snapshot.points.map(([x, y]) => [x, y])
+  strokeCount.value = snapshot.strokeCount
+  await new Promise((resolve) => {
+    const img = new Image()
+    img.onload = () => {
+      maskCtx.clearRect(0, 0, maskCanvas.width, maskCanvas.height)
+      maskCtx.drawImage(img, 0, 0)
+      repaintViewFromMask()
+      resolve()
+    }
+    // 스냅샷을 못 읽어도 **입력을 잃지는 않게** 한다 — 현재 화면을 그대로 둔다
+    img.onerror = resolve
+    img.src = snapshot.mask
+  })
+  notify()
+}
+
+async function undo() {
+  if (!canUndo.value) return
+  historyIndex.value -= 1
+  await applySnapshot(history.value[historyIndex.value])
+}
+
+async function redo() {
+  if (!canRedo.value) return
+  historyIndex.value += 1
+  await applySnapshot(history.value[historyIndex.value])
+}
+
+function onKeydown(event) {
+  if (props.disabled) return
+  const mod = event.ctrlKey || event.metaKey
+  if (!mod || event.key.toLowerCase() !== 'z') return
+  event.preventDefault()
+  if (event.shiftKey) redo()
+  else undo()
+}
+
+onMounted(() => window.addEventListener('keydown', onKeydown))
+onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 
 /** 부모(화면 2·5)가 제출 직전에 호출한다. */
 defineExpose({
   clear,
+  undo,
+  redo,
   getPoints: () => points.value.map(([x, y]) => [x, y]),
   getMaskDataUrl: () => maskCanvas?.toDataURL('image/png') ?? null,
   getMaskBase64: () => maskCanvas?.toDataURL('image/png').split(',')[1] ?? null,
@@ -241,6 +343,29 @@ defineExpose({
 
         <span class="spacer"></span>
 
+        <!-- **획 단위로 되돌린다.** 예전에는 실수를 되돌릴 방법이 "전체 지우기"
+             뿐이라, 마지막 한 획이 틀리면 처음부터 다시 칠해야 했다. -->
+        <div class="history">
+          <button
+            class="icon"
+            :disabled="disabled || !canUndo"
+            title="되돌리기 (Ctrl+Z)"
+            aria-label="되돌리기"
+            @click="undo"
+          >
+            ↺
+          </button>
+          <button
+            class="icon"
+            :disabled="disabled || !canRedo"
+            title="다시하기 (Ctrl+Shift+Z)"
+            aria-label="다시하기"
+            @click="redo"
+          >
+            ↻
+          </button>
+        </div>
+
         <button :disabled="disabled || !hasInput" @click="clear">전체 지우기</button>
       </div>
 
@@ -251,7 +376,7 @@ defineExpose({
           :src="imageUrl"
           alt="의료영상"
           class="base"
-          @error="imageBroken = true"
+          @error="onImageError"
           @load="imageBroken = false"
         />
         <div v-else class="base placeholder">
@@ -289,20 +414,35 @@ defineExpose({
       </div>
     </div>
 
+    <!-- **서명 URL 을 화면에 그대로 뿌리지 않는다.** 사용자가 할 수 있는 일도 없고,
+         서명·만료 파라미터까지 노출된다. 개발자용 정보는 콘솔로 보낸다. -->
     <p v-if="imageUrl && imageBroken" class="muted note">
-      {{ imageUrl }} 이미지를 찾을 수 없습니다. 이미지가 없어도 ROI 입력·제출은 그대로 동작합니다.
+      영상을 불러오지 못했습니다. 표시(ROI) 입력과 제출은 그대로 동작합니다.
     </p>
   </div>
 </template>
 
 <style scoped>
 .roi {
-  max-width: 560px;
+  /* **부모가 정한다.** 560px 이 여기 박혀 있어서, 화면이 아무리 넓어도
+     판독 영상이 커지지 않았다 — 1440px 화면에서 영상이 절반도 못 썼다.
+     의료영상 학습에서 영상 크기는 기능이다. 기본값은 예전 그대로라
+     이 컴포넌트를 쓰는 다른 화면(결과 비교)은 영향을 받지 않는다. */
+  max-width: var(--roi-max-width, 560px);
+  margin-inline: auto;
 }
 
-.tools {
+.tools,
+.history {
   display: flex;
   gap: 4px;
+}
+
+.viewer-bar .icon {
+  min-width: 30px;
+  padding: 3px 8px;
+  font-size: 15px;
+  line-height: 1.2;
 }
 
 .size {

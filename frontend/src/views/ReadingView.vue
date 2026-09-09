@@ -260,22 +260,22 @@ onBeforeRouteUpdate((to) => {
 </script>
 
 <template>
-  <RouterLink v-if="isRetry" to="/wrong-notes" class="back">← 복습노트</RouterLink>
-  <RouterLink v-else to="/cases" class="back">← 케이스 목록</RouterLink>
-
   <p v-if="loadError" class="error">{{ loadError }}</p>
   <p v-else-if="!caseDetail" class="muted loading">케이스를 불러오는 중...</p>
 
   <template v-else>
+    <!-- **한 줄로 붙인다.** 뒤로가기·제목·부위가 각각 줄을 차지하면
+         세로 130px 이 사라진다 — 그만큼 영상이 작아진다. -->
     <header class="head">
-      <div class="titles">
-        <h1>{{ caseDetail.case_id }}</h1>
-        <p v-if="caseDetail.body_part" class="lead">
-          {{ bodyPartLabel(caseDetail.body_part) }}
-          <span class="dot">·</span>
-          {{ diseaseLabel(caseDetail.disease) }}
-        </p>
-      </div>
+      <RouterLink :to="isRetry ? '/wrong-notes' : '/cases'" class="back">
+        ← {{ isRetry ? '복습노트' : '케이스 목록' }}
+      </RouterLink>
+      <h1>{{ caseDetail.case_id }}</h1>
+      <p v-if="caseDetail.body_part" class="head-meta">
+        {{ bodyPartLabel(caseDetail.body_part) }}
+        <span class="dot">·</span>
+        {{ diseaseLabel(caseDetail.disease) }}
+      </p>
       <span v-if="isRetry" class="badge partial_match">재도전</span>
     </header>
 
@@ -296,7 +296,7 @@ onBeforeRouteUpdate((to) => {
           @change="onRoiChange"
         />
 
-        <div v-if="hasSlices" class="slices card">
+        <div v-if="hasSlices" class="slices">
           <div class="slice-bar">
             <button
               class="sm"
@@ -335,12 +335,17 @@ onBeforeRouteUpdate((to) => {
             </p>
             <button class="sm" @click="goToRepresentative">대표 slice로 이동</button>
           </div>
-          <p v-else class="muted">
-            병변은 여러 slice 에 걸쳐 있습니다. 좌우로 넘겨 범위를 확인한 뒤
-            이 대표 slice 에 표시하세요. 번호는 <strong>원본 volume 인덱스</strong>라 학습 해설의
-            slice 번호와 같습니다 (이 케이스는 병변 주변
-            {{ slices.length }}장이 등록되어 있습니다 / 원본 {{ meta.total_slices }}장).
-          </p>
+          <!-- **매번 읽을 문장이 아니다.** 처음 한 번 이해하면 되는 내용이라
+               접어 두고, 화면의 세로 공간은 영상에 준다. -->
+          <details v-else class="slice-help">
+            <summary>slice 번호는 무엇인가요?</summary>
+            <p>
+              병변은 여러 slice 에 걸쳐 있습니다. 좌우로 넘겨 범위를 확인한 뒤
+              <strong>대표 slice</strong> 에 표시하세요. 번호는 <strong>원본 volume 인덱스</strong>라
+              학습 해설의 slice 번호와 같습니다 (이 케이스는 병변 주변
+              {{ slices.length }}장이 등록되어 있습니다 / 원본 {{ meta.total_slices }}장).
+            </p>
+          </details>
         </div>
       </div>
 
@@ -433,8 +438,8 @@ onBeforeRouteUpdate((to) => {
   align-items: center;
   min-height: 36px;
   padding: 0 4px;
-  margin-bottom: var(--sp-3);
   margin-left: -4px;
+  flex: 0 0 auto;
   color: var(--ink-muted);
   font-size: 13.5px;
   text-decoration: none;
@@ -450,9 +455,19 @@ onBeforeRouteUpdate((to) => {
 
 .head {
   display: flex;
-  align-items: flex-start;
+  align-items: baseline;
   gap: var(--sp-3);
-  margin-bottom: var(--sp-5);
+  margin-bottom: var(--sp-3);
+  flex-wrap: wrap;
+}
+.head h1 {
+  margin: 0;
+  font-size: 24px;
+}
+.head-meta {
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: 13.5px;
 }
 
 .head h1 {
@@ -465,27 +480,58 @@ onBeforeRouteUpdate((to) => {
 }
 
 .layout {
-  display: flex;
-  flex-wrap: wrap;
+  /* **영상이 화면의 중심이어야 한다.** 예전에는 flex-wrap 이라
+     뷰어가 460px 기준으로 자리를 잡고 남는 폭이 그냥 여백이 됐다.
+     grid 로 바꿔 남는 폭을 전부 뷰어에 준다. */
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 330px;
   gap: var(--sp-5);
-  align-items: flex-start;
+  align-items: start;
 }
 
 .viewer-col {
-  flex: 1 1 460px;
-  min-width: 300px;
+  /* 세로로도 잘리지 않게. 화면 높이에서 상단바(62) + 머리말(48) + 도구바(46)
+     + slice 바(60) + 여백을 뺀 만큼까지만 키운다.
+     **그보다 크면 스크롤해야 영상 전체가 보인다** — 판독에서 그건 손해다. */
+  --roi-max-width: min(100%, calc(100vh - 300px));
 }
 
+
+
 .side {
-  flex: 0 0 270px;
   position: sticky;
   top: 76px;
 }
 
 .slices {
-  margin-top: var(--sp-4);
-  max-width: 560px;
-  padding: var(--sp-4);
+  /* 뷰어와 같은 폭으로 붙는다 — 예전에는 560px 로 고정돼 있어
+     영상이 커지면 컨트롤만 왼쪽에 남았다. */
+  max-width: var(--roi-max-width, 560px);
+  margin: var(--sp-3) auto 0;
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+}
+
+.slice-help {
+  margin-top: var(--sp-2);
+  font-size: 12.5px;
+  color: var(--ink-muted);
+}
+.slice-help summary {
+  cursor: pointer;
+  color: var(--ink-secondary);
+  padding: 2px 0;
+}
+.slice-help summary:focus-visible {
+  outline: 2px solid var(--brand-300);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.slice-help p {
+  margin: var(--sp-2) 0 0;
+  line-height: 1.6;
 }
 
 .slice-bar {
