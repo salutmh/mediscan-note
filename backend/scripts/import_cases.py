@@ -38,6 +38,7 @@ manifest 형식은 `backend/data/manifest.example.json` 참고.
 import argparse
 import json
 import shutil
+import uuid
 import sys
 from datetime import date
 from pathlib import Path
@@ -360,6 +361,34 @@ def _copy_assets(info: dict) -> dict:
     }
 
 
+def _stash_case_dir(case_id: str) -> Path | None:
+    """이 케이스의 기존 자산을 옆으로 치운다. 없으면 None.
+
+    등록이 중간에 실패했을 때 되돌리기 위해서다. 덮어쓰기(--replace) 도중 실패하면
+    **잘 돌던 케이스의 자산이 반쯤 갈아엎힌 상태**로 남는데, 그게 가장 나쁘다.
+    """
+    case_dir = CASES_DIR / case_id
+    if not case_dir.exists():
+        return None
+    stash = CASES_DIR / f".stash-{case_id}-{uuid.uuid4().hex[:8]}"
+    shutil.move(str(case_dir), str(stash))
+    return stash
+
+
+def _restore_case_dir(case_id: str, stash: Path | None) -> None:
+    """실패했을 때 원래 자산으로 되돌린다. 원래 없었으면 새로 만든 것을 지운다."""
+    case_dir = CASES_DIR / case_id
+    if case_dir.exists():
+        shutil.rmtree(case_dir, ignore_errors=True)
+    if stash is not None and stash.exists():
+        shutil.move(str(stash), str(case_dir))
+
+
+def _drop_stash(stash: Path | None) -> None:
+    if stash is not None and stash.exists():
+        shutil.rmtree(stash, ignore_errors=True)
+
+
 def import_manifest(manifest_path: Path, replace: bool = False, dry_run: bool = False) -> dict:
     """manifest 를 읽어 케이스를 등록한다. 결과 요약을 돌려준다."""
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -394,59 +423,76 @@ def import_manifest(manifest_path: Path, replace: bool = False, dry_run: bool = 
                 summary["registered"].append((info["case_id"], "(dry-run)"))
                 continue
 
-            urls = _copy_assets(info)
-            width, height = info["image_size"]
-            case = db.get(Case, info["case_id"]) or Case(case_id=info["case_id"])
-            case.body_part = info["body_part"]
-            case.disease = info["disease"]
-            case.image_url = urls["image_url"]
-            case.thumbnail_url = urls["thumbnail_url"]
-            case.reference_mask_url = urls["reference_mask_url"]
-            case.volume_id = info["volume_id"]
-            case.representative_slice = info["representative_slice"]
-            case.image_meta = {
-                "width": width,
-                "height": height,
-                "slice_index": info["slice_index"],
-                "total_slices": info["total_slices"],
-            }
-            case.explanation = info["explanation"]
-            # 소견이 실제로 들어왔을 때만 approved. 없으면 "아직 검토 전"이라고 사실대로 둔다.
-            # (manifest 로 상태만 approved 로 올리는 경로를 만들지 않는다)
-            case.findings_status = (
-                "approved" if info["explanation"].get("case_findings") else "needs_expert_review"
-            )
-            # 좌표 근사 채점은 개발 전용이라 실제 케이스에는 쓰지 않는다
-            case.reference_shape = None
-            db.add(case)
-            db.flush()
-
-            # slice 는 통째로 갈아끼운다 (부분 갱신은 예전 slice 가 남을 수 있다)
-            for old in db.scalars(
-                select(CaseSlice).where(CaseSlice.case_id == info["case_id"])
-            ).all():
-                db.delete(old)
-            db.flush()
-
-            for item in info["slices"]:
-                index = item["slice_index"]
-                db.add(
-                    CaseSlice(
-                        case_id=info["case_id"],
-                        slice_index=index,
-                        image_url=urls["slice_urls"][index]["image_url"],
-                        mask_url=urls["slice_urls"][index]["mask_url"],
-                        lesion_area_px=item["lesion_area_px"],
-                    )
+            # **케이스 하나를 원자적으로 처리한다.**
+            # 24건을 한 번에 넣다가 20번째에서 실패했을 때, 앞 19건은 남고 20번째는
+            # 흔적 없이 사라져야 한다. DB 만 롤백하면 static 에 자산이 남아
+            # "파일은 있는데 DB 에 없는" 상태가 되고, 다음 등록 때 무엇이 진짜인지 알 수 없다.
+            stash = _stash_case_dir(info["case_id"])
+            try:
+                urls = _copy_assets(info)
+                width, height = info["image_size"]
+                case = db.get(Case, info["case_id"]) or Case(case_id=info["case_id"])
+                case.body_part = info["body_part"]
+                case.disease = info["disease"]
+                case.image_url = urls["image_url"]
+                case.thumbnail_url = urls["thumbnail_url"]
+                case.reference_mask_url = urls["reference_mask_url"]
+                case.volume_id = info["volume_id"]
+                case.representative_slice = info["representative_slice"]
+                case.image_meta = {
+                    "width": width,
+                    "height": height,
+                    "slice_index": info["slice_index"],
+                    "total_slices": info["total_slices"],
+                }
+                case.explanation = info["explanation"]
+                # 소견이 실제로 들어왔을 때만 approved. 없으면 "아직 검토 전"이라고 사실대로 둔다.
+                # (manifest 로 상태만 approved 로 올리는 경로를 만들지 않는다)
+                case.findings_status = (
+                    "approved"
+                    if info["explanation"].get("case_findings")
+                    else "needs_expert_review"
                 )
+                # 좌표 근사 채점은 개발 전용이라 실제 케이스에는 쓰지 않는다
+                case.reference_shape = None
+                db.add(case)
+                db.flush()
 
+                # slice 는 통째로 갈아끼운다 (부분 갱신은 예전 slice 가 남을 수 있다)
+                for old_slice in db.scalars(
+                    select(CaseSlice).where(CaseSlice.case_id == info["case_id"])
+                ).all():
+                    db.delete(old_slice)
+                db.flush()
+
+                for item in info["slices"]:
+                    index = item["slice_index"]
+                    db.add(
+                        CaseSlice(
+                            case_id=info["case_id"],
+                            slice_index=index,
+                            image_url=urls["slice_urls"][index]["image_url"],
+                            mask_url=urls["slice_urls"][index]["mask_url"],
+                            lesion_area_px=item["lesion_area_px"],
+                        )
+                    )
+
+                # 이 케이스만 커밋한다. 앞 케이스는 이미 안전하게 들어가 있다.
+                db.commit()
+            except Exception as exc:
+                # DB 와 파일을 **함께** 되돌린다. 한쪽만 되돌리면 상태가 어긋난다.
+                db.rollback()
+                _restore_case_dir(info["case_id"], stash)
+                summary["failed"].append((info["case_id"], f"등록 실패: {exc}"))
+                continue
+            else:
+                _drop_stash(stash)
+
+            existing.add(info["case_id"])
             note = "gradable" if urls["reference_mask_url"] else "gradable=false"
             if info["slices"]:
                 note += f", slice {len(info['slices'])}장 (대표 {info['representative_slice']})"
             summary["registered"].append((info["case_id"], note))
-
-        if not dry_run:
-            db.commit()
 
     return summary
 

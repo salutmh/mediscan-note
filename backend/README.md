@@ -271,6 +271,9 @@ DICOM 원본에서 서비스 케이스까지 **4단계로 나눠** 진행한다.
 3) 자산 생성    npy -> 표시용 PNG + 마스크 PNG + manifest
    python -m scripts.build_vs_seg_case_assets --export-root data/vs_seg_export        --out data/vs_seg_cases --margin 3
 4) 등록         python -m scripts.import_cases data/vs_seg_cases/manifest.json
+   # --dry-run 으로 먼저 확인하고, --replace 로 덮어쓴다.
+   # 등록은 **케이스 단위로 원자적**이다 — 20번째에서 실패해도 앞 19건은 남고
+   # 실패한 케이스는 DB·파일 양쪽에서 흔적 없이 사라진다.
 5) 모델 예측     (학습 venv 로) python -m scripts.run_model_predictions                      --export-root data/vs_seg_export --verify-against <노트북 outputs>
 ```
 
