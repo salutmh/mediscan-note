@@ -990,6 +990,34 @@ cd backend && alembic revision --autogenerate -m "<설명>"
 
 ## 13. NEXT STEP — 다음 세션이 가장 먼저 할 일
 
+### 먼저 눈으로 확인하기 (로컬 실행)
+
+```bash
+# 터미널 1 — 백엔드
+cd backend
+MEDISCAN_RATE_LIMIT=0 python -m uvicorn app.main:app --host 127.0.0.1 --port 8010
+
+# 터미널 2 — 프론트
+cd frontend
+npm run dev          # http://localhost:5173
+```
+
+| 화면 | URL | 무엇이 달라졌나 |
+|---|---|---|
+| **홈 (신설)** | `/` | 이어서 학습하기 · 진행 지표 4종 · 재도전 개선폭 · 최근 학습 |
+| 케이스 목록 | `/cases` | 카드마다 시도 횟수·최고/최근 일치도, 상태 필터, 검색 |
+| **판독** | `/cases/VS-SEG-202` | 영상이 훨씬 크다. **Ctrl+Z 로 되돌리기** |
+| 결과 | 위 화면에서 제출 | 판정 + 큰 숫자 하나 → 겹친/놓친/과한 영역 → 세부 지표는 접힘 |
+| 복습노트 | `/wrong-notes` | 썸네일 + 최근/최고 일치도 |
+| 진행현황 | `/progress` | 케이스별 학습 이력 표 (첫→최근→최고→변화) |
+| 검수(운영자) | `/admin/review` | 24건 기술 검수. 시트를 스크롤에 맞춰 받는다 |
+
+> 스테이징(Supabase)으로 띄우려면:
+> `python -m scripts.staging_secret run --mode session_pooler -- python -m uvicorn app.main:app --port 8020`
+> 그다음 `python -m scripts.staging_e2e --base http://127.0.0.1:8020`
+
+---
+
 > **Phase 1~8 과 자율 루프가 전부 끝났다. 이미 있는 것을 다시 만들지 말 것.**
 > 4·5절과 `docs/RELEASE_READINESS.md` 3~6절을 먼저 본다.
 >
@@ -1002,6 +1030,14 @@ cd backend && alembic revision --autogenerate -m "<설명>"
 >       판단 기준은 `docs/CASE_REVIEW_CHECKLIST.md` 2절.
 >       **6케이스로는 학습 분량이 부족하다 — 이게 제품을 가장 크게 바꾼다.**
 > - [ ] **`case_findings` 입력**: 전문가가 `/admin/cases` 에서 (BLOCKER-2)
+> - [ ] **`pg_dump` 가 있는 환경에서 복구 훈련 1회** — 이 개발 PC 에는 PostgreSQL
+>       클라이언트 도구가 없어 Supabase 백업/복구를 확인하지 못했다.
+>       `deploy_preflight` 가 이 항목을 **차단**으로 잡는다.
+> - [ ] **AI 예측 sidecar 생성** — 이 PC 에는 sidecar 가 하나도 없다
+>       (`ai_prediction: null` 로 나가고 채점은 정상이다).
+>       학습 venv 가 있는 환경에서:
+>       `python -m scripts.sidecar_manage plan` → 안내된 명령 실행 →
+>       `validate` → `promote`
 >
 > 검수가 끝나면 이어지는 것은 전부 준비돼 있다:
 > ```bash
