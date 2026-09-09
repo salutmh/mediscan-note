@@ -407,6 +407,18 @@ onBeforeRouteUpdate((to) => {
             영역을 먼저 칠해야 제출할 수 있습니다.
           </p>
         </div>
+
+        <!-- **되돌리기를 아무도 모르면 없는 것과 같다.**
+             도구 막대의 ↺ 아이콘만으로는 발견되지 않는다.
+             제출 전에만 보여준다 — 제출 뒤에는 입력이 잠긴다. -->
+        <div v-if="phase !== 'done'" class="card tips">
+          <h3>표시하다 실수했다면</h3>
+          <ul>
+            <li><kbd>Ctrl</kbd>+<kbd>Z</kbd> 마지막 획 되돌리기</li>
+            <li><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> 다시하기</li>
+            <li><strong>지우개</strong>로 일부만 지울 수도 있습니다</li>
+          </ul>
+        </div>
       </aside>
     </div>
 
@@ -501,6 +513,36 @@ onBeforeRouteUpdate((to) => {
 .side {
   position: sticky;
   top: 76px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+.tips h3 {
+  margin: 0 0 var(--sp-3);
+  font-size: 13.5px;
+  color: var(--ink-secondary);
+}
+.tips ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  font-size: 12.5px;
+  color: var(--ink-muted);
+}
+.tips kbd {
+  display: inline-block;
+  padding: 1px 5px;
+  border: 1px solid var(--line-strong);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  background: var(--surface);
+  font-family: inherit;
+  font-size: 11.5px;
+  color: var(--ink-secondary);
 }
 
 .slices {
