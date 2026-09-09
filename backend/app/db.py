@@ -58,7 +58,37 @@ DATABASE_URL = _resolve_database_url()
 # FastAPI 는 요청을 스레드풀에서 처리하므로 이 옵션이 필요하다 (PostgreSQL 에는 불필요).
 connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
 
-engine = create_engine(DATABASE_URL, connect_args=connect_args, future=True)
+
+def _engine_options(url: str) -> dict:
+    """원격 DB 용 연결 풀 설정.
+
+    ==========================================================================
+    **원격 DB 는 유휴 연결을 끊는다.**
+    ==========================================================================
+    로컬 Docker PostgreSQL 은 2분짜리 테스트 도중에 연결을 끊지 않아서 이 문제가
+    보이지 않는다. 하지만 관리형 DB(Supabase 등)와 그 앞의 풀러는 일정 시간 뒤
+    유휴 연결을 닫는다. 그러면 SQLAlchemy 가 **이미 죽은 연결을 꺼내주고**
+    요청이 500 으로 떨어진다 — 배포 후 첫 한산한 시간대에 나타난다.
+
+      pool_pre_ping   꺼내 쓰기 전에 살아 있는지 확인한다 (죽었으면 조용히 새로 만든다)
+      pool_recycle    이 시간이 지난 연결은 미리 버린다. 서버가 끊기 전에 우리가 먼저 버린다
+
+    SQLite 는 파일이라 해당 없다.
+    """
+    if url.startswith("sqlite"):
+        return {}
+    return {
+        "pool_pre_ping": True,
+        # 관리형 DB 의 유휴 타임아웃(보통 몇 분~수십 분)보다 짧게 잡는다
+        "pool_recycle": 300,
+        "pool_size": int(os.getenv("MEDISCAN_DB_POOL_SIZE", "5")),
+        "max_overflow": int(os.getenv("MEDISCAN_DB_MAX_OVERFLOW", "5")),
+    }
+
+
+engine = create_engine(
+    DATABASE_URL, connect_args=connect_args, future=True, **_engine_options(DATABASE_URL)
+)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
 
 
@@ -96,6 +126,19 @@ def _assert_not_legacy_schema() -> None:
         )
 
 
+def _warn_if_pooled_for_migration() -> None:
+    """마이그레이션을 트랜잭션 풀러로 돌면 조용히 깨질 수 있다.
+
+    스키마 변경은 세션 수준 기능을 쓴다. Supabase Transaction pooler(6543)는
+    트랜잭션 단위로 연결을 돌려써서 prepared statement 가 세션에 남지 않는다.
+    **막지는 않는다** — 사용자의 인프라 사정을 우리가 알 수 없다. 알려줄 뿐이다.
+    """
+    from app import db_connection
+
+    for note in db_connection.advisories(DATABASE_URL, purpose="migration"):
+        logger.warning("마이그레이션 연결 확인: %s", note)
+
+
 def run_migrations() -> None:
     """Alembic 을 프로그램 안에서 실행해 스키마를 head 까지 올린다.
 
@@ -106,6 +149,7 @@ def run_migrations() -> None:
     from alembic.config import Config
 
     _assert_not_legacy_schema()
+    _warn_if_pooled_for_migration()
 
     ini_path = BACKEND_DIR / "alembic.ini"
     config = Config(str(ini_path))

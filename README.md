@@ -96,8 +96,8 @@ npm run dev
 
 | 검증 | 결과 |
 |---|---|
-| `cd backend && pytest` | **738 passed** |
-| 같은 스위트를 PostgreSQL 로 | **738 passed** (`scripts/verify_postgres.py`) |
+| `cd backend && pytest` | **830 passed** |
+| 같은 스위트를 PostgreSQL 로 | **830 passed** (`scripts/verify_postgres.py`) |
 | `cd frontend && npm test` | **22 passed** (vitest) |
 | `cd frontend && npm run build` | **통과** |
 | `cd backend && python -m scripts.verify_cases` | **VS-SEG 6케이스 통과** (등록 상태 + 오래된 예측 sidecar 점검) |

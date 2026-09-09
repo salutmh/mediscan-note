@@ -288,6 +288,12 @@ def main() -> int:
     driver = DATABASE_URL.split("://", 1)[0]
     print(f"대상: {driver} / 출력: {out_dir}")
 
+    # 백업은 세션 수준 기능(pg_dump)을 쓴다. 트랜잭션 풀러로는 깨질 수 있다.
+    from app import db_connection
+
+    for note in db_connection.advisories(DATABASE_URL, purpose="backup"):
+        print(f"  ※ {note}")
+
     try:
         if DATABASE_URL.startswith("sqlite"):
             target = backup_sqlite(DATABASE_URL, out_dir)

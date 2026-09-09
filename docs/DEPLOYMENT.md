@@ -8,6 +8,12 @@
 
 ---
 
+> **Supabase 로 배포한다면 `docs/SUPABASE_SETUP.md` 를 먼저 본다.**
+> 연결 방식이 셋이고 **포트만으로 구분되지 않는다** (세션 풀러도 5432 를 쓴다).
+> 마이그레이션·백업은 Direct connection 을 써야 한다.
+>
+> 계정 없이 배포 형태를 미리 연습하려면 `tools/staging/README.md`.
+
 ## 0. 배포 전 반드시 확인 (체크리스트)
 
 **기계로 확인 가능한 항목은 한 번에 돌릴 수 있다:**
@@ -112,7 +118,9 @@ cd frontend
 npm ci
 # 배포 API 주소를 .env.production 에 넣는다
 echo "VITE_API_BASE=https://api.example.com/api" > .env.production
-npm run build          # dist/ 를 정적 호스팅에 올린다
+VITE_API_BASE="https://<API 주소>/api" npm run build   # dist/ 를 정적 호스팅에 올린다
+#   VITE_API_BASE 는 **빌드 시점에 번들로 박힌다.** 없거나 localhost 면 빌드가 실패한다.
+#   정적 호스팅에 **SPA fallback** 을 켠다 — 없으면 깊은 경로 새로고침이 404 가 된다.
 ```
 
 `VITE_API_BASE` 는 **빌드 시점에 박힌다.** 주소가 바뀌면 다시 빌드해야 한다.

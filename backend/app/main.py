@@ -8,6 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from app import (
     asset_urls,
     config,
+    db_connection,
     inference,
     logging_config,
     model_predictions,
@@ -115,6 +116,9 @@ def health():
         "cors_origins": describe_cors(),
         "logging": logging_config.describe(),
         "db": DATABASE_URL.split("://", 1)[0],
+        # 어떤 연결 방식으로 붙어 있는지. Supabase 는 Direct/Session/Transaction 이 다르고
+        # 포트만으로는 구분되지 않는다 (app/db_connection.py).
+        "db_connection": db_connection.describe(DATABASE_URL),
         # 어떤 채점 기준으로 돌고 있는지. 환경변수로 덮을 수 있으므로 배포된 값을
         # 눈으로 확인할 수 있어야 한다 (validation_status 도 함께 나간다).
         "scoring": scoring_config.thresholds(),

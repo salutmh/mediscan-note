@@ -166,7 +166,21 @@ def check_database(report: Report) -> None:
 
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
-        report.ok("DB 연결", DATABASE_URL.split("://", 1)[0])
+        from app import db_connection
+
+        described = db_connection.describe(DATABASE_URL)
+        report.ok("DB 연결", f"{described['label']} ({described['host_suffix'] or 'local'})")
+
+        # 연결 방식이 용도에 맞는지. **막지 않는다** — 인프라 사정을 우리가 알 수 없다.
+        for note in db_connection.advisories(DATABASE_URL, purpose="runtime"):
+            if "serverless" in note or "prepared statement" in note:
+                report.warn("DB 연결 방식", note)
+        if db_connection.is_transaction_pooler_url(DATABASE_URL):
+            report.warn(
+                "마이그레이션·백업 연결",
+                "런타임이 Transaction pooler 다. **마이그레이션과 백업은 Direct connection** 으로 "
+                "따로 돌리세요 (스키마 변경·pg_dump 는 세션 수준 기능을 씁니다)",
+            )
     except Exception as exc:
         report.block("DB 연결", f"{type(exc).__name__}: {exc}")
         return
