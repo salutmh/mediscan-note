@@ -664,9 +664,20 @@ onBeforeRouteUpdate((to) => {
 }
 
 @media (max-width: 860px) {
+  /* **한 칸으로 내린다.** grid 로 바꾸면서 이 규칙을 같이 손보지 않아
+     390px 폭에서 뷰어 칸이 6px 까지 찌그러졌다 (1fr + 330px 이 안 들어간다).
+     예전 flex-wrap 레이아웃에서는 저절로 줄바꿈됐던 부분이다. */
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .viewer-col {
+    /* 좁은 화면에서는 세로 여유가 없으니 폭 기준으로만 맞춘다 */
+    --roi-max-width: 100%;
+  }
+
   .side {
     position: static;
-    flex: 1 1 100%;
   }
 }
 </style>

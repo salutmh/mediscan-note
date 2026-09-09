@@ -439,8 +439,11 @@ defineExpose({
 }
 
 .viewer-bar .icon {
-  min-width: 30px;
-  padding: 3px 8px;
+  /* 반응형 점검이 30×30 을 "누르기 힘든 크기"로 잡았다 (권장 44px).
+     아이콘 글자는 그대로 두고 **누를 수 있는 면적만** 넓힌다. */
+  min-width: 34px;
+  min-height: 34px;
+  padding: 4px 9px;
   font-size: 15px;
   line-height: 1.2;
 }
