@@ -15,7 +15,7 @@
 | 원격 | `https://github.com/salutmh/mediscan-note.git` (Public) |
 | 현재 모드 | **지속 자율 개발 루프** (Phase 1~8 은 최초 백로그였고 전부 완료) |
 | STATUS | `IN_PROGRESS` — 사이클마다 제품 재평가 → 최고가치 작업 선정 |
-| 마지막 전체 검증 | 백엔드 **786 passed** (SQLite·PostgreSQL 양쪽) / 프론트 **59 passed** / E2E 6종 / 접근성·좁은화면 점검 0건 / `verify_cases` 6케이스 |
+| 마지막 전체 검증 | 백엔드 **806 passed** (SQLite·PostgreSQL 양쪽) / 프론트 **74 passed** / E2E 7종 / 접근성·좁은화면 점검 0건 / `verify_cases` 6케이스 |
 
 > **push 는 매번 사용자 승인이 필요하다.**
 > force push / rebase / reset --hard / history rewrite 는 하지 않는다.
@@ -649,6 +649,31 @@ Phase 백로그가 끝난 뒤 스스로 선정해서 진행한 작업들이다.
 | `tests/test_documentation_drift.py` | 문서 표류 점검 | 없는 스크립트·환경변수·문서 참조를 잡는다 |
 | `tools/browser-verify/error-paths.mjs` | 오류 경로 E2E | 사용자가 잘못됐을 때 무엇을 보는가 |
 
+### 운영자 화면 UX (루프 #45)
+
+화면을 실제로 띄워 보고 세 가지를 고쳤다.
+
+| 무엇이 잘못돼 있었나 |
+|---|
+| 소견 없이 `검토 완료` 를 **고를 수 있게 해놓고** 서버가 422 로 실패시켰다 |
+| 버튼이 **상태**("노출 중")를 말해서 누르면 노출된다고 읽혔다 (실제로는 숨겨진다) |
+| **제출 332건짜리 케이스가 클릭 한 번에** 사라졌다 (확인 단계 없음) |
+
+검색·필터 5종을 추가했다. 24건 확장 후에는 스크롤로 못 찾는다.
+"소견 없음" 필터는 전문가 검토 대상을 추리는 데 바로 쓰인다.
+
+### SNS 토큰 실검증 (루프 #46)
+
+**계정 탈취 경로가 열려 있었다.** `provider_token` 을 검증 없이 계정 식별자로 써서:
+
+  1. 토큰 값만 알면 **남의 계정으로 로그인**됐다
+  2. 토큰이 갱신되면 **같은 사람이 새 계정**이 됐다 (학습 이력이 갈린다)
+
+각 사에 토큰을 되물어 **바뀌지 않는 식별자**를 받아 계정 키로 쓴다(`app/social_auth.py`).
+`aud`/`app_id` 를 확인해 **다른 서비스용 토큰**으로 들어오는 것도 막는다.
+설정되지 않으면 **production 은 503 으로 거부**한다 — "아직 안 만들었다"와
+"열려 있다"는 다르다. 앱 시크릿은 필요 없고 공개 값(앱 ID)만 있으면 켜진다.
+
 ### 2차 보안 점검에서 나온 실제 취약점
 
 **`/static/cases/.../slice_035.png` 를 로그인 없이 받을 수 있었다** (실제 의료영상 155KB).
@@ -679,24 +704,21 @@ URL 생성이 `absolute_url()` 한 곳이라 거기만 고쳐 전 응답이 함�
 ## 6. 아직 하지 않은 작업
 
 **사람이 있어야 하는 것**
-- **케이스 24건 육안 검수** — `/admin/review` 에서 판단하면 된다. 준비는 전부 끝났다
-  (export · 검수 시트 · 사전점검 · 기록 저장). 이게 제품을 가장 크게 바꾼다
+- **케이스 24건 육안 검수** — `/admin/review` 에서 판단하면 된다. 준비는 전부 끝났다.
+  이게 제품을 가장 크게 바꾼다 (지금 6케이스로는 학습 분량이 부족하다)
 - **`case_findings` 입력** — 구조 완성, 전문가 대기 (BLOCKER-2)
+- **SNS 앱 등록** — 실검증 로직은 끝났다. 각 사에서 앱 ID 를 받아 환경변수에 넣으면 켜진다
 
-**코드로 가능한 것 (남은 백로그)**
-- error-path E2E (오류 화면·복구 경로를 브라우저에서)
-- security review 2차
-- API error contract 정리
-- Admin UX
-- dependency/license inventory
-- documentation drift 자동 점검
-- 키보드로 ROI 입력할 수단 (설계 필요)
+**코드로 가능한 것 (남은 것이 많지 않다)**
+- 키보드로 ROI 입력할 수단 (자유곡선 대체 — 설계 판단 필요)
 - `Submission.explanation` 스냅샷을 어디에 보여줄지
+- 본격 부하 테스트 (동시성 **정확성**은 확인했다)
+- CSP 정책 확정 (배포 형태가 정해진 뒤 `MEDISCAN_CSP` 로)
 
 **외부 수단·판단이 필요한 것**
 - 이메일 인증 (BLOCKER-4)
 - 접속기록(감사 로그) 범위 (BLOCKER-3)
-- SNS 실인증 연동 — **CLAUDE.md 가 "실서비스 전 반드시"라고 적은 유일한 하드닝 잔여 항목**
+- 저장소 라이선스 (BLOCKER-5)
 
 ---
 
@@ -733,10 +755,10 @@ cd backend && alembic revision --autogenerate -m "<설명>"
 
 | 무엇 | 명령 | 결과 |
 |---|---|---|
-| 백엔드 (SQLite) | `cd backend && pytest` | **786 passed** |
+| 백엔드 (SQLite) | `cd backend && pytest` | **806 passed** |
 | 백엔드 (PostgreSQL) | `python -m scripts.verify_postgres --url ... --with-tests` | 마이그레이션 up/down/up + 전체 테스트 통과 |
 | 케이스 | `python -m scripts.verify_cases` | 6케이스 통과 |
-| 프론트 단위 | `cd frontend && npx vitest run` | **59 passed** |
+| 프론트 단위 | `cd frontend && npx vitest run` | **74 passed** |
 | 빌드 | `npm run build` | 통과 |
 | 브라우저 E2E | `tools/browser-verify/{user-flow,slice-navigation,consent-and-sns,screenshot-all}.mjs` | 4종 통과 |
 | 접근성 | `tools/browser-verify/a11y-audit.mjs` | 지적 0건 |
