@@ -48,11 +48,12 @@
     모델을 바꾸면 반드시 `alembic revision --autogenerate` 로 마이그레이션을 만든다.
   - 실제 케이스 등록: `python -m scripts.import_cases <manifest>` — 영상·기준마스크·해설을 함께 등록.
     실제 데이터 파일은 커밋하지 않는다 (`backend/data/`, `app/static/cases/` gitignore).
-  - 테스트: 백엔드 pytest **830개** (`cd backend && pytest`) — **SQLite·PostgreSQL 양쪽에서 통과**
-    (`scripts/verify_postgres.py --with-tests`). 프론트 vitest **59개** (`cd frontend && npm test`).
-    브라우저 검증은 `tools/browser-verify/` — E2E 4종(user-flow / slice-navigation /
-    consent-and-sns / screenshot-all) + 접근성 점검(`a11y-audit`) + 좁은 화면 점검(`responsive-check`).
-    동시 쓰기 스모크는 `scripts/load_smoke.py`.
+  - 테스트: 백엔드 pytest **920개** (`cd backend && pytest`) — **SQLite·PostgreSQL 양쪽에서 통과**
+    (`scripts/verify_postgres.py --with-tests`). 프론트 vitest **74개** (`cd frontend && npm test`).
+    브라우저 검증은 `tools/browser-verify/` — E2E 7종(user-flow / slice-navigation /
+    consent-and-sns / screenshot-all / error-paths / case-review / admin-ux)
+    + 접근성 점검(`a11y-audit`) + 좁은 화면 점검(`responsive-check`).
+    배포 형태 시뮬레이션은 `tools/staging/`. 동시 쓰기 스모크는 `scripts/load_smoke.py`.
   - 보안: production 에서 `MEDISCAN_SECRET_KEY`/`MEDISCAN_CORS_ORIGINS`/`DATABASE_URL` 이
     없으면 **기동이 실패한다**. 인증 엔드포인트 rate limit, 로그아웃 시 서버측 토큰 폐기,
     회원 탈퇴(화면 포함)까지 구현됐다.

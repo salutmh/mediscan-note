@@ -54,12 +54,21 @@ prediction.png
 prediction_mask.npy
 
 # --- 비밀값 / 자격증명 -------------------------------------------------------
+# **모든 .env 변형을 먼저 막고, 공개해도 되는 것만 되살린다.**
+# 예전에는 `.env` 만 막아서 `.env.staging` 같은 파일이 그대로 커밋될 수 있었다 —
+# 거기에 DB 비밀번호를 적으면 저장소에 올라간다 (Public 저장소다).
 .env
-.env.local
-.env.*.local
+.env.*
 !.env.example
-# .env.development / .env.production 은 API 주소만 담는 공개 설정이라 커밋한다.
-# 비밀값은 여기 넣지 말 것 (백엔드 .env 로).
+# 아래 둘은 **frontend 것만** 되살린다 — 배포 API 주소만 담는 공개 설정이다.
+# **경로를 붙이지 않으면 `backend/.env.production` 까지 되살아난다** (거기엔 비밀값이 들어간다).
+!/frontend/.env.development
+!/frontend/.env.production
+
+# Supabase CLI 작업 산출물 — 프로젝트 참조·임시 파일이 들어간다
+supabase/.temp/
+supabase/.branches/
+.supabase-secrets*
 *.pem
 *.key
 *.p12

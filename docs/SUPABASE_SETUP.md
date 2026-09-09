@@ -51,6 +51,62 @@ host 와 사용자명까지 봐야 무엇인지 알 수 있다.
 
 ---
 
+## 1-2. 프로젝트 만들기 (CLI)
+
+### 준비 상태부터 본다
+
+```bash
+cd backend
+python -m scripts.supabase_staging preflight
+```
+
+CLI 유무·버전, 로그인 여부, organization 목록, `mediscan-note-staging` 존재 여부,
+로컬 secret 상태를 한 번에 보여준다. **access token 은 읽지도 찍지도 않는다.**
+
+CLI 는 전역 npm 설치를 지원하지 않는다 — `npx supabase@latest` 가 공식 경로다.
+(이 PC 기준: Node v24, supabase CLI 2.117.0 이 `npx` 로 동작함을 확인했다.)
+
+### 로그인 — **여기만 사람이 직접 한다**
+
+```bash
+npx supabase@latest login
+```
+
+브라우저가 열려 인증한다. 자동화할 수 없는 유일한 단계다.
+토큰 값은 CLI 가 `~/.supabase` 에 보관한다 — **어디에도 붙여 넣지 않는다.**
+
+### DB 비밀번호 — 만들되 보지 않는다
+
+```bash
+cd backend
+python -m scripts.staging_secret init     # 40자 생성. **값은 출력되지 않는다**
+python -m scripts.staging_secret status   # 지문으로만 확인
+```
+
+저장 위치는 저장소 루트의 `.supabase-secrets.json` 이고 `.gitignore` 에 걸려 있다.
+`init` 은 **gitignore 에 걸리지 않으면 만들기를 거부한다** — 이 저장소는 Public 이라
+한 번 push 되면 이력에서 지울 수 없기 때문이다.
+
+문자 구성은 `A-Za-z0-9-._~` 뿐이다. `@` `:` `/` 가 섞이면 연결 문자열이 엉뚱하게
+파싱돼 "비밀번호가 틀렸다"가 아니라 **"host 를 못 찾겠다"** 같은 오류가 난다.
+
+### 프로젝트 생성
+
+```bash
+python -m scripts.supabase_staging create --org-id <preflight 가 보여준 id>
+```
+
+* region 은 서울(`ap-northeast-2`)이 기본이다.
+* **같은 이름의 프로젝트가 이미 있으면 만들지 않고 그것을 쓴다.**
+  둘 만들면 어느 쪽에 마이그레이션을 돌렸는지 헷갈린다.
+* 비밀번호는 `@SECRET` 자리표시자로 넘어가고, 화면에는 `***` 로 찍힌다.
+
+> **조직에 프로젝트 수·플랜 제한이 걸리면 여기서 실패한다.**
+> Free 플랜은 조직당 활성 프로젝트 수가 제한된다. 유료 전환은
+> **사용자가 직접 판단할 일이라 자동으로 진행하지 않는다.**
+
+---
+
 ## 2. Dashboard 에서 값 받기
 
 1. Supabase 프로젝트 → **Connect** (상단 버튼)
@@ -62,6 +118,31 @@ host 와 사용자명까지 봐야 무엇인지 알 수 있다.
 
 비밀번호에 `@` `:` `/` 같은 문자가 있으면 **percent-encoding** 해야 한다
 (`@` → `%40`). 안 그러면 URL 파싱이 엉뚱하게 된다.
+(`staging_secret init` 으로 만든 비밀번호에는 그런 문자가 없다.)
+
+### 4~5번을 손으로 하지 않는 방법
+
+Connect 에서 복사한 문자열을 **`[YOUR-PASSWORD]` 가 들어 있는 그대로** 넣는다:
+
+```bash
+cd backend
+python -m scripts.staging_secret set-url --mode direct --url "postgresql://postgres:[YOUR-PASSWORD]@db.<ref>.supabase.co:5432/postgres?sslmode=require"
+python -m scripts.staging_secret check     # 어떤 모드로 인식되는지 + 용도별 권고
+```
+
+* 비밀번호는 **자리표시자로 보관**된다 — 파일에 두 번 적히지 않는다.
+* 드라이버 접두사(`+psycopg2`)는 쓸 때 자동으로 붙는다.
+* **모드를 착각하면 알려준다.** Session pooler 문자열을 `--mode direct` 로
+  저장하면 경고가 나온다 (둘 다 5432 라 눈으로는 구분되지 않는다).
+
+이후 명령은 비밀번호를 화면에 노출하지 않고 실행한다:
+
+```bash
+python -m scripts.staging_secret run --mode direct -- alembic upgrade head
+```
+
+`DATABASE_URL` 은 자식 프로세스의 **환경변수로만** 전달되므로
+프로세스 목록에도, 쉘 히스토리에도 남지 않는다.
 
 ---
 
@@ -126,6 +207,11 @@ MEDISCAN_RATE_LIMIT=0           로그인 무차별 대입이 열린다 (externa
 
 ## 4. 연결 절차
 
+> `staging_secret set-url` 로 연결 문자열을 저장해 뒀다면, 아래의
+> `DATABASE_URL="<...>" <명령>` 을 전부
+> `python -m scripts.staging_secret run --mode direct -- <명령>` 으로 바꿔 쓸 수 있다.
+> **비밀번호가 쉘 히스토리에 남지 않는다.**
+
 ```bash
 cd backend
 
@@ -147,7 +233,13 @@ DATABASE_URL="<Direct 연결 문자열>" python -m scripts.import_cases data/vs_
 # 3) 등록 확인
 DATABASE_URL="<Direct 연결 문자열>" python -m scripts.verify_cases
 
-# 4) 최초 운영자 지정
+# 4) 스테이징 검증용 계정 (운영자 1 + 학습자 1) — **합성 계정만 만든다**
+#    비밀번호는 .supabase-secrets.json 에 들어가고 화면에 찍히지 않는다.
+#    스테이징이 아닌 계정이 이미 있으면 **멈춘다** (운영 DB 오지정 방지)
+DATABASE_URL="<Direct 연결 문자열>" python -m scripts.staging_seed
+DATABASE_URL="<Direct 연결 문자열>" python -m scripts.staging_seed --check
+
+# 4-1) 실제 운영자를 따로 지정할 때
 DATABASE_URL="<Direct 연결 문자열>" python -m scripts.grant_admin --email <이메일>
 
 # 5) 배포 직전 점검 — 차단 항목이 없어야 한다

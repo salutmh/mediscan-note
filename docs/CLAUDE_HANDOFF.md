@@ -15,7 +15,7 @@
 | 원격 | `https://github.com/salutmh/mediscan-note.git` (Public) |
 | 현재 모드 | **지속 자율 개발 루프** (Phase 1~8 은 최초 백로그였고 전부 완료) |
 | STATUS | `IN_PROGRESS` — 사이클마다 제품 재평가 → 최고가치 작업 선정 |
-| 마지막 전체 검증 | 백엔드 **830 passed** (SQLite·PostgreSQL 양쪽) / 프론트 **74 passed** / E2E 7종 / 접근성·좁은화면 점검 0건 / `verify_cases` 6케이스 |
+| 마지막 전체 검증 | 백엔드 **920 passed** (SQLite·PostgreSQL 양쪽) / 프론트 **74 passed** / E2E 7종 / 접근성·좁은화면 점검 0건 / `verify_cases` 6케이스 |
 
 > **push 는 매번 사용자 승인이 필요하다.**
 > force push / rebase / reset --hard / history rewrite 는 하지 않는다.
@@ -54,6 +54,44 @@
 ---
 
 ## 3. 완료된 작업
+
+### 자율 루프 #18 — Supabase 스테이징 준비 (사용자 로그인에서 대기)
+
+**먼저 찾은 것: DB 비밀번호를 담을 파일이 커밋될 수 있었다.**
+`.gitignore` 에 `.env` 만 있어서 `backend/.env.staging` · `.env.production` ·
+`.env.supabase` · `.supabase-secrets` 가 전부 커밋 대상이었다. 이 저장소는 Public 이고,
+한 번 push 되면 `git rm --cached` 로도 이력에서 지워지지 않는다.
+**비밀번호를 만들기 전에** 막았다.
+
+되살릴 때도 함정이 있었다. `!.env.production` 은 경로가 없으면
+`frontend/`(공개 API 주소)뿐 아니라 `backend/`(비밀값)까지 되살린다.
+그래서 `!/frontend/.env.production` 으로 경로를 못박았다.
+`tests/test_secret_files_ignored.py` 가 이 규칙을 고정한다 (파일을 만들지 않고
+`git check-ignore` 로 규칙만 묻는다).
+
+| 만든 것 | 하는 일 |
+|---|---|
+| `scripts/staging_secret.py` | 비밀번호 생성·보관·주입. **화면에 찍지 않는다** (지문으로만 확인) |
+| `scripts/staging_seed.py` | 스테이징 검증용 계정 2개. **운영 DB 를 가리키면 멈춘다** |
+| `scripts/supabase_staging.py` | CLI·로그인·조직·프로젝트·secret 상태 점검 (`preflight`) |
+
+설계에서 지킨 것:
+- **연결 문자열을 조립하지 않는다.** Connect 가 준 문자열을 `[YOUR-PASSWORD]` 자리표시자
+  그대로 보관하고 그 자리에만 끼워 넣는다. host 패턴을 코드로 만들면 Supabase 가 형식을
+  바꿨을 때 조용히 틀린다.
+- **모드 착각을 잡는다.** Direct 와 Session pooler 는 **둘 다 5432** 라 눈으로 구분되지 않는다.
+  `set-url --mode direct` 에 세션 풀러 문자열을 넣으면 경고가 나온다.
+- 비밀번호 문자는 `A-Za-z0-9-._~` 뿐이다. `@` `:` `/` 가 섞이면 URL 파싱이 깨져
+  "비밀번호가 틀렸다"가 아니라 **"host 를 못 찾겠다"** 로 나타난다.
+- 시드 계정은 `@staging.invalid` (RFC 2606 예약 TLD) — 스테이징 메일이 실제로 가지 않는다.
+  동의 이력의 version 은 `staging-seed` 라, **실제 동의 증빙과 섞이지 않는다.**
+
+한 번 걸린 것: Windows 에서 `npx` 는 실제로 `npx.cmd` 라, 이름만 subprocess 에 넘기면
+"지정된 파일을 찾을 수 없습니다" 로 죽는다. `shutil.which` 가 준 경로를 쓴다.
+
+**여기서 멈췄다.** `npx supabase login` 은 브라우저 인증이라 대신할 수 없다.
+
+---
 
 ### Phase 1 — repository 전체 점검 (DONE)
 - 코드를 직접 읽고 구현 현황을 Critical/High/Medium/Low로 분류 → `docs/RELEASE_READINESS.md` 생성.
@@ -822,6 +860,12 @@ cd backend && alembic revision --autogenerate -m "<설명>"
 > 4·5절과 `docs/RELEASE_READINESS.md` 3~6절을 먼저 본다.
 >
 > **1순위 — 사람이 있어야 진행되는 것**
+> - [ ] **Supabase 로그인** (스테이징 구축의 유일한 차단점):
+>       `npx supabase@latest login` → 브라우저 인증 → 돌아와서
+>       `cd backend && python -m scripts.supabase_staging preflight`
+>       그 뒤 프로젝트 생성부터는 자동으로 이어진다. 준비는 전부 끝났다
+>       (비밀번호 생성·보관, 연결 모드 판별, 시드, 검증 스크립트).
+>       **조직 플랜/프로젝트 수 제한에 걸리면 그건 사용자 판단이라 멈춘다.**
 > - [ ] **케이스 24건 육안 검수**: `/admin/review` 에서 카드를 보고 PASS/HOLD/REJECT.
 >       준비는 전부 끝났다 (export · 검수 시트 · 기계 사전점검 · 기록 저장 · 단축키).
 >       운영자 계정이 필요하다: `python -m scripts.grant_admin --email <이메일>`
@@ -836,13 +880,20 @@ cd backend && alembic revision --autogenerate -m "<설명>"
 > # 통과분만 자산 생성 -> import_cases (is_active=false 로 들어간다)
 > ```
 >
-> **2순위 — 코드로 가능한 것 (사용자가 준 백로그 순서)**
-> - [ ] error-path E2E — 오류 화면·복구 경로를 브라우저에서 확인
-> - [ ] security review 2차
-> - [ ] API error contract 정리
-> - [ ] Admin UX
-> - [ ] dependency / license inventory
-> - [ ] documentation drift 자동 점검
+> **2순위 — 로그인 후 이어지는 것 (전부 준비돼 있다)**
+> ```bash
+> cd backend
+> python -m scripts.supabase_staging create --org-id <preflight 가 보여준 id>
+> python -m scripts.staging_secret set-url --mode direct --url "<Connect 의 Direct URI>"
+> python -m scripts.staging_secret check
+> python -m scripts.staging_secret run --mode direct -- alembic upgrade head
+> python -m scripts.staging_secret run --mode direct -- python -m scripts.staging_seed
+> python -m scripts.staging_secret run --mode direct -- python -m scripts.deploy_preflight
+> ```
+> 절차 전문은 `docs/SUPABASE_SETUP.md`.
+>
+> 사용자가 준 백로그(error-path E2E / security review 2차 / API error contract /
+> Admin UX / dependency·license inventory / documentation drift)는 **전부 완료**다.
 >
 > **3순위 — 외부 수단·판단**
 > - [ ] SNS 실인증 (CLAUDE.md 가 "실서비스 전 반드시"라고 적은 유일한 하드닝 잔여 항목)
@@ -861,6 +912,13 @@ cd backend && alembic revision --autogenerate -m "<설명>"
 > - **"전부 통과"가 나오면 일부러 깨뜨려 본다.** 그렇게 해서 빈 마스크가 경고 없이
 >   통과하던 것과 sidecar 자기모순을 찾았다
 > - **점검 도구는 한 항목이 터져도 나머지를 계속한다** (deploy_preflight 에서 겪었다)
+>
+> *비밀값*
+> - **비밀번호를 만들기 전에 그 파일이 커밋될 수 있는지 먼저 확인한다.**
+>   Public 저장소는 한 번 push 되면 이력에서 지울 수 없다
+> - `.gitignore` 에서 `!` 로 되살릴 때는 **경로를 붙인다** —
+>   `!.env.production` 하나가 backend 비밀 파일까지 되살린다
+> - 비밀값은 **지문으로 확인하고 값은 찍지 않는다**. 자식 프로세스에는 환경변수로 넘긴다
 >
 > *설계*
 > - 관리 화면에서 설정하는 값이 **학습자 경로까지 실제로 가는지** 확인한다
