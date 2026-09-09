@@ -5,11 +5,13 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from app import config, inference, logging_config, model_predictions, scoring_config
+from app import asset_urls, config, inference, logging_config, model_predictions, scoring_config, security_headers
 from app.cors import cors_kwargs, describe as describe_cors
 from app.db import DATABASE_URL, init_db
 from app import rate_limit as rate_limit_module
 from app.rate_limit import RateLimitMiddleware
+from app.asset_urls import SignedAssetMiddleware
+from app.security_headers import SecurityHeadersMiddleware
 from app.static_files import STATIC_DIR, STATIC_URL_PREFIX, ensure_dirs, set_request_base
 from app.routers import admin, analyze, auth, cases, consents, review, wrong_notes
 
@@ -55,7 +57,12 @@ app = FastAPI(title="메디스캔노트 API", version="0.2.0", lifespan=lifespan
 # 미들웨어는 **나중에 등록한 것이 바깥쪽**이다 (starlette). 그래서 CORS 를 마지막에 등록해
 # 가장 바깥에 두어야 rate limit 이 돌려주는 429 응답에도 CORS 헤더가 붙는다.
 # (그렇지 않으면 브라우저가 429 본문을 읽지 못해 "네트워크 오류"로만 보인다.)
+# 보안 헤더는 rate limit 보다 **바깥**에 둔다 — 429 응답에도 붙어야 한다.
+# (CORS 보다는 안쪽이다. CORS 는 preflight 를 가로채므로 가장 바깥이어야 한다.)
 app.add_middleware(RateLimitMiddleware)
+app.add_middleware(SecurityHeadersMiddleware)
+# 케이스 자산(실제 의료영상) 서명 확인. StaticFiles 보다 **앞**에 있어야 막을 수 있다.
+app.add_middleware(SignedAssetMiddleware)
 
 # CORS 는 환경에 따라 갈린다 (app/cors.py):
 #   development — localhost 아무 포트 허용 (프론트 5173, 포트 변경에도 그대로 동작)
@@ -107,6 +114,9 @@ def health():
         # production 에서는 항상 비어 있다 (켜져 있으면 기동이 실패한다).
         # 개발에서 "왜 이런 결과가 나오지?" 를 빨리 좁히기 위한 값이다.
         "dev_only_flags": config.describe_dev_only_flags(),
+        # 배포 후 보안 헤더가 실제로 붙었는지 확인할 수 있어야 한다
+        "security_headers": security_headers.describe(),
+        "asset_urls": asset_urls.describe(),
         "models": inference.status(),
         # 무거운 volume 모델은 요청 시 추론하지 않고 미리 계산된 예측을 쓴다
         "precomputed_predictions": model_predictions.summary(),

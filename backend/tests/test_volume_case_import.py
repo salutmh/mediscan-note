@@ -9,6 +9,7 @@ volume 케이스(뇌 MRI) 등록 테스트 — scripts/import_cases.py 의 slice
   - 해설은 case_facts / case_findings 블록으로 저장되고, disease_info 는 manifest 로 못 넣는다
 """
 import base64
+from urllib.parse import parse_qs, urlparse
 import json
 from pathlib import Path
 
@@ -372,4 +373,8 @@ def test_case_detail_exposes_representative_slice(client, volume_manifest, user_
     body = res.json()
     assert body["image_meta"]["slice_index"] == REPRESENTATIVE
     assert body["gradable"] is True
-    assert body["image_url"].endswith(f"/slices/slice_{REPRESENTATIVE:03d}.png")
+    # 응답 URL 에는 서명 쿼리(?e=..&s=..)가 붙는다 — 실제 의료영상이라 인증 없이
+    # 받아갈 수 없게 한 것이다 (app/asset_urls.py). 경로 부분만 비교한다.
+    assert urlparse(body["image_url"]).path.endswith(f"/slices/slice_{REPRESENTATIVE:03d}.png")
+    query = parse_qs(urlparse(body["image_url"]).query)
+    assert "s" in query and "e" in query, "케이스 영상 URL 에 서명이 없다"

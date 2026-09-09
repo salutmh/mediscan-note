@@ -35,7 +35,8 @@ python -m scripts.deploy_preflight --simulate-production   # 로컬에서 미리
 | 8 | 케이스 등록·점검 | `python -m scripts.verify_cases` 전체 통과 |
 | 9 | 최초 운영자 지정 | `python -m scripts.grant_admin --email <이메일>` |
 | 10 | 개발 전용 스위치 제거 | 아래 3개가 배포 환경에 남아 있으면 **기동 실패**한다 |
-| 11 | `MEDISCAN_RATE_LIMIT` 확인 | `0` 은 거부된다. 앞단에서 제한한다면 `external` 로 명시 |
+| 11 | 보안 헤더·자산 서명 확인 | `curl /health` 의 `security_headers` / `asset_urls`. 케이스 영상은 서명 URL 로만 받을 수 있다 |
+| 12 | `MEDISCAN_RATE_LIMIT` 확인 | `0` 은 거부된다. 앞단에서 제한한다면 `external` 로 명시 |
 
 **production 에서 기동을 막는 값들** — 잘못 뜬 서버는 겉보기에 정상이라 아무도 눈치채지 못한다.
 그래서 경고가 아니라 실패로 처리한다.

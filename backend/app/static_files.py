@@ -50,13 +50,21 @@ def ensure_dirs() -> None:
 
 
 def absolute_url(path: str | None) -> str | None:
-    """DB 의 루트 상대 경로를 프론트가 바로 쓸 수 있는 절대 URL 로."""
+    """DB 의 루트 상대 경로를 프론트가 바로 쓸 수 있는 절대 URL 로.
+
+    **케이스 자산(`/static/cases/`)에는 서명을 붙인다.** 실제 의료영상이라
+    인증 없이 받아갈 수 있으면 안 된다 (app/asset_urls.py).
+    URL 을 만드는 곳이 여기 하나라서, 여기만 고치면 모든 응답이 함께 보호된다.
+    """
+    from app import asset_urls  # 순환 임포트 방지 (asset_urls 가 security 를 쓴다)
+
     if not path:
         return None
     if path.startswith(("http://", "https://")):
-        return path
+        return asset_urls.add_signature(path)
     base = public_base()
-    return f"{base}{path if path.startswith('/') else '/' + path}"
+    url = f"{base}{path if path.startswith('/') else '/' + path}"
+    return asset_urls.add_signature(url)
 
 
 def resolve_local_path(url: str | None) -> Path | None:

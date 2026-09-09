@@ -48,6 +48,8 @@ def _codes_in_source() -> set[str]:
         re.compile(r'_unauthorized\(\s*"([A-Z][A-Z0-9_]{3,})"'),
         # "code": "RATE_LIMITED"
         re.compile(r'"code"\s*:\s*"([A-Z][A-Z0-9_]{3,})"'),
+        # return False, "ASSET_URL_EXPIRED" — 검증 함수가 (통과여부, 사유코드) 를 돌려주는 형태
+        re.compile(r'return\s+(?:False|True|None)\s*,\s*"([A-Z][A-Z0-9_]{3,})"'),
     ]
     for path in SOURCE_FILES:
         if not path.exists():

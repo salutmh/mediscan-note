@@ -35,8 +35,9 @@ AI 보조 피드백(참고) → 오답 재학습.
 | 업로드 검증 | 크기→포맷→손상→픽셀수→region, 미저장 + EXIF 제거 | `app/uploads.py` |
 | 화면 5 | 지어내지 않고 `model_unavailable`, 데모는 flag OFF 기본 | `app/routers/analyze.py:74` |
 | 스키마 | Alembic이 기준, 기동 시 자동 upgrade + 레거시 DB 감지 | `app/db.py:47` |
-| 정적 자산 | 요청 주소 기준 절대 URL 생성 | `app/main.py:32` |
-| 테스트 | 백엔드 **738개**(SQLite·PostgreSQL 양쪽) + 프론트 **59개** + E2E 6종 + 접근성·좁은화면 점검 | `backend/tests/`, `frontend/src/**/*.test.js` |
+| 정적 자산 | 요청 주소 기준 절대 URL 생성 + **케이스 영상·마스크는 서명 URL 로만** (인증 없이 받을 수 없다) | `app/static_files.py`, `app/asset_urls.py` |
+| 보안 헤더 | nosniff / X-Frame-Options DENY / Referrer-Policy / COOP / Permissions-Policy. CSP 는 **추측해서 만들지 않는다**(MEDISCAN_CSP 로 지정) | `app/security_headers.py` |
+| 테스트 | 백엔드 **786개**(SQLite·PostgreSQL 양쪽) + 프론트 **59개** + E2E 6종 + 접근성·좁은화면 점검 | `backend/tests/`, `frontend/src/**/*.test.js` |
 
 **이미 해결된 것은 다시 만들지 않는다.** 위 항목은 재구현 대상이 아니다.
 

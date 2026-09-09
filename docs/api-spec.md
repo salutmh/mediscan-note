@@ -74,6 +74,17 @@
 | `INVALID_DIFFICULTY` / `INVALID_FINDINGS_STATUS` | 422 | 허용되지 않은 값 |
 | `NO_CHANGES` | 400 | PATCH 에 변경할 항목이 없음 |
 
+| `ASSET_URL_UNSIGNED` | 403 | 케이스 영상·마스크를 서명 없는 URL 로 요청 |
+| `ASSET_URL_INVALID` | 403 | 자산 URL 서명이 올바르지 않음 |
+| `ASSET_URL_EXPIRED` | 403 | 자산 URL 유효기간 만료 (화면을 새로 고치면 된다) |
+
+> **케이스 자산 URL 은 서명돼 있다.** `/static/cases/...` 아래(실제 의료영상과 기준
+> 마스크)는 `?e=<만료>&s=<서명>` 이 붙은 URL 로만 받을 수 있다. `<img src>` 에는
+> Authorization 헤더를 붙일 수 없어서 URL 자체에 유효기간을 넣었다.
+> **API 응답의 URL 을 그대로 쓰면 된다** — 프론트가 서명을 만들 필요는 없다.
+> 유효기간은 기본 24시간(`MEDISCAN_ASSET_URL_TTL`)이고, 만료되면 화면을 새로 고쳐
+> 케이스를 다시 불러오면 새 URL 을 받는다.
+
 > **이 표는 계약이다.** 프론트가 이 코드로 분기하므로, 새 에러 코드를 만들면 여기에도 넣는다.
 > `backend/tests/test_error_contract.py` 가 **양방향으로 자동 대조**한다:
 > 코드에 있는데 표에 없으면 실패하고, 표에 있는데 코드가 만들지 않아도 실패한다.
