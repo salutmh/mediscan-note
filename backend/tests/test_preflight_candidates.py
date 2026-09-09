@@ -196,3 +196,121 @@ def test_missing_manifest_is_not_a_problem(tmp_path):
     checks = []
     pre.check_manifest_candidate(tmp_path, checks)
     assert _failed(checks) == []
+
+
+# ---------------------------------------------------------------------------
+# 후보끼리의 중복 — **한 사람을 두 번 등록하지 않는다**
+# ---------------------------------------------------------------------------
+# 242건을 기계로 선별했으므로, 서로 다른 case_id 인데 같은 환자·같은 촬영일 수 있다.
+# 그대로 등록하면 학습자가 사실상 같은 영상을 두 번 풀고 통계가 부풀려진다.
+def _meta(case_id, *, position=(0.0, 0.0, 0.0), gt_voxels=1000, area=500):
+    return {
+        "case_id": case_id,
+        "shape": [512, 512, 120],
+        "gt_voxels": gt_voxels,
+        "representative_slice": 32,
+        "representative_area_px": area,
+        "geometry": {
+            "image_position_patient_first": list(position),
+            "pixel_spacing": [0.41, 0.41],
+        },
+    }
+
+
+def test_two_candidates_from_the_same_scan_are_flagged():
+    checks = []
+    pre.check_no_duplicate_candidates(
+        {"VS-SEG-100": _meta("VS-SEG-100"), "VS-SEG-200": _meta("VS-SEG-200")}, checks
+    )
+    assert _failed(checks) == ["후보 간 중복"]
+    assert "VS-SEG-100" in checks[0]["detail"] and "VS-SEG-200" in checks[0]["detail"]
+
+
+def test_the_duplicate_check_asks_a_human_and_does_not_delete():
+    """**자동으로 지우지 않는다.** 같은 환자의 다른 시점일 수도 있다."""
+    checks = []
+    pre.check_no_duplicate_candidates(
+        {"A": _meta("A"), "B": _meta("B")}, checks
+    )
+    assert "사람이 확인" in checks[0]["detail"]
+
+
+def test_different_scans_pass():
+    checks = []
+    pre.check_no_duplicate_candidates(
+        {
+            "A": _meta("A", position=(0.0, 0.0, 0.0), gt_voxels=1000),
+            "B": _meta("B", position=(-107.0, -135.0, -90.0), gt_voxels=2200),
+        },
+        checks,
+    )
+    assert not _failed(checks)
+
+
+def test_the_same_position_but_different_lesion_is_not_a_duplicate():
+    """촬영 위치가 같아도 병변이 다르면 다른 케이스다 (지문을 여러 값으로 만드는 이유)."""
+    checks = []
+    pre.check_no_duplicate_candidates(
+        {"A": _meta("A", gt_voxels=1000, area=500), "B": _meta("B", gt_voxels=8800, area=1900)},
+        checks,
+    )
+    assert not _failed(checks)
+
+
+def test_one_candidate_cannot_be_compared():
+    """**"확인 못함"을 "이상 없음"으로 뭉개지 않는다.**"""
+    checks = []
+    pre.check_no_duplicate_candidates({"A": _meta("A")}, checks)
+    assert not _failed(checks)
+    assert "판정 불가" in checks[0]["detail"]
+
+
+def test_unreadable_metadata_is_skipped_not_counted_as_unique():
+    checks = []
+    pre.check_no_duplicate_candidates({"A": _meta("A"), "B": None}, checks)
+    assert "1건" in checks[0]["detail"], "읽을 수 없는 후보를 비교 대상에 넣으면 안 된다"
+
+
+# ---------------------------------------------------------------------------
+# 출처 정보 — **어디서 온 케이스인지 되짚을 수 있어야 한다**
+# ---------------------------------------------------------------------------
+# 나중에 데이터셋 이용 조건(BLOCKER-1)이나 GT 출처를 확인해야 할 때,
+# 이 값들이 없으면 근거가 사라진다.
+FULL_PROVENANCE = {
+    "case_id": "VS-SEG-003",
+    "rtstruct": "0d712c68.dcm",
+    "chosen_roi": "AN",
+    "roi_selected_by": "keyword",
+    "t1_description": "t1_fl3d_tra_gk_v1",
+    "shape": [512, 512, 120],
+}
+
+
+def test_complete_provenance_passes():
+    checks = []
+    pre.check_provenance("VS-SEG-003", dict(FULL_PROVENANCE), checks)
+    assert not _failed(checks)
+
+
+@pytest.mark.parametrize("field", sorted(FULL_PROVENANCE))
+def test_each_missing_provenance_field_is_caught(field):
+    """**하나씩 다 확인한다.** 한 항목만 검사하면 나머지는 조용히 빠진다."""
+    meta = dict(FULL_PROVENANCE)
+    meta.pop(field)
+    checks = []
+    pre.check_provenance("VS-SEG-003", meta, checks)
+    assert _failed(checks) == ["출처 정보"]
+    assert field in checks[0]["detail"]
+
+
+def test_missing_metadata_is_reported_as_unchecked():
+    checks = []
+    pre.check_provenance("VS-SEG-003", None, checks)
+    assert _failed(checks) == ["출처 정보"]
+    assert "확인 못함" in checks[0]["detail"]
+
+
+def test_provenance_does_not_require_medical_content():
+    """**소견·난이도를 출처로 요구하지 않는다.** 그건 전문가 몫이고 여기 없어야 정상이다."""
+    for field in ("case_findings", "difficulty", "diagnosis"):
+        assert field not in pre.REQUIRED_PROVENANCE

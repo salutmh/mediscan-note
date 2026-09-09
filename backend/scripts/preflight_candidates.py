@@ -211,6 +211,76 @@ def check_manifest_candidate(review_root: Path, checks: list) -> None:
     _ok(checks, "manifest 후보", f"{len(data.get('cases', []))}건, 활성화 표시 없음")
 
 
+# ---------------------------------------------------------------------------
+# 후보끼리의 중복 — **한 사람을 두 번 등록하는 것을 막는다**
+# ---------------------------------------------------------------------------
+# 지금까지의 중복 검사는 "이미 DB 에 있는 case_id 인가" 뿐이었다.
+# 그런데 242건을 기계로 선별했으므로, **서로 다른 case_id 인데 같은 환자·같은
+# 촬영**일 수 있다 (같은 검사가 두 번 들어갔거나, 같은 환자의 다른 시점).
+# 그대로 등록하면 학습자가 사실상 같은 영상을 두 번 풀고, 통계가 그만큼 부풀려진다.
+#
+# **의학적 판단이 아니다.** 두 export 가 기하학적으로 같은지를 볼 뿐이고,
+# 걸리면 사람에게 확인을 넘긴다 (자동으로 지우지 않는다).
+def _fingerprint(meta: dict) -> tuple:
+    geometry = meta.get("geometry") or {}
+    return (
+        tuple(meta.get("shape") or ()),
+        meta.get("gt_voxels"),
+        meta.get("representative_slice"),
+        meta.get("representative_area_px"),
+        # 촬영 위치까지 같으면 같은 검사일 가능성이 높다
+        tuple(geometry.get("image_position_patient_first") or ()),
+        tuple(geometry.get("pixel_spacing") or ()),
+    )
+
+
+def check_no_duplicate_candidates(metas: dict, checks: list) -> None:
+    """서로 다른 case_id 인데 export 지문이 같은 후보가 있는가."""
+    usable = {cid: _fingerprint(m) for cid, m in metas.items() if m}
+    if len(usable) < 2:
+        _ok(checks, "후보 간 중복", f"비교 대상 {len(usable)}건 — 중복 판정 불가")
+        return
+
+    groups: dict[tuple, list[str]] = {}
+    for case_id, fingerprint in usable.items():
+        groups.setdefault(fingerprint, []).append(case_id)
+
+    duplicates = [ids for ids in groups.values() if len(ids) > 1]
+    if duplicates:
+        _fail(
+            checks,
+            "후보 간 중복",
+            "같은 촬영으로 보이는 후보가 있습니다 (사람이 확인 필요): "
+            + " / ".join(", ".join(sorted(ids)) for ids in duplicates),
+        )
+    else:
+        _ok(checks, "후보 간 중복", f"{len(usable)}건 모두 서로 다른 촬영")
+
+
+# 이 값들이 없으면 **케이스가 어디서 왔는지 되짚을 수 없다.**
+# 나중에 데이터셋 이용 조건이나 GT 출처를 확인해야 할 때 근거가 사라진다.
+REQUIRED_PROVENANCE = {
+    "case_id": "원본 데이터셋의 케이스 식별자",
+    "rtstruct": "전문가 GT 가 들어 있는 RTSTRUCT 파일",
+    "chosen_roi": "여러 ROI 중 무엇을 병변으로 썼는가",
+    "roi_selected_by": "그 ROI 를 고른 방법 (keyword / 수동 등)",
+    "t1_description": "원본 시리즈 설명",
+    "shape": "볼륨 크기",
+}
+
+
+def check_provenance(case_id: str, meta: dict | None, checks: list) -> None:
+    """출처 정보가 빠짐없이 남아 있는가."""
+    if not meta:
+        _fail(checks, "출처 정보", "export_meta 를 읽을 수 없어 확인 못함")
+        return
+    missing = [f"{k}({desc})" for k, desc in REQUIRED_PROVENANCE.items() if not meta.get(k)]
+    if missing:
+        _fail(checks, "출처 정보", "빠진 항목: " + ", ".join(missing))
+    else:
+        _ok(checks, "출처 정보", f"{len(REQUIRED_PROVENANCE)}개 항목 모두 기록됨")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="기술 통과 후보 사전 검증 (등록·활성화하지 않는다)"
@@ -257,9 +327,18 @@ def main() -> int:
     manifest_checks: list = []
     check_manifest_candidate(review_root, manifest_checks)
 
+    # 후보 간 중복은 **전체 후보**를 놓고 봐야 한다 — 기술 통과분만 보면
+    # 아직 검수 안 된 쪽과 겹치는 경우를 놓친다.
+    all_metas = {
+        case_id: review_candidates.read_export_meta(export_root, case_id)
+        for case_id in case_ids
+    }
+    check_no_duplicate_candidates(all_metas, manifest_checks)
+
     for case_id, entry in targets:
         checks: list = []
         meta = check_export_integrity(case_id, export_root, checks)
+        check_provenance(case_id, meta, checks)
         check_not_already_registered(case_id, checks)
         check_assets(case_id, assets_root, checks)
         check_sidecar(case_id, meta, checks)
@@ -277,7 +356,7 @@ def main() -> int:
 
     print()
     for c in manifest_checks:
-        print(f"{'통과' if c['ok'] else '지적'}  manifest 후보 — {c['check']}: {c['detail']}")
+        print(f"{'통과' if c['ok'] else '지적'}  {c['check']}: {c['detail']}")
         if not c["ok"]:
             problems += 1
 

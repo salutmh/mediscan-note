@@ -18,7 +18,7 @@
  * AI 예측이 있으면 GT 와 **완전히 다른 색·블록**으로 분리해 보여준다 —
  * "AI 가 못 찾았으니 GT 가 틀렸다"로 읽히면 안 된다 (VS-SEG-204 가 그 반례다).
  */
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import { ApiError, fetchObjectUrl } from '../api/client'
 import { listReviewCandidates, reviewSheetPath, setTechnicalReview } from '../api/endpoints'
@@ -116,7 +116,6 @@ async function load() {
     notice.value = data.notice
     roots.value = data.roots
     cursor.value = 0
-    loadSheets()
   } catch (e) {
     loadError.value = e instanceof ApiError ? e.message : '후보 목록을 불러오지 못했습니다.'
   } finally {
@@ -124,21 +123,64 @@ async function load() {
   }
 }
 
-/** 검수 시트는 인증 뒤에 있어 blob 으로 받아야 한다. 실패해도 카드는 그대로 보인다. */
-async function loadSheets() {
-  for (const c of candidates.value) {
-    if (!c.sheet_available || sheetUrls.value[c.case_id]) continue
-    try {
-      sheetUrls.value = { ...sheetUrls.value, [c.case_id]: await fetchObjectUrl(reviewSheetPath(c.case_id)) }
-    } catch {
-      sheetErrors.value = { ...sheetErrors.value, [c.case_id]: true }
-    }
+/**
+ * 검수 시트는 인증 뒤에 있어 blob 으로 받아야 한다. 실패해도 카드는 그대로 보인다.
+ *
+ * **화면에 보이는 것만 받는다.**
+ * 예전에는 페이지가 열리자마자 24장을 순서대로 전부 받았다 -
+ * 합계 9.3MB, 디코딩하면 브라우저 메모리로 약 67MB 다. 검수자는 첫 장을
+ * 보기까지 나머지 23장을 기다렸고, 그동안 화면은 "시트 불러오는 중"이었다.
+ * 검수는 한 번에 한 장씩 보는 작업이라 미리 다 받을 이유가 없다.
+ */
+const sheetLoading = new Set()
+
+async function loadSheet(caseId) {
+  const candidate = candidates.value.find((c) => c.case_id === caseId)
+  if (!candidate?.sheet_available) return
+  if (sheetUrls.value[caseId] || sheetLoading.has(caseId)) return
+
+  sheetLoading.add(caseId)
+  try {
+    const url = await fetchObjectUrl(reviewSheetPath(caseId))
+    sheetUrls.value = { ...sheetUrls.value, [caseId]: url }
+  } catch {
+    sheetErrors.value = { ...sheetErrors.value, [caseId]: true }
+  } finally {
+    sheetLoading.delete(caseId)
   }
+}
+
+let sheetObserver = null
+
+/** 카드가 화면에 들어오면 그 시트를 받는다. */
+function watchSheet(el, caseId) {
+  if (!el) return
+  // IntersectionObserver 가 없는 환경(jsdom 등)에서는 그냥 받는다 -
+  // **기능이 조용히 사라지는 것보다 낫다.**
+  if (typeof IntersectionObserver === 'undefined') {
+    loadSheet(caseId)
+    return
+  }
+  if (!sheetObserver) {
+    sheetObserver = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) loadSheet(entry.target.dataset.caseId)
+        }
+      },
+      // 스크롤보다 조금 앞서 받아 두면 카드가 비어 보이지 않는다
+      { rootMargin: '400px' },
+    )
+  }
+  el.dataset.caseId = caseId
+  sheetObserver.observe(el)
 }
 
 function releaseSheets() {
   Object.values(sheetUrls.value).forEach((url) => URL.revokeObjectURL(url))
   sheetUrls.value = {}
+  sheetObserver?.disconnect()
+  sheetObserver = null
 }
 
 async function decide(caseId, status) {
@@ -177,6 +219,13 @@ function move(delta) {
     .querySelector(`[data-case="${filtered.value[cursor.value].case_id}"]`)
     ?.scrollIntoView({ block: 'center', behavior: 'smooth' })
 }
+
+// **지금 보고 있는 카드의 시트는 항상 받는다.**
+// 확대(lightbox)에서 다음 후보로 넘어가면 그 카드는 아직 화면 밖일 수 있어
+// IntersectionObserver 가 부르지 않는다 — 그러면 확대 창이 비어 버린다.
+watch(current, (candidate) => {
+  if (candidate) loadSheet(candidate.case_id)
+})
 
 function onKey(event) {
   if (['INPUT', 'TEXTAREA'].includes(event.target?.tagName)) return
@@ -296,19 +345,21 @@ onBeforeUnmount(() => {
             </span>
           </div>
 
-          <!-- 검수 시트 -->
-          <button
-            v-if="sheetUrls[c.case_id]"
-            class="sheet"
-            :aria-label="`${c.case_id} 검수 시트 확대`"
-            @click.stop="((cursor = i), (lightbox = true))"
-          >
-            <img :src="sheetUrls[c.case_id]" :alt="`${c.case_id} 검수 시트 (병변 시작·대표·끝 slice)`" />
-          </button>
-          <p v-else-if="sheetErrors[c.case_id]" class="muted sheet-missing">
-            검수 시트를 불러오지 못했습니다.
-          </p>
-          <p v-else class="muted sheet-missing">시트 불러오는 중...</p>
+          <!-- 검수 시트 — 카드가 화면에 들어올 때 받는다 (24장을 미리 다 받지 않는다) -->
+          <div class="sheet-slot" :ref="(el) => watchSheet(el, c.case_id)">
+            <button
+              v-if="sheetUrls[c.case_id]"
+              class="sheet"
+              :aria-label="`${c.case_id} 검수 시트 확대`"
+              @click.stop="((cursor = i), (lightbox = true))"
+            >
+              <img :src="sheetUrls[c.case_id]" :alt="`${c.case_id} 검수 시트 (병변 시작·대표·끝 slice)`" />
+            </button>
+            <p v-else-if="sheetErrors[c.case_id]" class="muted sheet-missing">
+              검수 시트를 불러오지 못했습니다.
+            </p>
+            <p v-else class="muted sheet-missing">시트 불러오는 중…</p>
+          </div>
 
           <!-- 계산된 객관값 (전부 export 단계 산출물) -->
           <dl class="facts">
@@ -601,6 +652,18 @@ kbd {
 .badge.reject_tech {
   background: #fdeceb;
   color: #c0392b;
+}
+
+/* 시트가 도착하기 전에도 자리를 잡아 둔다 — 안 그러면 카드가 로드될 때마다
+   격자 전체가 튀어 검수자가 보던 위치를 잃는다. */
+.sheet-slot {
+  min-height: 150px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.sheet-slot > .sheet {
+  width: 100%;
 }
 
 .sheet {

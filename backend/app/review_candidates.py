@@ -95,6 +95,12 @@ def _ai_prediction(case_id: str) -> dict | None:
     }
 
 
+def read_export_meta(export_root: Path, case_id: str) -> dict | None:
+    """후보 하나의 export 메타데이터. 없거나 깨졌으면 None."""
+    meta = _read_json(Path(export_root) / case_id / "export_meta.json")
+    return meta if isinstance(meta, dict) else None
+
+
 def build(case_id: str, export_root: Path, review_root: Path, screening_path: Path) -> dict | None:
     """후보 하나의 표시용 정보. export 결과가 없으면 None."""
     meta = _read_json(Path(export_root) / case_id / "export_meta.json")
