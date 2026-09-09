@@ -196,6 +196,44 @@ python -m scripts.staging_secret run --mode session_pooler --     python -m scri
 
 ---
 
+## 1-5. 앱을 실제로 붙여 학습 흐름 전체 확인 (2026-09-09 통과)
+
+**마이그레이션이 돌았다 ≠ 서비스가 동작한다.** 원격 DB 에서만 드러나는 것들이 있다 —
+유휴 연결 끊김, 시간대, 제약 위반, 트랜잭션 격리.
+
+```bash
+cd backend
+# 1) 스테이징 DB 로 앱을 띄운다 (다른 포트를 쓴다 — 로컬 개발과 섞이지 않게)
+python -m scripts.staging_secret run --mode session_pooler --     python -m uvicorn app.main:app --host 127.0.0.1 --port 8020
+
+# 2) 다른 터미널에서
+python -m scripts.staging_e2e --base http://127.0.0.1:8020
+```
+
+가입(동의 5종) → 로그인 → 케이스 목록 → 상세 → slice 탐색 → ROI 제출 →
+**GT 기준 채점** → 해설 → 재도전 → 이전/이번 비교 → 학습 이력 → 대시보드 →
+로그아웃 → **토큰 무효화** → 운영자 권한 거부 → 계정 정리.
+
+**결과: 33건 검사 전부 통과.** 그중 의료 불변조건에 해당하는 것:
+
+| 확인한 것 | 결과 |
+|---|---|
+| 채점 기준이 전문가 GT 마스크인가 | `evaluation.method = reference_mask` |
+| **AI 예측이 없어도 채점이 되는가** | 이 PC 에는 sidecar 가 없다 — `ai_prediction: null` 인데 채점 정상 |
+| 전문가 소견이 비어 있는가 | `case_findings: null` (검수 전에는 만들지 않는다) |
+| 해설이 출처별로 분리돼 있는가 | `dataset_verified`, `literature_based` |
+| 영상이 원격 스토리지가 아닌 앱 서버에서 오는가 | `/static/cases/...` |
+
+검증 계정은 `@staging.invalid` 로만 만들고 끝나면 지운다 —
+그래야 `verify_remote_db --expect-staging` 의 순수성 검사가 계속 의미를 갖는다.
+
+> **백업(pg_dump)은 이 PC 에서 확인하지 못했다.** PostgreSQL 클라이언트 도구가
+> 설치돼 있지 않다. Supabase 플랫폼 자체 백업과는 별개 문제이며,
+> 배포 전에 `pg_dump` 가 있는 환경에서 `restore_drill` 을 한 번 돌려야 한다.
+> `deploy_preflight` 가 이 항목을 확인한다.
+
+---
+
 ## 2. Dashboard 에서 값 받기
 
 1. Supabase 프로젝트 → **Connect** (상단 버튼)

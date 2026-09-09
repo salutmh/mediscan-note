@@ -201,3 +201,47 @@ def test_unknown_does_not_count_as_blocking():
     pre.add_human_checks(report)
     assert report.count(pre.BLOCK) == 0
     assert report.count(pre.UNKNOWN) >= 4
+
+
+# ---------------------------------------------------------------------------
+# 백업 도구 — **첫 백업을 시도하는 순간에야 알게 되면 늦다**
+# ---------------------------------------------------------------------------
+# PostgreSQL 백업은 `pg_dump` 를 부른다. 없으면 백업 명령이 실패하는데,
+# 보통 배포한 뒤에야 알게 된다. (이 저장소를 만든 개발 PC 가 그 상태였다.)
+def test_sqlite_needs_no_external_backup_tool(monkeypatch):
+    monkeypatch.setattr("app.db.DATABASE_URL", "sqlite:///./x.db", raising=False)
+    report = pre.Report()
+    pre.check_backup_tooling(report)
+    assert report.rows[-1]["level"] == "ok"
+    assert "SQLite" in report.rows[-1]["detail"]
+
+
+def test_postgres_without_pg_dump_blocks(monkeypatch):
+    monkeypatch.setattr("app.db.DATABASE_URL", "postgresql+psycopg2://u:p@h:5432/d", raising=False)
+    monkeypatch.setattr("shutil.which", lambda name: None)
+    report = pre.Report()
+    pre.check_backup_tooling(report)
+
+    row = report.rows[-1]
+    assert row["level"] == "block", "**백업을 못 뜨는 상태로 배포하면 안 된다**"
+    assert "pg_dump" in row["detail"]
+
+
+def test_postgres_with_pg_dump_passes(monkeypatch):
+    monkeypatch.setattr("app.db.DATABASE_URL", "postgresql+psycopg2://u:p@h:5432/d", raising=False)
+    monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/pg_dump")
+    report = pre.Report()
+    pre.check_backup_tooling(report)
+    assert report.rows[-1]["level"] == "ok"
+
+
+def test_the_block_message_says_why_it_matters(monkeypatch):
+    """차단 메시지는 **무엇을 하면 되는지**와 **왜 중요한지**를 함께 말해야 한다."""
+    monkeypatch.setattr("app.db.DATABASE_URL", "postgresql+psycopg2://u:p@h:5432/d", raising=False)
+    monkeypatch.setattr("shutil.which", lambda name: None)
+    report = pre.Report()
+    pre.check_backup_tooling(report)
+
+    detail = report.rows[-1]["detail"]
+    assert "설치" in detail, "무엇을 하면 되는지"
+    assert "학습 이력" in detail, "왜 중요한지"

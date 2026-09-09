@@ -299,6 +299,33 @@ def check_sidecars(report: Report) -> None:
 
 
 # ------------------------------------------------------------------ 운영
+def check_backup_tooling(report: Report) -> None:
+    """백업을 **뜨는 데 필요한 도구가 있는가.**
+
+    PostgreSQL 백업은 `pg_dump` 를 부른다. 없으면 백업 명령이 실패하는데,
+    그 사실을 **첫 백업을 시도하는 순간**에야 알게 된다 — 보통 배포한 뒤다.
+    (이 저장소를 만든 개발 PC 가 정확히 그 상태였다.)
+    """
+    import shutil
+
+    from app.db import DATABASE_URL
+
+    if DATABASE_URL.startswith("sqlite"):
+        report.ok("백업 도구", "SQLite 는 내장 온라인 백업 API 를 쓴다 (외부 도구 불필요)")
+        return
+
+    found = shutil.which("pg_dump")
+    if found:
+        report.ok("백업 도구", "pg_dump 사용 가능")
+    else:
+        report.block(
+            "백업 도구",
+            "pg_dump 를 찾을 수 없다 — PostgreSQL 백업을 뜰 수 없다. "
+            "postgresql-client 를 설치하세요 (백업 없이 Closed Beta 를 열면 "
+            "사고 한 번에 학습 이력이 전부 사라진다)",
+        )
+
+
 def check_operations(report: Report, backup_dir: Path | None) -> None:
     from sqlalchemy import select
 
@@ -314,6 +341,8 @@ def check_operations(report: Report, backup_dir: Path | None) -> None:
         )
     else:
         report.ok("운영자 계정", f"{len(admins)}명")
+
+    check_backup_tooling(report)
 
     if backup_dir is None:
         report.unknown("백업", "--backup-dir 을 주지 않아 확인하지 못했다")
