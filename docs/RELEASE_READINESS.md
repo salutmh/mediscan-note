@@ -36,7 +36,7 @@ AI 보조 피드백(참고) → 오답 재학습.
 | 화면 5 | 지어내지 않고 `model_unavailable`, 데모는 flag OFF 기본 | `app/routers/analyze.py:74` |
 | 스키마 | Alembic이 기준, 기동 시 자동 upgrade + 레거시 DB 감지 | `app/db.py:47` |
 | 정적 자산 | 요청 주소 기준 절대 URL 생성 | `app/main.py:32` |
-| 테스트 | 백엔드 **563개**(SQLite·PostgreSQL 양쪽) + 프론트 **59개** + E2E 4종 + 접근성·좁은화면 점검 | `backend/tests/`, `frontend/src/**/*.test.js` |
+| 테스트 | 백엔드 **662개**(SQLite·PostgreSQL 양쪽) + 프론트 **59개** + E2E 4종 + 접근성·좁은화면 점검 | `backend/tests/`, `frontend/src/**/*.test.js` |
 
 **이미 해결된 것은 다시 만들지 않는다.** 위 항목은 재구현 대상이 아니다.
 
@@ -75,7 +75,7 @@ AI 보조 피드백(참고) → 오답 재학습.
 | ~~M2~~ | ~~`_grade_by_points` 개발용 근사 채점 경로가 코드에 남아 있음~~ → `MEDISCAN_ALLOW_APPROX_GRADING` 을 포함한 **개발 전용 스위치 3종이 production 에서 기동을 막는다**(`app/config.py`, `tests/test_dev_only_flags.py`). 경로 자체는 개발용으로 남긴다 |
 | ~~M3~~ | ~~난이도 메타데이터 없음~~ → `cases.difficulty` 추가 (Phase 5). **자동 판정하지 않고 전문가 검토 대상**(E2) |
 | ~~M4~~ | ~~모델 평가 도구 없음~~ → `scripts/evaluate_model.py` (검출률·크기 구간별·버전 비교, Phase 7) |
-| M5 | 예측 sidecar 수동 재계산 |
+| ~~M5~~ | ~~예측 sidecar 수동 재계산~~ → **수명주기 도구**(`scripts/sidecar_manage.py`): stale 판정(모델버전·가중치 sha256·GT/volume sha256·GT voxel·스키마·자기모순) → 재계산 계획 → 검증 → **백업 후 승격**. GPU 없이 돌아가고 **검증 실패분은 승격하지 않는다.** 실제 추론만 학습 venv 가 필요하다 |
 | M6 | ~~동시성 미검증~~ → **경쟁 조건 2건을 재현해서 고쳤다**(`tests/test_concurrency.py`): 로그아웃 더블클릭 시 IntegrityError → 500, 재설정 코드가 두 번 사용 가능. ~~PostgreSQL 실검증 없음~~ → **검증 완료**(scripts/verify_postgres.py, 544 테스트 통과). **동시 쓰기 스모크 확인**(`scripts/load_smoke.py`): 동시 30명 x 3회 = 90건 전부 성공, 중앙 445ms, SQLite 잠금 오류 0건. 단일 요청은 앱 내부 30ms / 네트워크 경유 44ms. 본격 부하 테스트(지속 처리량·한계점)는 여전히 미실시 — Closed Beta 규모에서는 우선순위가 낮다 |
 
 ## 6. Low
