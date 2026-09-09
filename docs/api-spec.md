@@ -47,6 +47,7 @@
 |---|---|---|
 | `UNAUTHORIZED` | 401 | 토큰 없음 |
 | `INVALID_TOKEN` | 401 | 서명 불일치 / 만료 |
+| `INVALID_CREDENTIALS` | 401 | 로그인 실패. **이메일이 없는 경우와 비밀번호가 틀린 경우를 구분하지 않는다** — 구분하면 가입 여부를 캐낼 수 있다 |
 | `USER_NOT_FOUND` | 401 | 토큰의 사용자가 존재하지 않음 |
 | `TOKEN_REVOKED` | 401 | 로그아웃되어 서버가 폐기한 토큰 |
 | `SESSION_EXPIRED` | 401 | 비밀번호 변경 등으로 이전 세션이 모두 무효화됨 |
@@ -72,6 +73,14 @@
 | `FINDINGS_NOT_FOUND` | 404 | 회수할 소견이 없음 |
 | `INVALID_DIFFICULTY` / `INVALID_FINDINGS_STATUS` | 422 | 허용되지 않은 값 |
 | `NO_CHANGES` | 400 | PATCH 에 변경할 항목이 없음 |
+
+> **이 표는 계약이다.** 프론트가 이 코드로 분기하므로, 새 에러 코드를 만들면 여기에도 넣는다.
+> `backend/tests/test_error_contract.py` 가 **양방향으로 자동 대조**한다:
+> 코드에 있는데 표에 없으면 실패하고, 표에 있는데 코드가 만들지 않아도 실패한다.
+> (실제로 `INVALID_CREDENTIALS` 가 이 표에서 빠져 있었고 사람 눈으로는 놓쳤다.)
+>
+> 운영자 전용 로컬 도구(`/api/admin/review/*`)의 코드는 프론트가 분기하지 않아 표에 없다 —
+> 테스트의 `NOT_ERROR_CODES` 에 이유와 함께 적혀 있다.
 
 ---
 
