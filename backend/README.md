@@ -265,6 +265,9 @@ DICOM 원본에서 서비스 케이스까지 **4단계로 나눠** 진행한다.
    python -m scripts.export_vs_seg_npy --data-root <DICOM루트> --out data/vs_seg_export        --cases VS-SEG-202 ... [--verify-against <노트북 outputs>]
 2) 육안 검수    npy -> 오버레이 시트 PNG (DB 등록 없음)
    python -m scripts.make_review_overlays --export-root data/vs_seg_export --out data/vs_seg_review
+   # 사람이 보기 전에 기계가 셀 수 있는 것부터 (덩어리 수·정렬·ROI·편측성)
+   python -m scripts.pre_review_check --export-root data/vs_seg_export --json data/vs_seg_review/pre_review.json
+   # 판단 기준: docs/CASE_REVIEW_CHECKLIST.md — 사전점검이 깨끗해도 전부 눈으로 본다
 3) 자산 생성    npy -> 표시용 PNG + 마스크 PNG + manifest
    python -m scripts.build_vs_seg_case_assets --export-root data/vs_seg_export        --out data/vs_seg_cases --margin 3
 4) 등록         python -m scripts.import_cases data/vs_seg_cases/manifest.json
@@ -441,6 +444,7 @@ alembic/         마이그레이션 (env.py 는 app/db.py 의 DATABASE_URL 사�
 scripts/
   export_vs_seg_npy.py         VS-SEG DICOM -> npy (노트북 로직 그대로 + ROI 안전장치)
   make_review_overlays.py      등록 전 육안 검수 오버레이 시트 (DB 등록 없음)
+  pre_review_check.py          육안 검수 **전** 기계 점검 — 사람 검수를 대신하지 않고 볼 순서를 정한다
   build_vs_seg_case_assets.py  npy -> 표시용 PNG + 마스크 PNG + manifest
   import_cases.py              실제 케이스 등록 CLI (단일 영상 / volume 둘 다)
   verify_cases.py              등록 후 sanity check (Dice=1.0 자가점검 포함)
