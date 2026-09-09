@@ -10,6 +10,19 @@
 
 ## 0. 배포 전 반드시 확인 (체크리스트)
 
+**기계로 확인 가능한 항목은 한 번에 돌릴 수 있다:**
+
+```bash
+cd backend
+python -m scripts.deploy_preflight --backup-dir /var/backups/mediscan
+python -m scripts.deploy_preflight --simulate-production   # 로컬에서 미리보기
+```
+
+결과는 넷으로 나뉜다 — **차단 / 주의 / 확인못함 / 통과**.
+`확인못함` 은 **통과가 아니다.** 데이터셋 이용 조건이나 전문가 GT 검수처럼 사람이
+판단해야 하는 항목은 확인하는 척하지 않고 항상 여기 남는다.
+차단이 하나라도 있으면 종료코드 1 이다.
+
 | # | 항목 | 확인 방법 |
 |---|---|---|
 | 1 | 데이터셋·모델 이용 조건 확인 | **BLOCKER-1** — 외부 사용자에게 여는 것이 허용되는지 (`CLAUDE_HANDOFF.md`) |

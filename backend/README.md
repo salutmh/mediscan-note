@@ -454,6 +454,8 @@ scripts/
                                GPU 없이 돌아간다. 검증 실패분은 승격하지 않는다
   restore_drill.py             복구 훈련 — 백업을 되돌려 **앱이 실제로 뜨는지** 확인.
                                격리된 임시 위치에서만 돌고 운영 DB 는 건드리지 않는다
+  deploy_preflight.py          배포 직전 점검 (환경·DB·콘텐츠·sidecar·운영).
+                               사람 판단 항목은 "확인못함"으로 남긴다 — 통과로 뭉개지 않는다
   build_vs_seg_case_assets.py  npy -> 표시용 PNG + 마스크 PNG + manifest
   import_cases.py              실제 케이스 등록 CLI (단일 영상 / volume 둘 다)
   verify_cases.py              등록 후 sanity check (Dice=1.0 자가점검 포함)
