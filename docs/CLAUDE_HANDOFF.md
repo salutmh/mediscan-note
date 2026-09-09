@@ -15,7 +15,7 @@
 | 원격 | `https://github.com/salutmh/mediscan-note.git` (Public) |
 | 현재 모드 | **지속 자율 개발 루프** (Phase 1~8 은 최초 백로그였고 전부 완료) |
 | STATUS | `IN_PROGRESS` — 사이클마다 제품 재평가 → 최고가치 작업 선정 |
-| 마지막 전체 검증 | 백엔드 **738 passed** / 프론트 **59 passed** / E2E 6종 / 접근성·좁은화면 점검 0건 / `verify_cases` 6케이스 |
+| 마지막 전체 검증 | 백엔드 **786 passed** (SQLite·PostgreSQL 양쪽) / 프론트 **59 passed** / E2E 6종 / 접근성·좁은화면 점검 0건 / `verify_cases` 6케이스 |
 
 > **push 는 매번 사용자 승인이 필요하다.**
 > force push / rebase / reset --hard / history rewrite 는 하지 않는다.
@@ -636,7 +636,38 @@ Phase 백로그가 끝난 뒤 스스로 선정해서 진행한 작업들이다.
 ### 이번에 고친 실제 결함
 
 | 무엇이 잘못돼 있었나 |
+|
+### 운영 자동화 2차 (루프 #40~44)
+
+| 스크립트·모듈 | 무엇 | 안전 규칙 |
+|---|---|---|
+| `deploy_preflight.py` | 배포 직전 점검 | 사람 판단 항목은 **"확인못함"** — 통과로 뭉개지 않는다 |
+| `license_inventory.py` | 의존성·자산 라이선스 목록 | **판단하지 않는다.** 데이터셋·가중치는 사람 검토 항목 |
+| `app/asset_urls.py` | 케이스 영상·마스크 **서명 URL** | 인증 없이 의료영상을 받을 수 없다 |
+| `app/security_headers.py` | 보안 헤더 | **CSP 는 추측해서 만들지 않는다** (`MEDISCAN_CSP`) |
+| `tests/test_error_contract.py` | 에러 코드 양방향 대조 | 코드↔문서가 어긋나면 실패 |
+| `tests/test_documentation_drift.py` | 문서 표류 점검 | 없는 스크립트·환경변수·문서 참조를 잡는다 |
+| `tools/browser-verify/error-paths.mjs` | 오류 경로 E2E | 사용자가 잘못됐을 때 무엇을 보는가 |
+
+### 2차 보안 점검에서 나온 실제 취약점
+
+**`/static/cases/.../slice_035.png` 를 로그인 없이 받을 수 있었다** (실제 의료영상 155KB).
+`case_id` 가 예측 가능해 열거 가능했고 기준 마스크(정답)도 같았다.
+`<img src>` 에 헤더를 붙일 수 없어 **서명 URL**(HMAC, 기본 24시간)로 막았다.
+URL 생성이 `absolute_url()` 한 곳이라 거기만 고쳐 전 응답이 함께 보호된다.
+
+### 추가로 고친 것
+
+| 무엇이 잘못돼 있었나 |
 |---|
+| `INVALID_CREDENTIALS`(로그인 실패)가 **api-spec 에러 코드 표에서 빠져** 있었다 |
+| 루트 README **417** / CLAUDE.md **563** / RELEASE_READINESS **662** — 실제는 786 이었다 |
+| 보안 헤더가 **하나도 없었다** (클릭재킹·MIME 스니핑 방어 없음) |
+| 저장소에 **LICENSE 파일이 없다** → BLOCKER-5 로 기록 |
+| `psycopg2-binary` 가 LGPL 계열 → 배포 형태 확인 대상으로 문서화 |
+
+---
+|
 | 검수 화면에서 PASS 해도 **상단 진행 현황이 갱신되지 않았다** (서버 스냅샷을 그대로 씀) |
 | **케이스 등록이 전체 한 트랜잭션**이라 20번째에서 실패하면 앞 19건이 날아가고, DB 는 롤백되는데 **static 에 파일은 남았다** |
 | `pre_review_check` 에서 **빈 마스크가 경고 없이 통과**했다 |
@@ -702,7 +733,7 @@ cd backend && alembic revision --autogenerate -m "<설명>"
 
 | 무엇 | 명령 | 결과 |
 |---|---|---|
-| 백엔드 (SQLite) | `cd backend && pytest` | **738 passed** |
+| 백엔드 (SQLite) | `cd backend && pytest` | **786 passed** |
 | 백엔드 (PostgreSQL) | `python -m scripts.verify_postgres --url ... --with-tests` | 마이그레이션 up/down/up + 전체 테스트 통과 |
 | 케이스 | `python -m scripts.verify_cases` | 6케이스 통과 |
 | 프론트 단위 | `cd frontend && npx vitest run` | **59 passed** |
