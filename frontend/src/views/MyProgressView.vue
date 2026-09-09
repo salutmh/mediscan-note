@@ -2,12 +2,14 @@
 /**
  * 화면 7 — 마이 진행현황 (api-spec.md 4절 화면 7, "선택")
  *
- * 화면 정의서에 "별도 집계 엔드포인트 필요 시 추가 논의"로 남아 있어서, 지금은 이미 있는
- * 두 엔드포인트(GET /api/cases, GET /api/wrong-notes)만으로 프론트에서 집계한다.
+ * **케이스별 학습 이력**을 여기서 본다.
+ * 예전에는 `/api/cases` 가 has_matched/needs_review 두 boolean 만 줘서
+ * "학습완료율"까지만 그릴 수 있었고, 이 화면은 숫자 네 개와 막대 하나가 전부였다.
+ * 지금은 목록 응답에 `progress`(시도 횟수·첫/최근/최고 일치도)가 함께 오므로
+ * **처음보다 얼마나 나아졌는지**까지 보여줄 수 있다.
  *
- * 한계: cases 응답에는 has_matched/needs_review 두 상태만 있어서 "학습완료율"까지만 계산할 수 있다.
- * 기획서의 "부위별 일치율"(일치/부분 일치/불일치 비율)은 제출 이력(Submission)이 필요하므로
- * 집계 엔드포인트가 생겨야 정확히 그릴 수 있다 — 아래 안내 문구로 명시해 두었다.
+ * 여기 나오는 숫자는 전부 **학습자 자신의 기록**이다.
+ * 케이스의 의학적 난이도나 소견을 뜻하지 않으며, 그런 것을 추론하지도 않는다.
  */
 import { computed, onMounted, ref } from 'vue'
 import { listCases, listWrongNotes } from '../api/endpoints'
@@ -39,6 +41,53 @@ const wrongCounts = computed(() => ({
   partial_match: wrongNotes.value.filter((i) => i.grade === 'partial_match').length,
   mismatch: wrongNotes.value.filter((i) => i.grade === 'mismatch').length,
 }))
+
+/** 한 번이라도 푼 케이스만, 최근 시도가 빠른 순으로. */
+const history = computed(() =>
+  cases.value
+    .filter((c) => c.progress)
+    .map((c) => {
+      const p = c.progress
+      const delta =
+        p.first_dice != null && p.latest_dice != null
+          ? Math.round((p.latest_dice - p.first_dice) * 100)
+          : null
+      return {
+        caseId: c.case_id,
+        bodyPart: c.body_part,
+        attempts: p.attempts,
+        first: percent(p.first_dice),
+        latest: percent(p.latest_dice),
+        best: percent(p.best_dice),
+        // **시도가 한 번뿐이면 변화가 없다.** 0 으로 쓰면 "제자리걸음"으로 읽힌다.
+        delta: p.attempts > 1 ? delta : null,
+        hasMatched: c.has_matched,
+        needsReview: c.needs_review,
+        lastAt: p.last_attempt_at,
+      }
+    })
+    .sort((a, b) => (b.lastAt ?? '').localeCompare(a.lastAt ?? '')),
+)
+
+/** 여러 번 푼 케이스에서 실제로 나아졌는가 — 재도전이 효과가 있는지 스스로 확인한다. */
+const retrySummary = computed(() => {
+  const retried = history.value.filter((h) => h.delta != null)
+  if (!retried.length) return null
+  const improved = retried.filter((h) => h.delta > 0).length
+  const total = retried.reduce((sum, h) => sum + h.delta, 0)
+  return { retried: retried.length, improved, averageDelta: Math.round(total / retried.length) }
+})
+
+const retryTone = computed(() => {
+  const summary = retrySummary.value
+  if (!summary) return ''
+  if (summary.improved === 0) return 'flat'
+  return summary.averageDelta >= 0 ? 'up' : 'down'
+})
+
+function percent(value) {
+  return value == null ? null : Math.round(value * 100)
+}
 
 // 도넛 게이지용 — 반지름 34, 둘레 = 2πr
 const CIRC = 2 * Math.PI * 34
@@ -135,6 +184,68 @@ onMounted(async () => {
       <p class="muted foot">
         <strong>학습완료</strong>는 그 케이스에서 한 번이라도 <strong>일치</strong> 판정을 받은 것을 뜻하며,
         한 번 달성하면 취소되지 않습니다. 이후 다시 틀리면 <strong>복습필요</strong>가 함께 표시됩니다.
+      </p>
+    </section>
+
+    <!-- 케이스별 학습 이력 — **처음보다 얼마나 나아졌는지**가 핵심이다 -->
+    <section class="card">
+      <div class="card-title">
+        <h2>케이스별 학습 이력</h2>
+        <span class="muted">최근 시도 순</span>
+      </div>
+
+      <!-- **색이 내용과 어긋나면 안 된다.** 0개 개선인데 초록 배경이면
+           "잘하고 있다"로 읽힌다. 평균 변화로 톤을 정한다. -->
+      <p v-if="retrySummary" class="retry-summary" :class="retryTone">
+        다시 푼 케이스 <strong>{{ retrySummary.retried }}개</strong> 중
+        <strong>{{ retrySummary.improved }}개</strong>에서 첫 시도보다 기준에 가까워졌습니다
+        <span class="muted">(평균 {{ retrySummary.averageDelta >= 0 ? '+' : '' }}{{ retrySummary.averageDelta }}p)</span>
+      </p>
+
+      <div v-if="history.length" class="table-wrap">
+        <table class="history">
+          <thead>
+            <tr>
+              <th scope="col">케이스</th>
+              <th scope="col" class="num">시도</th>
+              <th scope="col" class="num">첫 시도</th>
+              <th scope="col" class="num">최근</th>
+              <th scope="col" class="num">최고</th>
+              <th scope="col" class="num">변화</th>
+              <th scope="col">상태</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="row in history" :key="row.caseId">
+              <th scope="row">
+                <RouterLink :to="`/cases/${row.caseId}`">{{ row.caseId }}</RouterLink>
+              </th>
+              <td class="num tnum">{{ row.attempts }}</td>
+              <td class="num tnum">{{ row.first != null ? row.first + '%' : '—' }}</td>
+              <td class="num tnum">{{ row.latest != null ? row.latest + '%' : '—' }}</td>
+              <td class="num tnum best">{{ row.best != null ? row.best + '%' : '—' }}</td>
+              <td class="num tnum">
+                <!-- 시도가 한 번뿐이면 변화가 없다 — 0 이 아니라 빈칸이다 -->
+                <span v-if="row.delta == null" class="muted">—</span>
+                <span v-else :class="row.delta >= 0 ? 'up' : 'down'">
+                  {{ row.delta >= 0 ? '+' : '' }}{{ row.delta }}p
+                </span>
+              </td>
+              <td>
+                <span v-if="row.needsReview" class="badge mismatch">복습필요</span>
+                <span v-else-if="row.hasMatched" class="badge match">학습완료</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p v-else class="muted empty-history">
+        아직 푼 케이스가 없습니다. 케이스를 풀면 여기에 시도별 기록이 쌓입니다.
+      </p>
+
+      <p class="muted foot">
+        여기 숫자는 모두 <strong>내가 표시한 영역과 기준 마스크의 일치도</strong>입니다.
+        케이스의 의학적 난이도를 뜻하지 않습니다.
       </p>
     </section>
   </template>
@@ -308,5 +419,81 @@ onMounted(async () => {
   padding-top: var(--sp-4);
   border-top: 1px solid var(--line);
   font-size: 12px;
+}
+
+/* --- 케이스별 학습 이력 ------------------------------------------------ */
+.retry-summary {
+  margin: 0 0 var(--sp-4);
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--surface-sunken);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  font-size: 14px;
+}
+.retry-summary.up {
+  background: var(--match-bg);
+  border-color: var(--match-line);
+}
+.retry-summary.down {
+  background: var(--partial-bg);
+  border-color: var(--partial-line);
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+table.history {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+}
+table.history th,
+table.history td {
+  padding: 9px var(--sp-3);
+  text-align: left;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+table.history thead th {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-muted);
+  border-bottom-width: 1px;
+}
+table.history .num {
+  text-align: right;
+}
+table.history tbody th {
+  font-weight: 600;
+}
+table.history tbody th a {
+  color: var(--ink);
+  text-decoration: none;
+}
+table.history tbody th a:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+table.history .best {
+  color: var(--match-ink);
+  font-weight: 600;
+}
+table.history .up {
+  color: var(--match-ink);
+  font-weight: 600;
+}
+table.history .down {
+  color: var(--mismatch-ink);
+  font-weight: 600;
+}
+table.history tbody tr:last-child th,
+table.history tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.empty-history {
+  padding: var(--sp-8) 0;
+  text-align: center;
 }
 </style>

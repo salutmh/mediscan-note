@@ -33,7 +33,11 @@ def _keys(payload, prefix="") -> set[str]:
             found.add(key)
             found |= _keys(value)
     elif isinstance(payload, list):
-        for item in payload[:1]:  # 리스트는 첫 항목만 봐도 형태는 같다
+        # **항목을 전부 본다.** 예전에는 첫 항목만 보고 "형태는 같다"고 뒀는데,
+        # 조건부로 채워지는 필드가 있으면 그렇지 않다 —
+        # 케이스 목록에서 첫 케이스가 미시도(progress=null)면 그 안의
+        # 필드가 통째로 검사에서 빠져, 문서에 없는 필드가 조용히 새어 나갔다.
+        for item in payload:
             found |= _keys(item)
     return found
 
@@ -55,8 +59,16 @@ def _assert_documented(keys: set[str], spec: str, where: str):
     assert not missing, f"{where} 응답 필드가 api-spec.md 에 없습니다: {missing}"
 
 
-def test_case_list_fields_are_documented(client, user_a, spec_text):
+def test_case_list_fields_are_documented(client, user_a, roi_mismatch, spec_text):
+    """**먼저 한 번 풀고 나서 본다.**
+
+    풀지 않은 상태에서는 `progress` 가 null 이라 그 안의 필드가 응답에
+    아예 나타나지 않는다. 그대로 검사하면 새로 늘어난 하위 필드가
+    문서에 없어도 조용히 통과한다 — 실제로 그렇게 새어 나갔다.
+    """
+    user_a.submit(roi_mismatch)
     body = user_a.get("/api/cases").json()
+    assert any(c.get("progress") for c in body["cases"]), "progress 가 채워진 상태를 봐야 한다"
     _assert_documented(_keys(body), spec_text, "GET /api/cases")
 
 
@@ -76,6 +88,13 @@ def test_wrong_notes_fields_are_documented(client, user_a, roi_mismatch, spec_te
     user_a.submit(roi_mismatch)
     body = user_a.get("/api/wrong-notes").json()
     _assert_documented(_keys(body), spec_text, "GET /api/wrong-notes")
+
+
+def test_dashboard_fields_are_documented(client, user_a, roi_mismatch, spec_text):
+    """홈 화면이 쓰는 필드도 계약이다 — 문서 없이 늘어나면 프론트가 추측하게 된다."""
+    user_a.submit(roi_mismatch)
+    body = user_a.get("/api/me/dashboard").json()
+    _assert_documented(_keys(body), spec_text, "GET /api/me/dashboard")
 
 
 def test_analyze_fields_are_documented(client, user_a, spec_text):

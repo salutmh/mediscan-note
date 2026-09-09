@@ -337,13 +337,42 @@
       "body_part": "brain_mri",
       "disease": "vestibular_schwannoma",
       "thumbnail_url": "http://localhost:8010/static/cases/VS-SEG-202/thumb.png",
-      "has_matched": false,
-      "needs_review": false,
-      "gradable": true
+      "has_matched": true,
+      "needs_review": true,
+      "gradable": true,
+      "difficulty": null,
+      "progress": {
+        "attempts": 3,
+        "best_dice": 0.87,
+        "latest_dice": 0.62,
+        "latest_grade": "partial_match",
+        "first_dice": 0.31,
+        "first_grade": "mismatch",
+        "best_location_score": 92,
+        "last_attempt_at": "2026-09-10T14:00:00+09:00",
+        "first_attempt_at": "2026-09-08T10:12:00+09:00"
+      }
     }
   ]
 }
 ```
+
+> **`progress` 는 그 사용자가 이 케이스를 한 번이라도 푼 경우에만 있다.**
+> 아직 풀지 않았으면 **`null`** 이다 — 0 으로 채우지 않는다.
+> "0점을 받았다"와 "아직 안 풀었다"는 완전히 다른 상태이고, 0 으로 채우면
+> 화면에서 두 상태를 구분할 방법이 사라진다.
+>
+> | 필드 | 의미 |
+> |---|---|
+> | `attempts` | 그 케이스의 총 제출 횟수 |
+> | `best_dice` / `latest_dice` / `first_dice` | 최고 · 최근 · 첫 시도의 일치도. 값이 없으면 null |
+> | `latest_grade` / `first_grade` | 최근 · 첫 시도의 판정 |
+> | `best_location_score` | 최고 위치 점수 (0~100) |
+> | `last_attempt_at` / `first_attempt_at` | ISO 8601, **항상 offset 포함** |
+>
+> **이 숫자들은 전부 학습자 자신의 기록이다.** 케이스의 의학적 난이도를 뜻하지 않는다
+> (난이도는 별도 필드 `difficulty` 이며 **전문가가 지정한 것만** 들어간다).
+
 > **학습 상태 (v0.3에서 분리)** — 로그인한 사용자 기준으로 계산된다.
 >
 > | 필드 | 의미 | 계산 |
@@ -675,6 +704,64 @@ POST /api/cases/{case_id}/explanation-viewed     (로그인 필요)
 **왜 재는가**: "틀린 뒤에 해설을 읽는가"는 전문가 소견(`case_findings`) 작성에 사람 시간을
 쓸 가치가 있는지를 가른다. 그 판단이 곧 콘텐츠 우선순위다.
 
+### 2-3-2. GET /api/me/dashboard
+
+홈(학습 대시보드)이 쓰는 요약. **여기서 새로 만들어내는 값은 없다** —
+전부 `submissions` 에 이미 있는 것을 모아 보여줄 뿐이다.
+
+> **의료적 판단이 아니다.** 나오는 숫자는 전부 학습자 자신의 시도 기록이며,
+> 케이스의 난이도나 소견을 뜻하지 않는다.
+
+**Response**
+```json
+{
+  "totals": {
+    "total_cases": 6,
+    "gradable_cases": 6,
+    "matched": 2,
+    "needs_review": 1,
+    "attempted": 3,
+    "not_started": 3,
+    "total_attempts": 7
+  },
+  "next_up": {
+    "case_id": "VS-SEG-202",
+    "body_part": "brain_mri",
+    "disease": "vestibular_schwannoma",
+    "thumbnail_url": "https://api.example.com/static/cases/VS-SEG-202/thumb.png?e=...&s=...",
+    "reason": "needs_review"
+  },
+  "recent_activity": [
+    {
+      "case_id": "VS-SEG-202",
+      "grade": "match",
+      "dice": 0.91,
+      "location_score": 96,
+      "submitted_at": "2026-09-10T14:00:00+09:00",
+      "case_active": true
+    }
+  ],
+  "best_dice": 0.91,
+  "latest_improvement": {
+    "case_id": "VS-SEG-202",
+    "previous_dice": 0.42,
+    "latest_dice": 0.91,
+    "delta": 0.49,
+    "previous_grade": "mismatch",
+    "latest_grade": "match",
+    "submitted_at": "2026-09-10T14:00:00+09:00"
+  },
+  "has_any_activity": true
+}
+```
+
+| 필드 | 의미 |
+|---|---|
+| `next_up.reason` | `needs_review` / `not_started` / `all_matched`. **순서 규칙일 뿐 난이도 판단이 아니다** (복습필요 → 미시도 순) |
+| `best_dice` | 값이 없으면 **null**. 0 으로 채우지 않는다 |
+| `latest_improvement` | **같은 케이스의 마지막 두 시도**만 비교한다. 케이스마다 병변이 달라 서로 다른 케이스의 Dice 비교는 성립하지 않는다. 비교 대상이 없으면 null |
+| `recent_activity[].case_active` | 운영자가 숨긴 케이스의 이력도 남는다 — 다시 풀 수 있는지 구분하려고 함께 내려준다 |
+
 ### 2-4. GET /api/wrong-notes
 
 로그인한 사용자의 복습노트 목록 (grade가 partial_match/mismatch인 케이스)
@@ -686,10 +773,25 @@ POST /api/cases/{case_id}/explanation-viewed     (로그인 필요)
 ```json
 {
   "items": [
-    { "case_id": "VS-SEG-115", "body_part": "brain_mri", "grade": "mismatch", "attempted_at": "2026-09-10T14:00:00+09:00" }
+    {
+      "case_id": "VS-SEG-115",
+      "body_part": "brain_mri",
+      "disease": "vestibular_schwannoma",
+      "thumbnail_url": "https://api.example.com/static/cases/VS-SEG-115/thumb.png?e=...&s=...",
+      "grade": "mismatch",
+      "attempted_at": "2026-09-10T14:00:00+09:00",
+      "latest_dice": 0.31,
+      "best_dice": 0.52,
+      "attempts": 3
+    }
   ]
 }
 ```
+
+`latest_dice` / `best_dice` 는 **없을 수 있다**(null). 0 으로 채우지 않는다 —
+"0점을 받았다"와 "값이 없다"는 다른 상태다.
+`attempts` 는 그 케이스의 총 제출 횟수이며, **학습자 자신의 기록**이다
+(케이스의 의학적 난이도와 무관하다).
 
 ### 2-5. POST /api/wrong-notes/{case_id}/retry
 

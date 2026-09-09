@@ -137,7 +137,46 @@ def case_progress_map(db: Session, user_id: str) -> dict[str, dict]:
         entry["latest_grade"] = submission.grade
         entry["latest_dice"] = submission.dice
         entry["latest_location_score"] = submission.location_score
+
+    # 첫 시도 점수. **"처음보다 얼마나 나아졌는가"** 는 재도전 학습의 핵심 질문인데,
+    # 직전 시도만 비교하면 여러 번 푼 경우의 전체 궤적이 보이지 않는다.
+    for submission in first_submissions(db, user_id):
+        entry = summary.setdefault(submission.case_id, {"attempts": 1})
+        entry["first_dice"] = submission.dice
+        entry["first_grade"] = submission.grade
     return summary
+
+
+def first_submissions(db: Session, user_id: str) -> list[Submission]:
+    """케이스별 **가장 이른** 제출."""
+    earliest = (
+        select(
+            Submission.case_id.label("case_id"),
+            func.min(Submission.submitted_at).label("first_at"),
+        )
+        .where(Submission.user_id == user_id)
+        .group_by(Submission.case_id)
+        .subquery()
+    )
+    stmt = (
+        select(Submission)
+        .join(
+            earliest,
+            (Submission.case_id == earliest.c.case_id)
+            & (Submission.submitted_at == earliest.c.first_at),
+        )
+        .where(Submission.user_id == user_id)
+        .order_by(Submission.id)
+    )
+    # 같은 시각에 두 건이 들어간 경우 케이스별로 하나만 남긴다 (latest_submissions 와 같은 이유)
+    seen: set[str] = set()
+    result: list[Submission] = []
+    for submission in db.scalars(stmt).all():
+        if submission.case_id in seen:
+            continue
+        seen.add(submission.case_id)
+        result.append(submission)
+    return result
 
 
 def recent_submissions(db: Session, user_id: str, limit: int = 8) -> list[Submission]:

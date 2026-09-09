@@ -172,6 +172,8 @@ def _case_progress(entry: dict | None) -> dict | None:
         "best_dice": entry.get("best_dice"),
         "latest_dice": entry.get("latest_dice"),
         "latest_grade": entry.get("latest_grade"),
+        "first_dice": entry.get("first_dice"),
+        "first_grade": entry.get("first_grade"),
         "best_location_score": entry.get("best_location_score"),
         "last_attempt_at": _iso(entry.get("last_attempt_at")),
         "first_attempt_at": _iso(entry.get("first_attempt_at")),

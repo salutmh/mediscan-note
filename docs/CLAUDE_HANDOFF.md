@@ -15,7 +15,7 @@
 | 원격 | `https://github.com/salutmh/mediscan-note.git` (Public) |
 | 현재 모드 | **지속 자율 개발 루프** (Phase 1~8 은 최초 백로그였고 전부 완료) |
 | STATUS | `IN_PROGRESS` — 사이클마다 제품 재평가 → 최고가치 작업 선정 |
-| 마지막 전체 검증 | 백엔드 **920 passed** (SQLite·PostgreSQL 양쪽) / 프론트 **74 passed** / E2E 7종 / 접근성·좁은화면 점검 0건 / `verify_cases` 6케이스 |
+| 마지막 전체 검증 | 백엔드 **988 passed** (SQLite·PostgreSQL 양쪽) / 프론트 **108 passed** / E2E 7종 / 접근성·좁은화면 점검 0건 / `verify_cases` 6케이스 |
 
 > **push 는 매번 사용자 승인이 필요하다.**
 > force push / rebase / reset --hard / history rewrite 는 하지 않는다.
@@ -865,12 +865,12 @@ cd backend && alembic revision --autogenerate -m "<설명>"
 
 | 무엇 | 명령 | 결과 |
 |---|---|---|
-| 백엔드 (SQLite) | `cd backend && pytest` | **830 passed** |
+| 백엔드 (SQLite) | `cd backend && pytest` | **988 passed** |
 | 백엔드 (PostgreSQL) | `python -m scripts.verify_postgres --url ... --with-tests` | 마이그레이션 up/down/up + 전체 테스트 통과 |
 | 케이스 | `python -m scripts.verify_cases` | 6케이스 통과 |
-| 프론트 단위 | `cd frontend && npx vitest run` | **74 passed** |
+| 프론트 단위 | `cd frontend && npx vitest run` | **108 passed** |
 | 빌드 | `npm run build` | 통과 |
-| 브라우저 E2E | `tools/browser-verify/{user-flow,slice-navigation,consent-and-sns,screenshot-all}.mjs` | 4종 통과 |
+| 브라우저 E2E | `tools/browser-verify/*.mjs` (user-flow / slice-navigation / consent-and-sns / screenshot-all / error-paths / case-review / admin-ux / **roi-undo**) | 통과 |
 | 접근성 | `tools/browser-verify/a11y-audit.mjs` | 지적 0건 |
 
 현재 실패하는 테스트: **없음**

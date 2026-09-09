@@ -25,6 +25,19 @@ const counts = computed(() => ({
   mismatch: items.value.filter((i) => i.grade === 'mismatch').length,
 }))
 
+function percent(value) {
+  return value == null ? null : Math.round(value * 100)
+}
+
+/**
+ * 최고 기록은 **최근 기록보다 나을 때만** 보여준다.
+ * 둘이 같으면 같은 숫자가 두 번 나와 잡음이고,
+ * 최근이 더 좋으면 "최고"는 지금 그 값이라 따로 말할 이유가 없다.
+ */
+function showsBest(item) {
+  return item.best_dice != null && item.latest_dice != null && item.best_dice > item.latest_dice
+}
+
 function formatDate(iso) {
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return iso
@@ -46,7 +59,9 @@ onMounted(async () => {
 <template>
   <header class="head">
     <h1>복습노트</h1>
-    <p class="lead">내가 표시한 ROI가 기준 마스크와 완전히 일치하지 않았던 케이스입니다.</p>
+    <p class="lead">
+      기준 마스크와 완전히 일치하지 않았던 케이스입니다. 다시 풀어 얼마나 가까워지는지 확인하세요.
+    </p>
   </header>
 
   <div class="segmented filters">
@@ -73,6 +88,7 @@ onMounted(async () => {
   <ul v-else class="list">
     <li v-for="item in visible" :key="item.case_id" class="card row">
       <span class="rail" :class="item.grade" aria-hidden="true"></span>
+      <img v-if="item.thumbnail_url" class="thumb" :src="item.thumbnail_url" alt="" />
       <div class="row-info">
         <div class="line">
           <strong class="case-id">{{ item.case_id }}</strong>
@@ -82,8 +98,25 @@ onMounted(async () => {
           {{ bodyPartLabel(item.body_part) }}
           <span class="dot">·</span>
           {{ formatDate(item.attempted_at) }} 시도
+          <template v-if="item.attempts > 1">
+            <span class="dot">·</span> {{ item.attempts }}회 시도
+          </template>
         </p>
       </div>
+
+      <!-- **재도전이 이 서비스의 핵심 학습 루프인데** 그 경과가 어디에도 없었다.
+           "틀린 것 목록"이 아니라 "얼마나 가까워졌는지"를 보여준다. -->
+      <div v-if="item.latest_dice != null" class="scores">
+        <div class="score">
+          <span class="score-label">최근</span>
+          <span class="tnum score-value">{{ percent(item.latest_dice) }}%</span>
+        </div>
+        <div v-if="showsBest(item)" class="score best">
+          <span class="score-label">최고</span>
+          <span class="tnum score-value">{{ percent(item.best_dice) }}%</span>
+        </div>
+      </div>
+
       <RouterLink class="btn primary" :to="{ name: 'retry', params: { caseId: item.case_id } }">
         재도전
       </RouterLink>
@@ -131,6 +164,53 @@ onMounted(async () => {
   padding: var(--sp-4) var(--sp-5);
   overflow: hidden;
   transition: border-color var(--transition), box-shadow var(--transition);
+}
+
+.thumb {
+  flex: 0 0 auto;
+  width: 56px;
+  height: 56px;
+  border-radius: var(--r-sm);
+  object-fit: cover;
+  background: var(--viewer-bg);
+}
+
+.row-info {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* 점수는 오른쪽에 모아 세로로 읽히게 한다 — 목록에서 눈이 한 줄로 훑는다 */
+.scores {
+  display: flex;
+  gap: var(--sp-5);
+  flex: 0 0 auto;
+}
+.score {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+}
+.score-label {
+  font-size: 11.5px;
+  color: var(--ink-muted);
+}
+.score-value {
+  font-size: 17px;
+  font-weight: 700;
+}
+.score.best .score-value {
+  color: var(--match-ink);
+}
+
+@media (max-width: 640px) {
+  .thumb {
+    display: none;
+  }
+  .scores {
+    gap: var(--sp-3);
+  }
 }
 
 .row:hover {

@@ -9,8 +9,9 @@ from sqlalchemy import select
 
 from app.deps import CurrentUser, DbSession
 from app.models import Case
-from app.repository import wrong_note_items
+from app.repository import case_progress_map, wrong_note_items
 from app.routers.cases import grade_and_store
+from app.static_files import absolute_url
 from app.timefmt import to_kst_iso
 
 router = APIRouter(prefix="/api/wrong-notes", tags=["wrong-notes"])
@@ -38,13 +39,23 @@ def list_wrong_notes(user: CurrentUser, db: DbSession):
             select(Case).where(Case.case_id.in_(case_ids), Case.is_active.is_(True))
         ).all()
     } if case_ids else {}
+    # **시도 요약을 함께 싣는다.** 예전에는 케이스 ID·등급·시각뿐이라,
+    # 복습노트가 "틀린 것 목록"이지 "얼마나 나아지고 있는지"를 보여주지 못했다.
+    # 재도전이 이 서비스의 핵심 학습 루프인데 그 경과가 어디에도 없었다.
+    progress = case_progress_map(db, user.user_id)
     return {
         "items": [
             {
                 "case_id": s.case_id,
                 "body_part": case_map[s.case_id].body_part,
+                "disease": case_map[s.case_id].disease,
+                "thumbnail_url": absolute_url(case_map[s.case_id].thumbnail_url),
                 "grade": s.grade,
                 "attempted_at": _to_kst_iso(s.submitted_at),
+                # 값이 없으면 넣지 않는다 — 0 으로 채우면 "0점을 받았다"로 읽힌다
+                "latest_dice": s.dice,
+                "best_dice": (progress.get(s.case_id) or {}).get("best_dice"),
+                "attempts": (progress.get(s.case_id) or {}).get("attempts", 1),
             }
             for s in items
             # 숨겨졌거나 삭제된 케이스는 재도전이 불가능하므로 목록에서 뺀다
