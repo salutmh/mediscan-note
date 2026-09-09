@@ -71,4 +71,13 @@ const afterRedo = await painted(); console.log('다시하기 뒤:', afterRedo)
 
 const ok = after1 > 0 && after2 > after1 && Math.abs(afterUndo - after1) < after1 * 0.05 && Math.abs(afterRedo - after2) < after2 * 0.05
 console.log(ok ? '\n판정: 통과 — 되돌리기/다시하기가 실제 픽셀을 복원한다' : '\n판정: 실패')
+// **만든 탭을 닫는다.** 다른 스크립트들은 기존 탭을 재사용하지만 이 스크립트는
+// 새로 만든다. 닫지 않으면 반복 실행할수록 헤드리스 Chrome 에 탭이 쌓이고,
+// 그 상태에서는 **다른 스크립트의 전체 페이지 스크린샷이 타임아웃난다**
+// (실제로 admin-ux / case-review 가 그렇게 멈췄다).
+try {
+  await send('Target.closeTarget', { targetId }, false)
+} catch {
+  /* 이미 닫혔으면 그만이다 */
+}
 ws.close(); process.exit(ok ? 0 : 1)

@@ -66,6 +66,23 @@ node tools/browser-verify/error-paths.mjs ./out/errors 9333
 node tools/browser-verify/admin-ux.mjs ./out/admin 9333 <운영자이메일>
 ```
 
+## 같은 브라우저를 여러 스크립트가 나눠 쓴다
+
+대부분의 스크립트는 **이미 열려 있는 첫 페이지 탭을 재사용한다**
+(`Target.getTargets` -> `type === 'page'`). 새 탭을 만드는 것은 `roi-undo.mjs` 뿐이고,
+그건 **끝나면 자기가 만든 탭을 닫는다**.
+
+**새 탭을 만들었으면 반드시 닫는다.** 닫지 않으면 반복 실행할수록 탭이 쌓이고,
+그 상태에서는 다른 스크립트의 전체 페이지 스크린샷이 30초 안에 안 끝나
+`CDP timeout: Page.captureScreenshot` 으로 죽는다. 실제로 `admin-ux` 와
+`case-review` 가 그렇게 멈춰서, 한동안 "검수 화면이 무거운 탓"으로 오해했다.
+
+쌓인 탭을 정리하려면:
+
+```bash
+curl -s http://127.0.0.1:9333/json/list |   python -c "import sys,json,urllib.request;   [urllib.request.urlopen('http://127.0.0.1:9333/json/close/'+t['id']).read()    for t in json.load(sys.stdin)[1:] if t.get('type')=='page']"
+```
+
 ## 참고
 
 - 스크립트가 **실제로 API 에 가입**해서 진짜 토큰을 받는다 (백엔드가 서명·만료를 검증하므로
