@@ -7,14 +7,13 @@
  */
 import { computed, onMounted, ref } from 'vue'
 import { listWrongNotes } from '../api/endpoints'
-import { bodyPartLabel } from '../labels'
+import { bodyPartLabel, gradeBadge, gradeLabel } from '../labels'
 
 const items = ref([])
 const loading = ref(true)
 const errorMessage = ref('')
 const filter = ref('all') // 'all' | 'partial_match' | 'mismatch'
 
-const GRADE_LABEL = { partial_match: '부분 일치', mismatch: '불일치' }
 
 const visible = computed(() =>
   filter.value === 'all' ? items.value : items.value.filter((i) => i.grade === filter.value),
@@ -69,10 +68,10 @@ onMounted(async () => {
       전체 <span class="cnt">{{ counts.all }}</span>
     </button>
     <button :class="{ active: filter === 'partial_match' }" @click="filter = 'partial_match'">
-      부분 일치 <span class="cnt">{{ counts.partial_match }}</span>
+      {{ gradeLabel('partial_match') }} <span class="cnt">{{ counts.partial_match }}</span>
     </button>
     <button :class="{ active: filter === 'mismatch' }" @click="filter = 'mismatch'">
-      불일치 <span class="cnt">{{ counts.mismatch }}</span>
+      {{ gradeLabel('mismatch') }} <span class="cnt">{{ counts.mismatch }}</span>
     </button>
   </div>
 
@@ -92,7 +91,7 @@ onMounted(async () => {
       <div class="row-info">
         <div class="line">
           <strong class="case-id">{{ item.case_id }}</strong>
-          <span class="badge" :class="item.grade">{{ GRADE_LABEL[item.grade] ?? item.grade }}</span>
+          <span class="badge" :class="item.grade">{{ gradeBadge(item.grade) }}</span>
         </div>
         <p class="muted">
           {{ bodyPartLabel(item.body_part) }}

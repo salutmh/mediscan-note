@@ -752,7 +752,8 @@ POST /api/cases/{case_id}/explanation-viewed     (로그인 필요)
       "dice": 0.91,
       "location_score": 96,
       "submitted_at": "2026-09-10T14:00:00+09:00",
-      "case_active": true
+      "case_active": true,
+      "thumbnail_url": "https://api.example.com/static/cases/VS-SEG-202/thumb.png?e=...&s=..."
     }
   ],
   "best_dice": 0.91,
@@ -775,6 +776,38 @@ POST /api/cases/{case_id}/explanation-viewed     (로그인 필요)
 | `best_dice` | 값이 없으면 **null**. 0 으로 채우지 않는다 |
 | `latest_improvement` | **같은 케이스의 마지막 두 시도**만 비교한다. 케이스마다 병변이 달라 서로 다른 케이스의 Dice 비교는 성립하지 않는다. 비교 대상이 없으면 null |
 | `recent_activity[].case_active` | 운영자가 숨긴 케이스의 이력도 남는다 — 다시 풀 수 있는지 구분하려고 함께 내려준다 |
+
+### 2-3-3. GET /api/glossary — 의학용어 사전 (v0.8)
+
+판독 화면(화면 2) 우측 패널이 쓴다. **질환 단위 문헌 기반 용어 목록**이다.
+
+> **여기서 의학 내용을 새로 만들지 않는다.** `app/content/diseases/<code>.json` 의
+> `medical_terms` 를 **그대로** 내보낸다 (출처 표기 포함). 콘텐츠가 없는 질환은
+> 빈 목록이고, 그것은 오류가 아니라 "아직 쓰지 않았다"는 뜻이다.
+
+**Query**: `disease` (질환 코드, 생략 가능)
+
+**Response**
+```json
+{
+  "disease": "vestibular_schwannoma",
+  "content_version": "vs-2026-09-08b",
+  "source": "literature_based",
+  "terms": [
+    {
+      "term": "소뇌교각 (cerebellopontine angle, CPA)",
+      "description": "전정신경초종이 발생하는 대표적인 부위. (Applied Radiology 2019)"
+    }
+  ]
+}
+```
+
+**제출 전에 열어도 되는 이유**: 여기서 나가는 것은 질환 일반론(해부 용어·영상 기법 정의)이고,
+**이 케이스의 기준 마스크·병변 위치·크기·편측성은 들어 있지 않다.**
+케이스별 사실(`case_facts`)과 소견(`case_findings`)은 제출 뒤 해설에만 나간다
+(`tests/test_gt_not_leaked_before_submit.py`, `tests/test_glossary.py`).
+
+로그인이 필요하다 (미인증 401).
 
 ### 2-4. GET /api/wrong-notes
 

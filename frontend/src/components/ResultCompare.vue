@@ -13,6 +13,7 @@
  */
 import { computed, onMounted, ref, watch } from 'vue'
 import ScoreBar from './ScoreBar.vue'
+import { gradeLabel } from '../labels'
 
 const props = defineProps({
   result: { type: Object, required: true },
@@ -21,8 +22,6 @@ const props = defineProps({
   width: { type: Number, default: 512 },
   height: { type: Number, default: 512 },
 })
-
-const GRADE_LABEL = { match: '일치', partial_match: '부분 일치', mismatch: '불일치' }
 
 // v0.3 이후: 채점 기준은 전문가 검수 reference mask (이전 ai_mask_url)
 const referenceMaskUrl = computed(() => props.result.reference_mask_url ?? null)
@@ -293,7 +292,7 @@ function ratio(value, max = 1) {
     <div class="verdict" :class="result.grade">
       <div class="verdict-head">
         <div class="verdict-text">
-          <strong class="grade">{{ GRADE_LABEL[result.grade] ?? result.grade }}</strong>
+          <strong class="grade">{{ gradeLabel(result.grade) }}</strong>
           <p>{{ spatialFeedback?.primary_message ?? GRADE_DESC[result.grade] ?? '' }}</p>
         </div>
         <div v-if="headlinePercent != null" class="headline">
@@ -669,24 +668,32 @@ function ratio(value, max = 1) {
   }
 }
 
+/* 시안(08 채점·해설)은 판정을 **색이 채워진 알약**으로 크게 띄운다.
+   시안 원본 색(coral #f67566)은 흰 글씨 대비가 2.74:1 이라 쓰지 않고,
+   이미 대비를 맞춰 둔 --*-ink 를 채움색으로 쓴다 (흰 글씨 5.7~7.0:1).
+   색만으로 뜻을 전하지 않으므로 알약 안의 텍스트가 곧 판정이다. */
 .grade {
-  display: block;
-  font-size: 24px;
+  display: inline-block;
+  padding: 7px 20px;
+  margin-bottom: var(--sp-2);
+  border-radius: var(--r-full);
+  font-size: 20px;
   font-weight: 700;
   letter-spacing: -0.03em;
-  margin-bottom: 2px;
+  color: #fff;
+  background: var(--gray-600);
 }
 
 .verdict.match .grade {
-  color: var(--match-ink);
+  background: var(--match-ink);
 }
 
 .verdict.partial_match .grade {
-  color: var(--partial-ink);
+  background: var(--partial-ink);
 }
 
 .verdict.mismatch .grade {
-  color: var(--mismatch-ink);
+  background: var(--mismatch-ink);
 }
 
 .verdict-head p {

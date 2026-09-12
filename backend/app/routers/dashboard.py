@@ -97,6 +97,11 @@ def dashboard(user: CurrentUser, db: DbSession):
             "location_score": s.location_score,
             "submitted_at": _iso(s.submitted_at),
             "case_active": s.case_id in active_ids,
+            # 목록에 썸네일이 있으면 "어떤 영상이었는지"가 바로 떠오른다.
+            # 비활성화·삭제된 케이스는 카드가 없으므로 null 이다 (0 으로 채우지 않는 것과 같은 이유).
+            "thumbnail_url": (
+                absolute_url(by_id[s.case_id].thumbnail_url) if s.case_id in by_id else None
+            ),
         }
         for s in recent_submissions(db, user.user_id, RECENT_LIMIT)
     ]

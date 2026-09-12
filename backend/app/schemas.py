@@ -195,6 +195,19 @@ class CaseFacts(BaseModel):
     dataset: Optional[str] = None
 
 
+class GlossaryResponse(BaseModel):
+    """의학용어 사전 (화면 2 우측 패널) — 질환 단위 **문헌 기반 용어 목록**.
+
+    이 케이스의 기준 마스크·병변 위치는 들어 있지 않다. 콘텐츠가 없으면 `terms` 는 빈 목록이고,
+    그것은 오류가 아니라 "아직 쓰지 않았다"는 뜻이다.
+    """
+
+    disease: Optional[str] = None
+    content_version: Optional[str] = None
+    source: Literal["literature_based"] = "literature_based"
+    terms: list[MedicalTerm] = []
+
+
 class DiseaseInfo(BaseModel):
     """질환 단위 **문헌 기반 일반 학습정보**. 이 케이스의 소견이 아니다.
 

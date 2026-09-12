@@ -54,6 +54,14 @@ export const submitRoi = (caseId, roi, durationSeconds) =>
 export const markExplanationViewed = (caseId) =>
   api.post(`/cases/${encodeURIComponent(caseId)}/explanation-viewed`)
 
+/**
+ * 의학용어 사전 (화면 2 우측 패널).
+ * 질환 단위 **문헌 기반** 용어다 — 이 케이스의 기준 마스크·병변 위치는 들어 있지 않다.
+ * 콘텐츠가 없는 질환은 빈 목록이 오고, 그건 오류가 아니다.
+ */
+export const getGlossary = (disease) =>
+  api.get(`/glossary${disease ? `?disease=${encodeURIComponent(disease)}` : ''}`)
+
 export const listWrongNotes = () => api.get('/wrong-notes')
 export const retryWrongNote = (caseId, roi, durationSeconds) =>
   api.post(`/wrong-notes/${encodeURIComponent(caseId)}/retry`, {

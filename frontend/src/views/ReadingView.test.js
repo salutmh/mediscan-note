@@ -51,11 +51,15 @@ const CASE_WITH_SLICES = {
 
 const stubs = {
   RoiCanvas: {
-    props: ['imageUrl', 'disabled', 'clearOnImageChange'],
+    props: ['imageUrl', 'disabled', 'clearOnImageChange', 'tools'],
+    // 제출 버튼은 시안 07 처럼 **도구 막대 안**에 있다 (bar-action 슬롯).
+    // 슬롯을 그리지 않으면 화면 2 의 제출 자체가 테스트에서 사라진다.
     template:
       '<div class="roi-stub" :data-image="imageUrl" :data-disabled="String(disabled)"' +
-      ' :data-clear="String(clearOnImageChange)" />',
+      ' :data-clear="String(clearOnImageChange)" :data-tools="tools">' +
+      '<slot name="bar-action" /></div>',
   },
+  GlossaryPanel: { props: ['disease', 'diseaseLabel'], template: '<div class="glossary-stub" />' },
   ResultCompare: { props: ['result'], template: '<div class="result-stub" />' },
   ExplanationPanel: { props: ['explanation'], template: '<div class="explanation-stub" />' },
   RouterLink: { props: ['to'], template: '<a><slot /></a>' },

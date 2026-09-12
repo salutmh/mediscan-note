@@ -30,6 +30,7 @@ from app.routers import (
     cases,
     consents,
     dashboard,
+    glossary,
     review,
     wrong_notes,
 )
@@ -109,6 +110,7 @@ app.include_router(auth.router)
 app.include_router(consents.router)
 app.include_router(cases.router)
 app.include_router(dashboard.router)
+app.include_router(glossary.router)
 app.include_router(wrong_notes.router)
 app.include_router(analyze.router)
 app.include_router(admin.router)

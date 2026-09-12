@@ -12,6 +12,7 @@ import { onBeforeRouteUpdate, useRoute } from 'vue-router'
 import RoiCanvas from '../components/RoiCanvas.vue'
 import ResultCompare from '../components/ResultCompare.vue'
 import ExplanationPanel from '../components/ExplanationPanel.vue'
+import GlossaryPanel from '../components/GlossaryPanel.vue'
 import { ApiError } from '../api/client'
 import {
   getCase,
@@ -35,6 +36,8 @@ const detailMissing = ref(false) // 케이스 상세를 찾지 못해 기본 캔
 
 const roiCanvas = ref(null)
 const hasInput = ref(false)
+// 시안 07 의 우측 사전 패널. 닫아 두면 영상에 더 집중할 수 있으므로 접을 수 있게 둔다.
+const glossaryOpen = ref(true)
 
 const activeTime = useActiveTime()
 const explanationPanel = ref(null)
@@ -266,17 +269,35 @@ onBeforeRouteUpdate((to) => {
   <template v-else>
     <!-- **한 줄로 붙인다.** 뒤로가기·제목·부위가 각각 줄을 차지하면
          세로 130px 이 사라진다 — 그만큼 영상이 작아진다. -->
-    <header class="head">
-      <RouterLink :to="isRetry ? '/wrong-notes' : '/cases'" class="back">
-        ← {{ isRetry ? '복습노트' : '케이스 목록' }}
-      </RouterLink>
-      <h1>{{ caseDetail.case_id }}</h1>
-      <p v-if="caseDetail.body_part" class="head-meta">
-        {{ bodyPartLabel(caseDetail.body_part) }}
-        <span class="dot">·</span>
-        {{ diseaseLabel(caseDetail.disease) }}
+    <!-- 시안 07 의 상단: CASE SOLVING 라벨 + 부위 경로, 그 아래 CASE 블록과 과제 안내 -->
+    <header class="case-head">
+      <p class="crumb">
+        <span class="eyebrow">CASE SOLVING</span>
+        <span v-if="caseDetail.body_part" class="crumb-path">
+          {{ bodyPartLabel(caseDetail.body_part) }}
+          <span class="dot">·</span>
+          {{ diseaseLabel(caseDetail.disease) }}
+          <span class="dot">·</span>
+          문제 풀이
+        </span>
       </p>
-      <span v-if="isRetry" class="badge partial_match">재도전</span>
+
+      <div class="case-line">
+        <div class="case-id-block">
+          <span class="case-kicker">CASE</span>
+          <h1>{{ caseDetail.case_id }}</h1>
+          <span v-if="isRetry" class="badge partial_match">재도전</span>
+        </div>
+        <RouterLink :to="isRetry ? '/wrong-notes' : '/cases'" class="btn back">
+          ‹ {{ isRetry ? '복습노트' : '케이스 목록' }}
+        </RouterLink>
+      </div>
+
+      <!-- 과제 안내다. **영상 소견이 아니라 우리가 쓰는 조작 안내**라서 지어낸 의학 내용이 아니다. -->
+      <p class="case-task">
+        제시된 영상에서 이상으로 판단되는 부위를 표시한 뒤 제출하세요.
+        전문가가 검수한 기준 마스크와 비교해 얼마나 겹쳤는지 알려드립니다.
+      </p>
     </header>
 
     <p v-if="detailMissing" class="notice">
@@ -293,8 +314,28 @@ onBeforeRouteUpdate((to) => {
           :height="canvasHeight"
           :disabled="locked || !onRepresentative"
           :clear-on-image-change="false"
+          :tools="['brush', 'box', 'eraser']"
           @change="onRoiChange"
-        />
+        >
+          <!-- 시안 07 은 제출이 도구 막대 오른쪽 끝에 있다 — 그리던 손이 그대로 닿는 자리다 -->
+          <template #bar-action>
+            <button
+              v-if="phase !== 'done'"
+              class="primary submit-inline"
+              :disabled="!hasInput || !gradable || phase === 'submitting'"
+              @click="onSubmit"
+            >
+              {{ phase === 'submitting' ? '채점 중...' : '제출' }}
+            </button>
+            <span v-else class="badge match">제출 완료</span>
+          </template>
+        </RoiCanvas>
+
+        <p v-if="!gradable" class="notice">
+          이 케이스는 검수된 기준 마스크가 아직 등록되지 않아 채점할 수 없습니다.
+          다른 케이스를 먼저 풀어주세요.
+        </p>
+        <p v-if="submitError" class="error">{{ submitError }}</p>
 
         <div v-if="hasSlices" class="slices">
           <div class="slice-bar">
@@ -350,36 +391,29 @@ onBeforeRouteUpdate((to) => {
       </div>
 
       <aside class="side">
-        <div class="card submit-card">
+        <!-- 푸는 동안은 시안대로 **의학용어 사전**이 옆에 있다.
+             제출한 뒤에는 같은 자리를 "다음에 무엇을 할지"가 대신한다. -->
+        <GlossaryPanel
+          v-if="phase !== 'done' && glossaryOpen"
+          :disease="caseDetail.disease"
+          :disease-label="diseaseLabel(caseDetail.disease)"
+          @close="glossaryOpen = false"
+        />
+        <button
+          v-else-if="phase !== 'done'"
+          class="wide reopen-glossary"
+          @click="glossaryOpen = true"
+        >
+          의학용어 사전 열기
+        </button>
+
+        <div v-if="phase === 'done'" class="card submit-card">
           <div class="card-title">
-            <h2>ROI 제출</h2>
-            <span class="badge" :class="{ match: phase === 'done' }">
-              {{ phase === 'idle' ? '입력 중' : phase === 'submitting' ? '채점 중' : '제출 완료' }}
-            </span>
+            <h2>다음 학습</h2>
+            <span class="badge match">제출 완료</span>
           </div>
 
-          <ol class="steps">
-            <li :class="{ done: hasInput }">이상으로 판단되는 부위를 칠하기</li>
-            <li :class="{ done: phase === 'done' }">제출하고 기준 마스크와 비교</li>
-          </ol>
-
-          <p v-if="!gradable" class="notice">
-            이 케이스는 검수된 기준 마스크가 아직 등록되지 않아 채점할 수 없습니다.
-            다른 케이스를 먼저 풀어주세요.
-          </p>
-
-          <p v-if="submitError" class="error">{{ submitError }}</p>
-
-          <button
-            v-if="phase !== 'done'"
-            class="primary lg wide"
-            :disabled="!hasInput || !gradable || phase === 'submitting'"
-            @click="onSubmit"
-          >
-            {{ phase === 'submitting' ? '채점 중...' : '제출' }}
-          </button>
-          <template v-else>
-            <!-- 학습 루프를 닫는다: 끝냈으면 다음에 무엇을 할지 바로 제시한다 -->
+          <!-- 학습 루프를 닫는다: 끝냈으면 다음에 무엇을 할지 바로 제시한다 -->
             <RouterLink
               v-if="nextTarget"
               :to="nextTarget.to"
@@ -399,12 +433,7 @@ onBeforeRouteUpdate((to) => {
               {{ nextTarget.remaining }}개가 남아 있습니다.
             </p>
             <p v-else class="muted hint">
-              {{ isRetry ? '복습할 케이스를 모두 마쳤습니다.' : '모든 케이스를 학습완료했습니다.' }}
-            </p>
-          </template>
-
-          <p v-if="gradable && !hasInput && phase === 'idle'" class="muted hint">
-            영역을 먼저 칠해야 제출할 수 있습니다.
+            {{ isRetry ? '복습할 케이스를 모두 마쳤습니다.' : '모든 케이스를 학습완료했습니다.' }}
           </p>
         </div>
 
@@ -444,17 +473,22 @@ onBeforeRouteUpdate((to) => {
 
 <style scoped>
 .back {
-  /* 글자만 두면 높이가 22px 이라 손가락으로 누르기 어렵다.
-     여백으로 누를 수 있는 면적을 넓힌다 (보이는 모양은 그대로다). */
-  display: inline-flex;
-  align-items: center;
-  min-height: 36px;
-  padding: 0 4px;
-  margin-left: -4px;
+  /* 시안 07 은 오른쪽 위에 목록으로 돌아가는 **외곽선 버튼**을 둔다. */
   flex: 0 0 auto;
-  color: var(--ink-muted);
-  font-size: 13.5px;
-  text-decoration: none;
+  color: var(--ink-secondary);
+  font-size: 13px;
+}
+
+
+/* 도구 막대 안의 제출 버튼 (시안 07) */
+.submit-inline {
+  min-height: 32px;
+  padding: 6px 18px;
+  font-weight: 700;
+}
+
+.reopen-glossary {
+  justify-content: center;
 }
 
 .back:hover {
@@ -465,25 +499,58 @@ onBeforeRouteUpdate((to) => {
   padding: var(--sp-8) 0;
 }
 
-.head {
-  display: flex;
-  align-items: baseline;
-  gap: var(--sp-3);
-  margin-bottom: var(--sp-3);
-  flex-wrap: wrap;
-}
-.head h1 {
-  margin: 0;
-  font-size: 24px;
-}
-.head-meta {
-  margin: 0;
-  color: var(--ink-muted);
-  font-size: 13.5px;
+/* --- 시안 07 상단 (CASE SOLVING · CASE 번호 · 과제 안내) --- */
+.case-head {
+  margin-bottom: var(--sp-4);
 }
 
-.head h1 {
-  margin-bottom: 2px;
+.crumb {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  margin: 0 0 var(--sp-2);
+  flex-wrap: wrap;
+}
+.eyebrow {
+  color: var(--brand-600);
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+.crumb-path {
+  color: var(--ink-muted);
+  font-size: 12.5px;
+}
+
+.case-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  flex-wrap: wrap;
+}
+.case-id-block {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+}
+.case-kicker {
+  color: var(--brand-600);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+.case-id-block h1 {
+  margin: 0;
+  font-size: 28px;
+  color: var(--navy-700);
+}
+
+.case-task {
+  margin: var(--sp-2) 0 0;
+  color: var(--ink-secondary);
+  font-size: 13.5px;
+  max-width: 70ch;
 }
 
 .dot {

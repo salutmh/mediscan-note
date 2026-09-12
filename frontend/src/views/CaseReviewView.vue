@@ -618,7 +618,7 @@ kbd {
   background: #fff;
 }
 .case-card.focused {
-  outline: 2px solid var(--brand-500, #2f62e8);
+  outline: 2px solid var(--brand-500, #1f7b82);
   outline-offset: 2px;
 }
 .case-card.tech_pass {

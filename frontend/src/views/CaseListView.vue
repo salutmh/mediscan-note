@@ -341,10 +341,37 @@ function onThumbError(event) {
 
 .head h1 {
   margin-bottom: 4px;
+  font-size: 28px;
+  color: var(--navy-700);
 }
 
+/* 시안(06 학습 선택)의 필터 칩: 회색 세그먼트가 아니라 **흰 알약**이고,
+   고른 것만 teal 테두리·teal 글씨로 떠오른다. 색만으로 구분하지 않도록
+   고른 칩은 굵기도 함께 올린다. */
 .filters {
   margin-bottom: var(--sp-5);
+  background: none;
+  padding: 0;
+  gap: var(--sp-2);
+}
+.filters button {
+  min-height: 36px;
+  padding: 6px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-full);
+  background: var(--surface);
+  color: var(--ink-secondary);
+  box-shadow: none;
+}
+.filters button:hover:not(:disabled) {
+  border-color: var(--brand-300);
+  background: var(--surface);
+}
+.filters button.active {
+  border-color: var(--brand-500);
+  background: var(--brand-50);
+  color: var(--brand-700);
+  font-weight: 700;
 }
 
 .grid {
@@ -449,12 +476,24 @@ a.case-card:hover {
   margin: 0 2px;
 }
 
+/* 시안은 카드 맨 아래를 "누를 수 있는 면"으로 만든다 — 링크 글씨 하나보다
+   카드 전체가 눌린다는 것이 분명해진다. */
 .go {
-  display: block;
-  padding: var(--sp-3) var(--sp-4) var(--sp-4);
-  color: var(--brand-600);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 var(--sp-4) var(--sp-4);
+  padding: 9px 14px;
+  border-radius: var(--r-sm);
+  background: var(--brand-50);
+  color: var(--brand-700);
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
+  transition: background var(--transition), color var(--transition);
+}
+a.case-card:hover .go {
+  background: var(--brand-500);
+  color: #fff;
 }
 
 .empty {

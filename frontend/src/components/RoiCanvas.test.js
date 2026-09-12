@@ -235,3 +235,105 @@ describe('사용자에게 보이는 오류 문구', () => {
     expect(text).not.toContain('s=abcdef')
   })
 })
+
+/* ====================================================================
+   시안 07 에서 새로 들어온 것 — 박스 도구 / 확대·이동 / 밝기·대비
+   ====================================================================
+   여기서 지키려는 것은 하나다:
+   **보기(확대·이동·밝기)를 바꿔도 제출되는 좌표가 흔들리지 않는다.**
+   확대한 채로 칠한 게 엉뚱한 곳에 들어가면 채점이 조용히 틀린다.
+==================================================================== */
+describe('박스 도구', () => {
+  it('끌어서 만든 사각형이 입력으로 잡힌다', async () => {
+    const wrapper = mountCanvas({ tools: ['brush', 'box', 'eraser'] })
+    await wrapper.findAll('.tools button')[1].trigger('click') // 박스
+
+    await stroke(wrapper, 10, 10) // (10,10) -> (20,20)
+
+    const [event] = wrapper.emitted('change').slice(-1)
+    expect(event[0].hasInput).toBe(true)
+    // 사각형은 네 꼭짓점으로 남는다 (마스크와 points 가 어긋나지 않게)
+    expect(event[0].pointCount).toBe(4)
+    expect(event[0].strokeCount).toBe(1)
+  })
+
+  it('면적이 없는 클릭은 입력으로 치지 않는다', async () => {
+    // 점 하나는 Dice 채점에서 의미가 없다 — 칠했다고 착각하게 두지 않는다
+    const wrapper = mountCanvas({ tools: ['brush', 'box', 'eraser'] })
+    await wrapper.findAll('.tools button')[1].trigger('click')
+
+    const el = wrapper.find('canvas').element
+    el.setPointerCapture = () => {}
+    el.releasePointerCapture = () => {}
+    el.getBoundingClientRect = () => ({ left: 0, top: 0, width: 64, height: 64 })
+    el.dispatchEvent(new MouseEvent('pointerdown', { clientX: 10, clientY: 10, bubbles: true }))
+    el.dispatchEvent(new MouseEvent('pointerup', { clientX: 10, clientY: 10, bubbles: true }))
+    await flushPromises()
+
+    const events = wrapper.emitted('change') ?? []
+    expect(events[events.length - 1][0].hasInput).toBe(false)
+  })
+
+  it('박스를 고르면 굵기 조절이 사라진다', async () => {
+    const wrapper = mountCanvas({ tools: ['brush', 'box', 'eraser'] })
+    expect(wrapper.find('.size').exists()).toBe(true)
+    await wrapper.findAll('.tools button')[1].trigger('click')
+    expect(wrapper.find('.size').exists()).toBe(false)
+  })
+})
+
+describe('확대 · 이동 · 밝기', () => {
+  const railButton = (w, i) => w.findAll('.tool-rail button')[i]
+
+  it('확대해도 좌표는 원본 픽셀 기준 그대로다', async () => {
+    // **이 테스트가 지키는 것**: transform 으로 확대해도 getBoundingClientRect 가
+    // 변환된 사각형을 주므로 화면 좌표 -> 원본 좌표 변환식이 그대로 성립한다.
+    const wrapper = mountCanvas()
+    await railButton(wrapper, 0).trigger('click') // 확대
+    expect(wrapper.find('.stage').attributes('style')).toContain('scale(1.25)')
+
+    const el = wrapper.find('canvas').element
+    el.setPointerCapture = () => {}
+    el.releasePointerCapture = () => {}
+    // 확대된 만큼 화면상 크기도 커진다 (64 -> 80)
+    el.getBoundingClientRect = () => ({ left: 0, top: 0, width: 80, height: 80 })
+    el.dispatchEvent(new MouseEvent('pointerdown', { clientX: 40, clientY: 40, bubbles: true }))
+    el.dispatchEvent(new MouseEvent('pointerup', { clientX: 40, clientY: 40, bubbles: true }))
+    await flushPromises()
+
+    // 화면 한가운데(40,40) 는 원본 한가운데(32,32) 여야 한다
+    const points = wrapper.vm.getPoints()
+    expect(points[0]).toEqual([32, 32])
+  })
+
+  it('기본 크기로 되돌리면 확대와 이동이 함께 풀린다', async () => {
+    const wrapper = mountCanvas()
+    await railButton(wrapper, 0).trigger('click')
+    await railButton(wrapper, 2).trigger('click') // 기본크기
+    expect(wrapper.find('.stage').attributes('style')).toContain('scale(1)')
+    expect(wrapper.find('.stage').attributes('style')).toContain('translate(0%, 0%)')
+  })
+
+  it('리셋은 보기만 되돌리고 칠한 것은 지우지 않는다', async () => {
+    // 보기를 고치려다 작업을 잃으면 안 된다 (지우려면 '전체 지우기'가 따로 있다)
+    const wrapper = mountCanvas()
+    await stroke(wrapper)
+    const before = wrapper.vm.getPoints().length
+    expect(before).toBeGreaterThan(0)
+
+    await railButton(wrapper, 4).trigger('click') // 밝기 열기
+    await wrapper.findAll('.window-pop input')[0].setValue(150)
+    await railButton(wrapper, 5).trigger('click') // 리셋
+
+    expect(wrapper.vm.getPoints().length).toBe(before)
+    expect(wrapper.text()).toContain('밝기 100%')
+  })
+
+  it('입력이 잠긴 slice 에서도 이동은 쓸 수 있다', async () => {
+    // 대표 slice 밖에서는 그리지 못하지만 **보는 것은 막을 이유가 없다**
+    const wrapper = mountCanvas({ disabled: true })
+    expect(railButton(wrapper, 3).attributes('disabled')).toBeUndefined()
+    await railButton(wrapper, 3).trigger('click')
+    expect(wrapper.find('canvas').classes()).toContain('panning')
+  })
+})

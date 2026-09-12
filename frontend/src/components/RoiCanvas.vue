@@ -25,8 +25,9 @@ const props = defineProps({
   width: { type: Number, default: 512 },
   height: { type: Number, default: 512 },
   disabled: { type: Boolean, default: false },
-  // 제공할 도구. 판독훈련(화면 2)은 브러시+지우개만 쓴다 — 단일 클릭은 면적이 거의 없어
-  // Dice 기반 채점에서 낮은 점수가 나오므로, 별도 위치 채점이 생기기 전까지 제외한다.
+  // 제공할 도구. 판독훈련(화면 2)은 펜·박스·지우개를 쓴다 (시안 07 의 도구 구성).
+  // 'point'(단일 클릭)는 면적이 거의 없어 Dice 채점에서 낮은 점수가 나오므로,
+  // 별도 위치 채점이 생기기 전까지 기본에서 제외한다.
   tools: { type: Array, default: () => ['brush', 'eraser'] },
 })
 const emit = defineEmits(['change'])
@@ -36,11 +37,80 @@ let viewCtx = null
 let maskCanvas = null
 let maskCtx = null
 
-const tool = ref('brush') // 'brush' | 'point' | 'eraser'
+const tool = ref('brush') // 'brush' | 'box' | 'point' | 'eraser' | 'pan'
 const brushSize = ref(24)
 const points = ref([]) // api-spec.md 2-3 roi.points — 원본 픽셀 좌표
 const strokeCount = ref(0)
 const imageBroken = ref(false)
+
+/* ---------------------------------------------------------------------
+   뷰어 조작 — 확대 / 이동 / 밝기·대비
+   ---------------------------------------------------------------------
+   확대·이동은 `.stage` 에 **CSS transform** 으로만 건다. 캔버스 버퍼는 원본
+   해상도 그대로 두고 건드리지 않는다. `toImageCoords` 가 쓰는
+   `getBoundingClientRect()` 는 **변환이 반영된 사각형**을 돌려주므로,
+   확대하거나 이동해도 화면 좌표 -> 원본 픽셀 좌표 변환식이 그대로 성립한다
+   (회전이 없기 때문이다). 즉 **확대해서 그려도 채점 좌표가 틀어지지 않는다.**
+
+   밝기·대비는 배경 <img> 에만 filter 로 건다. 오버레이(ROI)에 걸면
+   사용자가 칠한 색까지 같이 바뀌어 무엇을 칠했는지 알아보기 어려워진다.
+
+   ※ 시안에는 "W 4096 / L 2048" 이 적혀 있지만 그건 DICOM 의 window width/level 이다.
+     우리가 서비스하는 자산은 **이미 윈도잉을 마친 PNG** 라 원본 HU 값이 없다.
+     없는 값을 숫자로 적으면 안 되므로 밝기·대비 비율로 표시한다.
+--------------------------------------------------------------------- */
+const ZOOM_MIN = 1
+const ZOOM_MAX = 6
+const ZOOM_STEP = 1.25
+
+const zoom = ref(1)
+const panX = ref(0) // stage 크기 대비 비율(-0.5~0.5)
+const panY = ref(0)
+const brightness = ref(100)
+const contrast = ref(100)
+const windowOpen = ref(false)
+/** 팬은 그리기 도구와 **별개 모드**다 (시안 07 의 좌측 레일). 켜져 있으면 끌기가 이동이 된다. */
+const panMode = ref(false)
+
+const stageTransform = computed(
+  () => `translate(${panX.value * 100}%, ${panY.value * 100}%) scale(${zoom.value})`,
+)
+const baseFilter = computed(() => `brightness(${brightness.value}%) contrast(${contrast.value}%)`)
+const imageAdjusted = computed(() => brightness.value !== 100 || contrast.value !== 100)
+
+/** 확대한 만큼만 움직일 수 있게 묶는다 — 영상이 화면 밖으로 완전히 빠져나가지 않도록. */
+function clampPan() {
+  const limit = Math.max(0, (zoom.value - 1) / 2 / zoom.value)
+  panX.value = Math.min(limit, Math.max(-limit, panX.value))
+  panY.value = Math.min(limit, Math.max(-limit, panY.value))
+}
+
+function setZoom(next) {
+  zoom.value = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Number(next.toFixed(3))))
+  if (zoom.value === 1) {
+    panX.value = 0
+    panY.value = 0
+  }
+  clampPan()
+}
+
+const zoomIn = () => setZoom(zoom.value * ZOOM_STEP)
+const zoomOut = () => setZoom(zoom.value / ZOOM_STEP)
+
+/** 기본 크기(1:1) — 확대와 이동만 되돌린다. 칠한 것과 밝기는 건드리지 않는다. */
+function zoomActual() {
+  setZoom(1)
+}
+
+/** 리셋 — 보기 상태만 처음으로. **칠한 ROI 는 지우지 않는다**
+    (지우려면 '전체 지우기'가 따로 있다. 보기를 고치려다 작업을 잃으면 안 된다). */
+function resetView() {
+  setZoom(1)
+  brightness.value = 100
+  contrast.value = 100
+  windowOpen.value = false
+  panMode.value = false
+}
 
 /** 화면에는 사람이 읽을 문장만 두고, 진단에 필요한 주소는 콘솔로 보낸다. */
 function onImageError() {
@@ -62,10 +132,21 @@ const canvasLabel = computed(() => {
 // 캔버스 좌표와 화면상의 이미지 픽셀이 1:1로 대응한다 (업로드 영상이 정사각형이 아닐 때 중요).
 const aspectRatio = computed(() => `${props.width} / ${props.height}`)
 
-const TOOL_LABELS = { brush: '브러시', point: '클릭', eraser: '지우개' }
+const TOOL_LABELS = { brush: '펜', box: '박스', point: '클릭', eraser: '지우개' }
 const availableTools = computed(() =>
   props.tools.map((key) => ({ key, label: TOOL_LABELS[key] ?? key })),
 )
+
+/** 굵기는 자유곡선·지우개에서만 뜻이 있다 (박스는 끌어서 크기를 정한다). */
+const usesBrushSize = computed(() => tool.value === 'brush' || tool.value === 'eraser')
+
+const TOOL_HINTS = {
+  brush: '이상으로 판단되는 부위를 끌어서 칠하세요.',
+  box: '이상으로 판단되는 부위를 사각형으로 끌어서 감싸세요.',
+  eraser: '잘못 칠한 곳을 끌어서 지우세요.',
+  point: '이상으로 판단되는 지점을 클릭하세요.',
+}
+const toolHint = computed(() => (panMode.value ? '끌어서 영상을 움직이세요.' : TOOL_HINTS[tool.value] ?? ''))
 
 function notify() {
   emit('change', { pointCount: points.value.length, strokeCount: strokeCount.value, hasInput: hasInput.value })
@@ -157,12 +238,62 @@ function erasePointsNear(p) {
   points.value = points.value.filter(([x, y]) => Math.hypot(x - p.x, y - p.y) > r)
 }
 
+/** 박스 도구: 끌어서 만든 사각형을 두 레이어에 채운다 (화면용/제출용 동시에). */
+function fillRect(a, b) {
+  const x = Math.min(a.x, b.x)
+  const y = Math.min(a.y, b.y)
+  const w = Math.abs(b.x - a.x)
+  const h = Math.abs(b.y - a.y)
+  if (w < 2 || h < 2) return false // 클릭에 가까운 것은 면적이 없어 채점에 의미가 없다
+  withLayer((ctx) => ctx.fillRect(x, y, w, h))
+  // points 는 사각형 네 꼭짓점으로 남긴다 (마스크와 어긋나지 않게)
+  points.value.push([x, y], [x + w, y], [x + w, y + h], [x, y + h])
+  strokeCount.value += 1
+  return true
+}
+
 let drawing = false
 let last = null
+/* 팬 드래그 상태 */
+let panning = false
+let panStart = null
+let stageBox = null
+/* 박스 드래그 미리보기 (원본 픽셀 좌표) */
+const boxStart = ref(null)
+const boxNow = ref(null)
+const boxPreview = computed(() => {
+  if (!boxStart.value || !boxNow.value) return null
+  const a = boxStart.value
+  const b = boxNow.value
+  return {
+    left: `${(Math.min(a.x, b.x) / props.width) * 100}%`,
+    top: `${(Math.min(a.y, b.y) / props.height) * 100}%`,
+    width: `${(Math.abs(b.x - a.x) / props.width) * 100}%`,
+    height: `${(Math.abs(b.y - a.y) / props.height) * 100}%`,
+  }
+})
 
 function onPointerDown(event) {
-  if (props.disabled || !viewCtx) return
+  if (!viewCtx) return
+
+  // 팬은 입력이 잠긴 상태(대표 slice 밖)에서도 쓸 수 있어야 한다 — 보기만 하는 동작이다
+  if (panMode.value) {
+    panning = true
+    stageBox = viewCanvas.value.getBoundingClientRect()
+    panStart = { x: event.clientX, y: event.clientY, px: panX.value, py: panY.value }
+    viewCanvas.value.setPointerCapture(event.pointerId)
+    return
+  }
+
+  if (props.disabled) return
   const p = toImageCoords(event)
+
+  if (tool.value === 'box') {
+    boxStart.value = p
+    boxNow.value = p
+    viewCanvas.value.setPointerCapture(event.pointerId)
+    return
+  }
 
   if (tool.value === 'point') {
     // 클릭 도구: 점 하나 = points 배열에 좌표 하나 추가
@@ -187,6 +318,21 @@ function onPointerDown(event) {
 }
 
 function onPointerMove(event) {
+  if (panning) {
+    // stage 크기 대비 비율로 옮긴다 — 확대 배율이 달라도 손끝과 영상이 같이 움직인다
+    const w = stageBox?.width || 1
+    const h = stageBox?.height || 1
+    panX.value = panStart.px + (event.clientX - panStart.x) / w
+    panY.value = panStart.py + (event.clientY - panStart.y) / h
+    clampPan()
+    return
+  }
+
+  if (boxStart.value) {
+    boxNow.value = toImageCoords(event)
+    return
+  }
+
   if (!drawing) return
   const p = toImageCoords(event)
   drawSegment(last, p)
@@ -202,6 +348,25 @@ function onPointerMove(event) {
 }
 
 function onPointerUp(event) {
+  if (panning) {
+    panning = false
+    panStart = null
+    viewCanvas.value.releasePointerCapture?.(event.pointerId)
+    return
+  }
+
+  if (boxStart.value) {
+    const drew = fillRect(boxStart.value, boxNow.value ?? boxStart.value)
+    boxStart.value = null
+    boxNow.value = null
+    viewCanvas.value.releasePointerCapture?.(event.pointerId)
+    if (drew) {
+      notify()
+      pushHistory()
+    }
+    return
+  }
+
   if (!drawing) return
   drawing = false
   last = null
@@ -335,14 +500,141 @@ defineExpose({
           </button>
         </div>
 
-        <label class="size">
+        <label v-if="usesBrushSize" class="size">
           <span class="dim">굵기</span>
           <input type="range" min="4" max="60" v-model.number="brushSize" :disabled="disabled" />
           <span class="dim val">{{ brushSize }}</span>
         </label>
 
+        <span v-if="toolHint" class="tool-hint dim">{{ toolHint }}</span>
+
         <span class="spacer"></span>
 
+        <!-- 시안 07 은 제출이 도구 막대 오른쪽 끝에 있다 — 부모가 넣는다 -->
+        <slot name="bar-action" />
+      </div>
+
+      <!-- 영상 + ROI 오버레이 -->
+      <div class="stage-clip" :style="{ aspectRatio }">
+      <div class="stage" :style="{ transform: stageTransform }">
+        <img
+          v-if="imageUrl"
+          :src="imageUrl"
+          alt="의료영상"
+          class="base"
+          :style="{ filter: baseFilter }"
+          @error="onImageError"
+          @load="imageBroken = false"
+        />
+        <div v-else class="base placeholder">
+          <span>영상 없음</span>
+        </div>
+        <!--
+          캔버스 내용은 픽셀뿐이라 대체 설명이 없으면 스크린리더에 아무것도 전달되지 않는다
+          (요소 자체가 조용히 건너뛰어진다). 무엇을 위한 영역이고 지금 어떤 상태인지를
+          이름으로 남긴다.
+
+          다만 **이것으로 ROI 그리기가 접근 가능해지는 것은 아니다.** 포인터로 자유곡선을
+          그리는 입력을 키보드·스크린리더로 대체하려면 별도 입력 수단이 필요하다.
+          지금은 "여기에 무엇이 있는지 알 수 있다"까지만 한다.
+        -->
+        <canvas
+          ref="viewCanvas"
+          class="overlay"
+          :class="[tool, { locked: disabled, panning: panMode }]"
+          role="img"
+          :aria-label="canvasLabel"
+          @pointerdown="onPointerDown"
+          @pointermove="onPointerMove"
+          @pointerup="onPointerUp"
+          @pointercancel="onPointerUp"
+        ></canvas>
+
+        <!-- 박스 도구 끌기 미리보기 (시안의 청록 점선) -->
+        <div v-if="boxPreview" class="box-preview" :style="boxPreview"></div>
+      </div>
+
+      <!-- 좌측 도구 레일 (시안 07). 확대·이동·밝기는 **보기만 바꾼다** —
+           칠한 ROI 와 제출되는 마스크에는 영향을 주지 않는다. -->
+      <div class="tool-rail" role="group" aria-label="영상 보기 도구">
+        <button type="button" :disabled="zoom >= ZOOM_MAX" title="확대" @click="zoomIn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true">
+            <circle cx="11" cy="11" r="6" /><path d="M20 20l-4.5-4.5M8.5 11h5M11 8.5v5" />
+          </svg>
+          <span>확대</span>
+        </button>
+        <button type="button" :disabled="zoom <= ZOOM_MIN" title="축소" @click="zoomOut">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true">
+            <circle cx="11" cy="11" r="6" /><path d="M20 20l-4.5-4.5M8.5 11h5" />
+          </svg>
+          <span>축소</span>
+        </button>
+        <button type="button" title="기본 크기로" @click="zoomActual">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true">
+            <rect x="4" y="6" width="16" height="12" rx="2" /><path d="M9 10v4M12 10v4M15 10v4" />
+          </svg>
+          <span>기본크기</span>
+        </button>
+        <button
+          type="button"
+          :class="{ on: panMode }"
+          :aria-pressed="panMode"
+          title="이동 (끌어서 영상 움직이기)"
+          @click="panMode = !panMode"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true">
+            <path d="M12 3v8M12 21v-6M3 12h8M21 12h-6" /><circle cx="12" cy="12" r="2.2" />
+          </svg>
+          <span>이동</span>
+        </button>
+        <button
+          type="button"
+          :class="{ on: windowOpen || imageAdjusted }"
+          :aria-pressed="windowOpen"
+          title="밝기·대비"
+          @click="windowOpen = !windowOpen"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true">
+            <circle cx="12" cy="12" r="4" />
+            <path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M19.1 4.9l-1.4 1.4M6.3 17.7l-1.4 1.4" />
+          </svg>
+          <span>밝기</span>
+        </button>
+        <button type="button" title="보기 되돌리기" @click="resetView">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true">
+            <path d="M4 12a8 8 0 1 1 2.6 5.9" /><path d="M4 19v-5h5" />
+          </svg>
+          <span>리셋</span>
+        </button>
+      </div>
+
+      <!-- 밝기·대비 조절 -->
+      <div v-if="windowOpen" class="window-pop">
+        <label>
+          <span>밝기 <b class="tnum">{{ brightness }}%</b></span>
+          <input type="range" min="40" max="180" step="5" v-model.number="brightness" />
+        </label>
+        <label>
+          <span>대비 <b class="tnum">{{ contrast }}%</b></span>
+          <input type="range" min="40" max="220" step="5" v-model.number="contrast" />
+        </label>
+        <p class="window-note">
+          보기만 바뀝니다. 칠한 영역과 채점에는 영향이 없습니다.
+        </p>
+      </div>
+
+      <!-- 좌하단 상태 (시안의 W/L·Zoom 자리). 우리는 원본 HU 가 없어 밝기·대비로 적는다 -->
+      <div class="stage-readout tnum">
+        <span>밝기 {{ brightness }}% · 대비 {{ contrast }}%</span>
+        <span>Zoom {{ zoom.toFixed(2) }}x</span>
+      </div>
+
+      <span v-if="disabled" class="lock-tag">입력 잠김</span>
+      </div>
+
+      <!-- 상태 줄 -->
+      <div class="viewer-bar foot">
+        <span class="dim">{{ width }} × {{ height }}</span>
         <!-- **획 단위로 되돌린다.** 예전에는 실수를 되돌릴 방법이 "전체 지우기"
              뿐이라, 마지막 한 획이 틀리면 처음부터 다시 칠해야 했다. -->
         <div class="history">
@@ -367,48 +659,7 @@ defineExpose({
         </div>
 
         <button :disabled="disabled || !hasInput" @click="clear">전체 지우기</button>
-      </div>
 
-      <!-- 영상 + ROI 오버레이 -->
-      <div class="stage" :style="{ aspectRatio }">
-        <img
-          v-if="imageUrl"
-          :src="imageUrl"
-          alt="의료영상"
-          class="base"
-          @error="onImageError"
-          @load="imageBroken = false"
-        />
-        <div v-else class="base placeholder">
-          <span>영상 없음</span>
-        </div>
-        <!--
-          캔버스 내용은 픽셀뿐이라 대체 설명이 없으면 스크린리더에 아무것도 전달되지 않는다
-          (요소 자체가 조용히 건너뛰어진다). 무엇을 위한 영역이고 지금 어떤 상태인지를
-          이름으로 남긴다.
-
-          다만 **이것으로 ROI 그리기가 접근 가능해지는 것은 아니다.** 포인터로 자유곡선을
-          그리는 입력을 키보드·스크린리더로 대체하려면 별도 입력 수단이 필요하다.
-          지금은 "여기에 무엇이 있는지 알 수 있다"까지만 한다.
-        -->
-        <canvas
-          ref="viewCanvas"
-          class="overlay"
-          :class="[tool, { locked: disabled }]"
-          role="img"
-          :aria-label="canvasLabel"
-          @pointerdown="onPointerDown"
-          @pointermove="onPointerMove"
-          @pointerup="onPointerUp"
-          @pointercancel="onPointerUp"
-        ></canvas>
-
-        <span v-if="disabled" class="lock-tag">입력 잠김</span>
-      </div>
-
-      <!-- 상태 줄 -->
-      <div class="viewer-bar foot">
-        <span class="dim">{{ width }} × {{ height }}</span>
         <span class="spacer"></span>
         <span class="dim tnum">좌표 {{ points.length }} · 스트로크 {{ strokeCount }}</span>
       </div>
@@ -436,6 +687,16 @@ defineExpose({
 .history {
   display: flex;
   gap: 4px;
+}
+
+.viewer-bar :deep(button.primary) {
+  background: var(--brand-500);
+  border-color: var(--brand-500);
+  color: #fff;
+}
+.viewer-bar :deep(button.primary:hover:not(:disabled)) {
+  background: var(--brand-600);
+  border-color: var(--brand-600);
 }
 
 .viewer-bar .icon {
@@ -469,10 +730,20 @@ defineExpose({
   border-top: 1px solid var(--viewer-line);
 }
 
-.stage {
+/* 확대·이동은 .stage 에 transform 으로 걸고, .stage-clip 이 잘라낸다.
+   도구 레일·상태 표시는 clip 에 붙어 있어 **확대해도 같이 커지지 않는다.** */
+.stage-clip {
   position: relative;
   width: 100%;
+  overflow: hidden;
   background: var(--viewer-bg);
+}
+
+.stage {
+  position: absolute;
+  inset: 0;
+  transform-origin: center center;
+  will-change: transform;
 }
 
 .base {
@@ -498,7 +769,8 @@ defineExpose({
 }
 
 .overlay.brush,
-.overlay.eraser {
+.overlay.eraser,
+.overlay.box {
   cursor: crosshair;
 }
 
@@ -508,6 +780,131 @@ defineExpose({
 
 .overlay.locked {
   pointer-events: none;
+}
+
+/* 이동 모드는 입력이 잠긴 상태에서도 쓸 수 있어야 한다 (보기만 바꾸는 동작이다) */
+.overlay.panning {
+  cursor: grab;
+  pointer-events: auto;
+}
+.overlay.panning:active {
+  cursor: grabbing;
+}
+
+/* 박스 도구 끌기 미리보기 — 시안의 청록 점선 */
+.box-preview {
+  position: absolute;
+  border: 2px dashed var(--roi-user);
+  background: rgba(47, 98, 232, 0.16);
+  pointer-events: none;
+}
+
+/* --- 좌측 도구 레일 (시안 07) --- */
+.tool-rail {
+  position: absolute;
+  top: 50%;
+  left: 10px;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 5px;
+  border-radius: var(--r-md);
+  background: rgba(13, 17, 23, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(6px);
+}
+
+.tool-rail button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 5px 4px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--viewer-ink);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+.tool-rail button svg {
+  width: 17px;
+  height: 17px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.tool-rail button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: transparent;
+  color: #fff;
+}
+.tool-rail button.on {
+  background: var(--brand-500);
+  color: #fff;
+}
+.tool-rail button:disabled {
+  opacity: 0.35;
+}
+
+/* --- 밝기·대비 --- */
+.window-pop {
+  position: absolute;
+  top: 50%;
+  left: 66px;
+  transform: translateY(-50%);
+  width: 210px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  border-radius: var(--r-md);
+  background: rgba(13, 17, 23, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: var(--viewer-ink);
+  backdrop-filter: blur(6px);
+}
+.window-pop label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 12px;
+}
+.window-pop input[type='range'] {
+  width: 100%;
+  accent-color: var(--brand-400);
+}
+.window-note {
+  margin: 0;
+  font-size: 11px;
+  color: var(--viewer-ink-dim);
+  line-height: 1.5;
+}
+
+/* --- 좌하단 상태 --- */
+.stage-readout {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-size: 11px;
+  color: var(--viewer-ink-dim);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+  pointer-events: none;
+}
+
+.tool-hint {
+  flex: 1 1 120px;
+  min-width: 0;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .lock-tag {

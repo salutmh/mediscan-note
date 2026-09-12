@@ -67,8 +67,14 @@ function isUrl(value) {
     <!-- 1) 이 케이스에서 확인된 사실 -->
     <section class="block">
       <div class="block-head">
-        <span class="chip chip-dataset">데이터셋 확인 정보</span>
+        <span class="head-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <path d="M6 4h9l4 4v12a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z" />
+            <path d="M14 4v5h5" /><path d="M9 13h6M9 17h4" />
+          </svg>
+        </span>
         <h3>이 케이스에서 확인된 사실</h3>
+        <span class="chip chip-dataset">데이터셋 확인 정보</span>
       </div>
 
       <template v-if="facts">
@@ -120,8 +126,14 @@ function isUrl(value) {
     <!-- 2) 질환 문헌 정보 — 케이스 소견과 섞이지 않도록 시각적으로 분리한다 -->
     <section class="block literature">
       <div class="block-head">
-        <span class="chip chip-literature">문헌 기반 학습정보</span>
+        <span class="head-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H11v16H5.5A1.5 1.5 0 0 1 4 18.5z" />
+            <path d="M20 5.5A1.5 1.5 0 0 0 18.5 4H13v16h5.5a1.5 1.5 0 0 0 1.5-1.5z" />
+          </svg>
+        </span>
         <h3>{{ facts?.disease_name ?? '질환' }} 일반 정보</h3>
+        <span class="chip chip-literature">문헌 기반 학습정보</span>
       </div>
 
       <template v-if="diseaseInfo">
@@ -174,8 +186,14 @@ function isUrl(value) {
     <!-- 3) 이 케이스의 영상 소견 — 없을 때도 자리를 남긴다 -->
     <section class="block">
       <div class="block-head">
-        <span class="chip chip-expert">전문가 검토 소견</span>
+        <span class="head-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <rect x="3" y="5" width="18" height="14" rx="2" />
+            <path d="M3 15l5-4 4 3 3-2 6 4" /><circle cx="9" cy="9.5" r="1.3" />
+          </svg>
+        </span>
         <h3>이 케이스의 영상 소견</h3>
+        <span class="chip chip-expert">전문가 검토 소견</span>
       </div>
 
       <template v-if="findings">
@@ -253,9 +271,28 @@ function isUrl(value) {
 
 .block-head h3 {
   margin: 0;
-  font-size: 14px;
+  font-size: 14.5px;
   letter-spacing: -0.01em;
-  color: var(--ink);
+  color: var(--navy-700);
+}
+
+/* 시안 08 은 해설 섹션마다 제목 앞에 아이콘을 둔다 — 블록 경계가 눈에 먼저 들어온다 */
+.head-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex: none;
+  border-radius: var(--r-sm);
+  background: var(--brand-50);
+  color: var(--brand-600);
+}
+.head-icon svg {
+  width: 15px;
+  height: 15px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .chip {

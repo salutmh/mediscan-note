@@ -15,26 +15,42 @@
 
 :root {
   /* --- 중립 색 (UI 표면·테두리·텍스트) --- */
+  /* MedLens 시안의 차가운 회색 계열. 배경(#f6f8fc)을 시안에서 직접 추출했다. */
   --gray-0: #ffffff;
   --gray-25: #fbfcfd;
-  --gray-50: #f5f7fa;
-  --gray-100: #eceff4;
-  --gray-200: #dee3ea;
-  --gray-300: #c7cfda;
-  --gray-400: #9aa5b4;
-  --gray-500: #6b7686;
-  --gray-600: #4d5768;
-  --gray-700: #363f4d;
-  --gray-800: #232a36;
-  --gray-900: #151a23;
+  --gray-50: #f6f8fc;
+  --gray-100: #edf1f7;
+  --gray-200: #dde3ed;
+  --gray-300: #c5ceda;
+  --gray-400: #97a2b4;
+  --gray-500: #586881;
+  --gray-600: #43516c;
+  --gray-700: #2b3a56;
+  --gray-800: #152c4f;
+  --gray-900: #0e2850;
 
-  /* --- 브랜드 --- */
-  --brand-50: #eef3ff;
-  --brand-100: #dbe5ff;
-  --brand-300: #9db4fb;
-  --brand-500: #2f62e8;
-  --brand-600: #1f4fd1;
-  --brand-700: #1a3fa6;
+  /* --- 브랜드 (MedLens 시안의 teal) ---
+     시안 원본 teal 은 #33a7af 다. 다만 여기에 **흰 글씨를 얹으면 2.88:1** 로
+     WCAG AA(본문 4.5:1)에 한참 못 미친다 — 시안의 1차 버튼이 이 조합이다.
+     그래서 색상(hue)은 시안 그대로 두고 **글씨가 얹히는 면만 어둡게** 나눠 잡았다:
+       --brand-400 = 시안 원본. 아이콘·선택 테두리·장식처럼 글씨가 안 얹히는 곳
+       --brand-500 = 흰 글씨를 얹는 면 (4.98:1)
+       --brand-600/700 = hover/active, 밝은 배경 위의 teal 텍스트 (6.4:1 / 8.6:1)
+     시안과 나란히 두면 버튼이 한 톤 진하지만, 대비를 깨지 않는 선에서 가장 가깝다. */
+  --brand-50: #eef7f8;
+  --brand-100: #d6edef;
+  --brand-300: #8fccd0;
+  --brand-400: #33a7af;
+  --brand-500: #1f7b82;
+  --brand-600: #17676d;
+  --brand-700: #115257;
+
+  /* --- 네이비 (시안의 제목·다크 버튼·상단 바) ---
+     시안은 teal 과 짝을 이루는 짙은 네이비를 제목과 1차 다크 버튼에 쓴다. */
+  --navy-500: #253e63;
+  --navy-600: #152c4f;
+  --navy-700: #0e2850;
+  --navy-800: #0a1f3f;
 
   /* --- 상태 (grade / 알림) — 항상 텍스트 라벨과 함께 쓴다. 색만으로 뜻을 전하지 않는다 --- */
   --match-bg: #e6f6ec;
@@ -94,16 +110,17 @@
   --sp-10: 40px;
   --sp-12: 48px;
 
-  /* --- 모서리 --- */
-  --r-sm: 6px;
-  --r-md: 10px;
-  --r-lg: 14px;
+  /* --- 모서리 (MedLens 시안은 지금보다 확실히 둥글다) --- */
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 16px;
   --r-full: 999px;
 
-  /* --- 그림자 (아주 얕게. 의료 UI 는 과한 그림자가 어울리지 않는다) --- */
-  --shadow-sm: 0 1px 2px rgba(21, 26, 35, 0.05);
-  --shadow-md: 0 2px 8px rgba(21, 26, 35, 0.07), 0 1px 2px rgba(21, 26, 35, 0.04);
-  --shadow-lg: 0 12px 32px rgba(21, 26, 35, 0.1), 0 2px 6px rgba(21, 26, 35, 0.05);
+  /* --- 그림자 (얕게. 의료 UI 는 과한 그림자가 어울리지 않는다)
+     시안은 카드를 그림자보다 여백과 흰 면으로 띄운다. 네이비 기가 도는 그림자를 쓴다. */
+  --shadow-sm: 0 1px 2px rgba(14, 40, 80, 0.05);
+  --shadow-md: 0 2px 10px rgba(14, 40, 80, 0.06), 0 1px 2px rgba(14, 40, 80, 0.04);
+  --shadow-lg: 0 14px 36px rgba(14, 40, 80, 0.1), 0 2px 6px rgba(14, 40, 80, 0.05);
 
   --focus-ring: 0 0 0 3px var(--brand-100);
   --transition: 140ms cubic-bezier(0.4, 0, 0.2, 1);
@@ -210,6 +227,8 @@ button,
   font-weight: 500;
   cursor: pointer;
   white-space: nowrap;
+  /* RouterLink 를 .btn 으로 쓰는 자리가 많다 — a 의 기본 밑줄이 버튼에 남지 않게 한다 */
+  text-decoration: none;
   transition: background var(--transition), border-color var(--transition), color var(--transition),
     box-shadow var(--transition);
 }

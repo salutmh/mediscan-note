@@ -23,10 +23,41 @@ export const DISEASE_LABEL = {
   pleural_effusion: '흉수',
 }
 
+/**
+ * 채점 결과 라벨.
+ *
+ * **"정답/오답"이라고 쓰지 않는다.** 우리는 의료인이 아니고, 이 화면이 말할 수 있는 것은
+ * "전문가가 검수한 기준 마스크와 얼마나 겹쳤는가" 뿐이다 (CLAUDE.md 개발원칙 3).
+ * 다만 "불일치" 는 학습자에게 차갑고 판정처럼 읽혀서, **무엇과 비교한 것인지**가
+ * 드러나는 말로 쓴다 — 기준이 주어이면 사용자의 판단을 단정하지 않게 된다.
+ *
+ * `GRADE_LABEL` 은 문장·표에서 쓰는 전체 표기, `GRADE_BADGE` 는 뱃지처럼 폭이 좁은 자리용이다.
+ * 셋을 색으로만 구분하지 않는다 — 어디서든 이 텍스트를 함께 쓴다.
+ */
+export const GRADE_LABEL = {
+  match: '기준과 일치',
+  partial_match: '일부 일치',
+  mismatch: '기준과 다름',
+}
+
+export const GRADE_BADGE = {
+  match: '일치',
+  partial_match: '일부 일치',
+  mismatch: '다름',
+}
+
 export function bodyPartLabel(code) {
   return BODY_PART_LABEL[code] ?? code
 }
 
 export function diseaseLabel(code) {
   return DISEASE_LABEL[code] ?? code
+}
+
+export function gradeLabel(code) {
+  return GRADE_LABEL[code] ?? code
+}
+
+export function gradeBadge(code) {
+  return GRADE_BADGE[code] ?? code
 }
