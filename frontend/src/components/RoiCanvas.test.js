@@ -283,7 +283,7 @@ describe('박스 도구', () => {
 })
 
 describe('확대 · 이동 · 밝기', () => {
-  const railButton = (w, i) => w.findAll('.tool-rail button')[i]
+  const railButton = (w, i) => w.findAll('.tool-rail .rail-tool')[i]
 
   it('확대해도 좌표는 원본 픽셀 기준 그대로다', async () => {
     // **이 테스트가 지키는 것**: transform 으로 확대해도 getBoundingClientRect 가
@@ -335,5 +335,39 @@ describe('확대 · 이동 · 밝기', () => {
     expect(railButton(wrapper, 3).attributes('disabled')).toBeUndefined()
     await railButton(wrapper, 3).trigger('click')
     expect(wrapper.find('canvas').classes()).toContain('panning')
+  })
+})
+
+describe('도구 레일 접기', () => {
+  /**
+   * **레일은 영상 위에 떠 있어서 그 아래는 칠할 수 없다.**
+   * 우리 케이스는 병변이 영상 가장자리에 오는 경우가 있어(편측 종양)
+   * 접을 수단이 없으면 표시 자체가 막힌다.
+   */
+  it('접으면 도구가 사라지고 얇은 손잡이만 남는다', async () => {
+    const wrapper = mountCanvas()
+    expect(wrapper.findAll('.tool-rail .rail-tool')).toHaveLength(6)
+
+    await wrapper.find('.rail-collapse').trigger('click')
+
+    expect(wrapper.find('.tool-rail').exists()).toBe(false)
+    expect(wrapper.find('.rail-handle').exists()).toBe(true)
+  })
+
+  it('손잡이를 누르면 다시 펼쳐진다', async () => {
+    const wrapper = mountCanvas()
+    await wrapper.find('.rail-collapse').trigger('click')
+    await wrapper.find('.rail-handle').trigger('click')
+
+    expect(wrapper.findAll('.tool-rail .rail-tool')).toHaveLength(6)
+  })
+
+  it('접어도 확대·밝기 상태는 그대로 유지된다', async () => {
+    // 가려진 곳을 칠하려고 접었을 뿐인데 보기가 초기화되면 다시 맞춰야 한다
+    const wrapper = mountCanvas()
+    await wrapper.findAll('.tool-rail .rail-tool')[0].trigger('click') // 확대
+    await wrapper.find('.rail-collapse').trigger('click')
+
+    expect(wrapper.find('.stage').attributes('style')).toContain('scale(1.25)')
   })
 })

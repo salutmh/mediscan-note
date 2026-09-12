@@ -72,6 +72,15 @@ const windowOpen = ref(false)
 /** 팬은 그리기 도구와 **별개 모드**다 (시안 07 의 좌측 레일). 켜져 있으면 끌기가 이동이 된다. */
 const panMode = ref(false)
 
+/**
+ * 도구 레일 접기.
+ *
+ * **레일은 영상 위에 떠 있어서 그 아래는 칠할 수 없다.** 시안도 같은 구조인데,
+ * 우리 케이스는 병변이 영상 가장자리에 오는 경우가 있어(편측 종양) 그대로 두면
+ * 표시 자체가 막힌다. 접으면 얇은 손잡이만 남고 가려졌던 영역을 칠할 수 있다.
+ */
+const railOpen = ref(true)
+
 const stageTransform = computed(
   () => `translate(${panX.value * 100}%, ${panY.value * 100}%) scale(${zoom.value})`,
 )
@@ -558,20 +567,40 @@ defineExpose({
 
       <!-- 좌측 도구 레일 (시안 07). 확대·이동·밝기는 **보기만 바꾼다** —
            칠한 ROI 와 제출되는 마스크에는 영향을 주지 않는다. -->
-      <div class="tool-rail" role="group" aria-label="영상 보기 도구">
-        <button type="button" :disabled="zoom >= ZOOM_MAX" title="확대" @click="zoomIn">
+      <button
+        v-if="!railOpen"
+        type="button"
+        class="rail-handle"
+        aria-label="영상 보기 도구 펼치기"
+        title="보기 도구 펼치기"
+        @click="railOpen = true"
+      >
+        ›
+      </button>
+
+      <div v-else class="tool-rail" role="group" aria-label="영상 보기 도구">
+        <button
+          type="button"
+          class="rail-collapse"
+          aria-label="영상 보기 도구 접기"
+          title="접기 (가려진 부분을 칠하려면)"
+          @click="railOpen = false"
+        >
+          ‹
+        </button>
+        <button type="button" class="rail-tool" :disabled="zoom >= ZOOM_MAX" title="확대" @click="zoomIn">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true">
             <circle cx="11" cy="11" r="6" /><path d="M20 20l-4.5-4.5M8.5 11h5M11 8.5v5" />
           </svg>
           <span>확대</span>
         </button>
-        <button type="button" :disabled="zoom <= ZOOM_MIN" title="축소" @click="zoomOut">
+        <button type="button" class="rail-tool" :disabled="zoom <= ZOOM_MIN" title="축소" @click="zoomOut">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true">
             <circle cx="11" cy="11" r="6" /><path d="M20 20l-4.5-4.5M8.5 11h5" />
           </svg>
           <span>축소</span>
         </button>
-        <button type="button" title="기본 크기로" @click="zoomActual">
+        <button type="button" class="rail-tool" title="기본 크기로" @click="zoomActual">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true">
             <rect x="4" y="6" width="16" height="12" rx="2" /><path d="M9 10v4M12 10v4M15 10v4" />
           </svg>
@@ -579,6 +608,7 @@ defineExpose({
         </button>
         <button
           type="button"
+          class="rail-tool"
           :class="{ on: panMode }"
           :aria-pressed="panMode"
           title="이동 (끌어서 영상 움직이기)"
@@ -591,6 +621,7 @@ defineExpose({
         </button>
         <button
           type="button"
+          class="rail-tool"
           :class="{ on: windowOpen || imageAdjusted }"
           :aria-pressed="windowOpen"
           title="밝기·대비"
@@ -602,7 +633,7 @@ defineExpose({
           </svg>
           <span>밝기</span>
         </button>
-        <button type="button" title="보기 되돌리기" @click="resetView">
+        <button type="button" class="rail-tool" title="보기 되돌리기" @click="resetView">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true">
             <path d="M4 12a8 8 0 1 1 2.6 5.9" /><path d="M4 19v-5h5" />
           </svg>
@@ -850,6 +881,44 @@ defineExpose({
 }
 .tool-rail button:disabled {
   opacity: 0.35;
+}
+
+/* 접기 버튼은 **보이기에만** 작다 (도구로 착각하지 않게).
+   좁은 화면 점검이 44x22 를 "누르기 힘든 크기"로 잡았다 —
+   글자는 그대로 두고 누를 수 있는 면적만 권장치까지 넓힌다. */
+.tool-rail .rail-collapse {
+  min-height: 44px;
+  padding: 0;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--viewer-ink-dim);
+}
+.tool-rail .rail-collapse:hover {
+  color: #fff;
+}
+
+/* 접었을 때 남는 손잡이. 폭이 좁아 영상을 거의 가리지 않는다. */
+.rail-handle {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  transform: translateY(-50%);
+  min-width: 18px;
+  min-height: 54px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-left: 0;
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
+  background: rgba(13, 17, 23, 0.72);
+  color: var(--viewer-ink);
+  font-size: 14px;
+  line-height: 1;
+  backdrop-filter: blur(6px);
+}
+.rail-handle:hover {
+  background: rgba(13, 17, 23, 0.9);
+  border-color: rgba(255, 255, 255, 0.24);
+  color: #fff;
 }
 
 /* --- 밝기·대비 --- */

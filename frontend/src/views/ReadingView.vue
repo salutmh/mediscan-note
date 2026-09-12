@@ -336,6 +336,11 @@ onBeforeRouteUpdate((to) => {
           다른 케이스를 먼저 풀어주세요.
         </p>
         <p v-if="submitError" class="error">{{ submitError }}</p>
+        <!-- **비활성 버튼만 두고 이유를 말하지 않으면 막힌 이유를 알 수 없다.**
+             제출이 도구 막대로 올라가면서 예전 우측 패널에 있던 이 안내가 사라졌었다. -->
+        <p v-if="gradable && !hasInput && phase === 'idle'" class="muted submit-hint">
+          영역을 먼저 칠해야 제출할 수 있습니다.
+        </p>
 
         <div v-if="hasSlices" class="slices">
           <div class="slice-bar">
@@ -489,6 +494,11 @@ onBeforeRouteUpdate((to) => {
   font-size: 13px;
 }
 
+
+.submit-hint {
+  margin-top: var(--sp-2);
+  text-align: center;
+}
 
 /* 결과를 다 읽은 뒤의 행동 (시안 08 하단 버튼 줄) */
 .bottom-actions {
