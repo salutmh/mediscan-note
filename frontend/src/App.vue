@@ -20,13 +20,28 @@ async function onLogout() {
   })
 }
 
+/**
+ * 상단 메뉴. `icon` 은 시안(04·05)처럼 글자 앞에 두는 선 아이콘이다 —
+ * 글자만 다섯 개 늘어놓으면 어디가 어디인지 한눈에 구분되지 않는다.
+ * **아이콘만 두지는 않는다.** 의미를 색이나 그림 하나에 맡기지 않는 것과 같은 이유로
+ * 항상 글자 라벨과 함께 쓴다.
+ */
 const NAV = [
-  { name: 'home', label: '홈', prefix: '/', exact: true },
-  { name: 'cases', label: '케이스', prefix: '/cases' },
-  { name: 'wrong-notes', label: '복습노트', prefix: '/wrong-notes' },
-  { name: 'analyze', label: '내 영상 분석', prefix: '/analyze' },
-  { name: 'progress', label: '진행현황', prefix: '/progress' },
+  { name: 'home', label: '홈', prefix: '/', exact: true, icon: 'home' },
+  { name: 'cases', label: '케이스', prefix: '/cases', icon: 'book' },
+  { name: 'wrong-notes', label: '복습노트', prefix: '/wrong-notes', icon: 'clipboard' },
+  { name: 'analyze', label: '내 영상 분석', prefix: '/analyze', icon: 'image' },
+  { name: 'progress', label: '진행현황', prefix: '/progress', icon: 'chart' },
 ]
+
+/** 선 아이콘 path 모음 (별도 아이콘 패키지를 들이지 않는다 — 의존성을 늘리지 않는 원칙) */
+const ICON_PATHS = {
+  home: ['M4 11l8-6 8 6', 'M6 10v9h12v-9'],
+  book: ['M4 5.5A1.5 1.5 0 0 1 5.5 4H11v16H5.5A1.5 1.5 0 0 1 4 18.5z', 'M20 5.5A1.5 1.5 0 0 0 18.5 4H13v16h5.5a1.5 1.5 0 0 0 1.5-1.5z'],
+  clipboard: ['M8 4h8a2 2 0 0 1 2 2v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V6a2 2 0 0 1 2-2z', 'M9 3h6v3H9z'],
+  image: ['M3 5h18v14H3z', 'M3 15l5-4 4 3 3-2 6 4', 'M8.5 9.5h.01'],
+  chart: ['M5 19V11', 'M12 19V5', 'M19 19v-6'],
+}
 
 /**
  * 상세 화면(/cases/:id, /wrong-notes/:id/retry)은 목록과 별도 라우트라
@@ -68,6 +83,16 @@ function initial(nickname) {
           class="nav-link"
           :class="{ current: isActive(item) }"
         >
+          <svg
+            class="nav-icon"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            aria-hidden="true"
+          >
+            <path v-for="(d, i) in ICON_PATHS[item.icon]" :key="i" :d="d" />
+          </svg>
           {{ item.label }}
         </RouterLink>
       </nav>
@@ -162,6 +187,11 @@ function initial(nickname) {
 }
 
 .nav-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  /* 상단 메뉴도 손가락으로 누른다 — 좁은 화면에서 28px 이 되지 않게 높이를 잡는다 */
+  min-height: 38px;
   padding: 6px 12px;
   border-radius: var(--r-sm);
   color: var(--ink-secondary);
@@ -169,6 +199,19 @@ function initial(nickname) {
   font-weight: 500;
   text-decoration: none;
   transition: background var(--transition), color var(--transition);
+}
+
+.nav-icon {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  color: var(--gray-400);
+}
+.nav-link:hover .nav-icon,
+.nav-link.current .nav-icon {
+  color: currentColor;
 }
 
 .nav-link:hover {
@@ -224,6 +267,12 @@ function initial(nickname) {
   }
 
   .nickname {
+    display: none;
+  }
+
+  /* 좁은 화면에서는 **아이콘을 감추고 글자를 남긴다.**
+     반대로 하면 그림만 보고 뜻을 짐작해야 한다. */
+  .nav-icon {
     display: none;
   }
 

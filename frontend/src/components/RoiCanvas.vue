@@ -140,13 +140,15 @@ const availableTools = computed(() =>
 /** 굵기는 자유곡선·지우개에서만 뜻이 있다 (박스는 끌어서 크기를 정한다). */
 const usesBrushSize = computed(() => tool.value === 'brush' || tool.value === 'eraser')
 
+/** 도구 막대 안에 들어가는 짧은 안내. 길면 잘려서 문장 중간에서 끊긴다 —
+    자세한 설명은 화면 위 과제 안내가 맡는다. */
 const TOOL_HINTS = {
-  brush: '이상으로 판단되는 부위를 끌어서 칠하세요.',
-  box: '이상으로 판단되는 부위를 사각형으로 끌어서 감싸세요.',
-  eraser: '잘못 칠한 곳을 끌어서 지우세요.',
-  point: '이상으로 판단되는 지점을 클릭하세요.',
+  brush: '끌어서 칠하세요',
+  box: '끌어서 사각형으로 감싸세요',
+  eraser: '끌어서 지우세요',
+  point: '클릭해서 표시하세요',
 }
-const toolHint = computed(() => (panMode.value ? '끌어서 영상을 움직이세요.' : TOOL_HINTS[tool.value] ?? ''))
+const toolHint = computed(() => (panMode.value ? '끌어서 영상을 움직이세요' : TOOL_HINTS[tool.value] ?? ''))
 
 function notify() {
   emit('change', { pointCount: points.value.length, strokeCount: strokeCount.value, hasInput: hasInput.value })

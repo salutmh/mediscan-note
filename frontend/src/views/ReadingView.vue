@@ -467,6 +467,16 @@ onBeforeRouteUpdate((to) => {
         class="stack"
         :explanation="result.explanation"
       />
+
+      <!-- 시안 08 처럼 **결과를 다 읽은 자리에서도** 다음 행동을 고를 수 있게 한다.
+           오른쪽 패널은 화면 위쪽에 있어서, 해설까지 내려온 사람에게는 보이지 않는다. -->
+      <div class="stack bottom-actions">
+        <RouterLink v-if="nextTarget" :to="nextTarget.to" class="btn primary lg">
+          {{ nextTarget.label }} →
+        </RouterLink>
+        <button class="lg" @click="retry">다시 풀기</button>
+        <RouterLink to="/wrong-notes" class="btn lg">복습노트 보기</RouterLink>
+      </div>
     </template>
   </template>
 </template>
@@ -479,6 +489,21 @@ onBeforeRouteUpdate((to) => {
   font-size: 13px;
 }
 
+
+/* 결과를 다 읽은 뒤의 행동 (시안 08 하단 버튼 줄) */
+.bottom-actions {
+  display: flex;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+}
+.bottom-actions .btn.primary {
+  background: var(--navy-700);
+  border-color: var(--navy-700);
+}
+.bottom-actions .btn.primary:hover {
+  background: var(--navy-800);
+  border-color: var(--navy-800);
+}
 
 /* 도구 막대 안의 제출 버튼 (시안 07) */
 .submit-inline {

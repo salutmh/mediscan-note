@@ -188,14 +188,27 @@ const PROVIDERS = [
 
 <template>
   <div class="wrap">
+    <!-- 시안 01 의 좌우 분할. 왼쪽은 브랜드 면, 오른쪽은 폼.
+         **시안의 흉부 X-ray 배경은 쓰지 않는다** — 우리가 가진 영상은 실제 환자
+         의료영상이고, 장식으로 쓸 성격이 아니다. 대신 격자·스캔선 모티프를 CSS 로 그린다. -->
+    <div class="brand-side" aria-hidden="true">
+      <div class="brand-grid"></div>
+      <div class="brand-inner">
+        <span class="mark">
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="7" />
+            <path d="M20 20l-4.2-4.2" stroke-linecap="round" />
+            <path d="M11 8v6M8 11h6" stroke-linecap="round" />
+          </svg>
+        </span>
+        <p class="brand-word">메디스캔<span>노트</span></p>
+        <p class="brand-sub">의료영상 판독 학습</p>
+      </div>
+      <p class="brand-foot">교육 · 학습용 서비스</p>
+    </div>
+
+    <div class="form-side">
     <div class="hero">
-      <span class="mark" aria-hidden="true">
-        <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="11" cy="11" r="7" />
-          <path d="M20 20l-4.2-4.2" stroke-linecap="round" />
-          <path d="M11 8v6M8 11h6" stroke-linecap="round" />
-        </svg>
-      </span>
       <h1>메디스캔노트</h1>
       <!-- **"AI 기준과 비교"는 사실이 아니었다.**
            채점 기준은 전문가가 검수한 reference mask 이고, AI 예측은
@@ -337,18 +350,88 @@ const PROVIDERS = [
     </div>
 
     <p class="muted foot">의료영상(민감정보)을 다루는 서비스입니다. AI 분석 결과는 학습 참고용이며 확정 진단이 아닙니다.</p>
+    </div>
   </div>
 </template>
 
 <style scoped>
 .wrap {
-  max-width: 420px;
+  /* 시안 01: 왼쪽 브랜드 면 + 오른쪽 폼. 폼이 길어지는 화면(동의·재설정)도
+     오른쪽 열에서만 늘어나므로 좌우가 어긋나지 않는다. */
+  display: grid;
+  grid-template-columns: 380px minmax(0, 460px);
+  gap: 0;
+  /* 폭을 내용에 맞춰야 배경(흰 면)이 빈 여백까지 번지지 않는다 */
+  width: fit-content;
+  max-width: 100%;
   margin: 0 auto;
+  align-items: stretch;
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-lg);
+  background: var(--surface);
+}
+
+.brand-side {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--sp-4);
+  padding: var(--sp-12) var(--sp-8);
+  background: linear-gradient(160deg, var(--navy-700), var(--navy-800));
+  color: #fff;
+  overflow: hidden;
+}
+
+/* 장식 — 스캔 격자. 실제 의료영상을 장식으로 쓰지 않기 위한 대체물이다. */
+.brand-grid {
+  position: absolute;
+  inset: -10%;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.06) 1px, transparent 1px),
+    radial-gradient(circle at 70% 65%, rgba(51, 167, 175, 0.28), transparent 55%);
+  background-size: 26px 26px, 26px 26px, 100% 100%;
+}
+
+.brand-inner {
+  position: relative;
+}
+
+.brand-word {
+  margin: var(--sp-5) 0 4px;
+  font-size: 32px;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+}
+.brand-word span {
+  color: var(--brand-400);
+}
+.brand-sub {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 14px;
+  letter-spacing: 0.02em;
+}
+.brand-foot {
+  position: relative;
+  margin: 0;
+  margin-top: auto;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 12px;
+}
+
+.form-side {
+  padding: var(--sp-8);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  min-width: 0;
 }
 
 .hero {
-  text-align: center;
-  margin-bottom: var(--sp-6);
+  margin-bottom: 0;
 }
 
 .mark {
@@ -356,20 +439,42 @@ const PROVIDERS = [
   place-items: center;
   width: 46px;
   height: 46px;
-  margin-bottom: var(--sp-3);
   border-radius: 13px;
   background: var(--brand-500);
   color: #fff;
-  box-shadow: var(--shadow-md);
 }
 
 .hero h1 {
   margin-bottom: 6px;
+  font-size: 24px;
+  color: var(--navy-700);
+}
+
+@media (max-width: 820px) {
+  /* 좁은 화면에서는 브랜드 면을 위로 눕히고 높이를 줄인다 —
+     폼이 화면 아래로 밀려나면 로그인부터 스크롤해야 한다. */
+  .wrap {
+    grid-template-columns: minmax(0, 460px);
+    width: auto;
+  }
+  .brand-side {
+    padding: var(--sp-6);
+  }
+  .brand-word {
+    margin-top: var(--sp-3);
+    font-size: 26px;
+  }
+  .brand-foot {
+    display: none;
+  }
 }
 
 .panel {
-  padding: var(--sp-6);
-  box-shadow: var(--shadow-lg);
+  /* 좌우 분할 카드 안이라 카드를 한 겹 더 얹지 않는다 (테두리·그림자 중복) */
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
 }
 
 .step-head {
