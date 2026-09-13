@@ -321,120 +321,129 @@ function ratio(value, max = 1) {
       </p>
     </div>
 
-    <!-- 공간 피드백 (v0.5) — "왜 틀렸는지"를 문장으로.
-         geometry 로 계산된 내용만 표시한다. 영상 소견은 아래 해설(case_findings) 몫이다. -->
-    <div v-if="spatialFeedback" class="feedback">
-      <div class="feedback-head">
-        <h3>표시한 영역 분석</h3>
-        <span class="chip chip-geometry">위치·범위 비교</span>
-      </div>
-
-      <!-- 2. 맞춘 / 놓친 / 과하게 표시한 —
-           **다음에 무엇을 고쳐야 하는지**로 나눈다. -->
-      <!-- 시안 08 의 "결과 요약" 처럼 **카드 세 장**으로 나눈다.
-           시안은 종류/위치/ROI 정확도를 쓰지만 우리에겐 질환을 고르는 단계가 없다 —
-           대신 **다음에 무엇을 고쳐야 하는지**로 나눈 세 값을 같은 모양에 담는다. -->
-      <ul v-if="areaBreakdown" class="breakdown">
-        <li v-for="part in areaBreakdown" :key="part.key" class="breakdown-card">
-          <span class="breakdown-chip" :class="part.tone" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9">
-              <template v-if="part.key === 'matched'">
-                <path d="M4 12.5l5 5L20 7" />
-              </template>
-              <template v-else-if="part.key === 'missed'">
-                <circle cx="12" cy="12" r="8" /><path d="M12 8v5M12 16h.01" />
-              </template>
-              <template v-else>
-                <path d="M12 4v16M4 12h16" />
-              </template>
-            </svg>
+    <!-- 시안 08 처럼 **왼쪽 영상 / 오른쪽 분석** 두 단으로 놓는다.
+         세로로 쌓으면 결과 화면만 2,400px 을 넘어가고, 영상과 수치를 같이 볼 수 없다. -->
+    <div class="result-cols">
+      <div class="result-left">
+      <!-- 오버레이 -->
+      <div class="viewer-frame overlay-frame">
+        <div class="viewer-bar">
+          <label class="toggle">
+            <input type="checkbox" v-model="showUser" />
+            <i class="sw user"></i>
+            내 ROI
+          </label>
+          <label class="toggle">
+            <input type="checkbox" v-model="showAi" />
+            <i class="sw ai"></i>
+            기준 마스크
+          </label>
+          <span v-if="pixelMode" class="toggle static">
+            <i class="sw both"></i>
+            겹침
           </span>
-          <span class="breakdown-label">{{ part.label }}</span>
-          <strong class="tnum breakdown-value">{{ part.percent }}<small>%</small></strong>
-          <ScoreBar :value="part.percent" :tone="part.tone" />
-          <p class="breakdown-hint">{{ part.hint }}</p>
-        </li>
-      </ul>
-
-      <!-- 3. 위치 차이 / 넓이 차이 — 겹침 비율과 다른 종류의 실수다 -->
-      <div v-if="centroidDistance != null || areaComparison" class="offsets">
-        <div v-if="centroidDistance != null" class="offset">
-          <span class="offset-label">중심 위치 차이</span>
-          <span class="tnum offset-value">{{ centroidDistance }}px</span>
+          <span class="spacer"></span>
+          <span class="dim">기준 마스크 대조</span>
         </div>
-        <div v-if="areaComparison" class="offset">
-          <span class="offset-label">표시 넓이 (기준 대비)</span>
-          <span class="tnum offset-value">
-            {{ areaComparison.user.toLocaleString() }}px
-            <small>/ 기준 {{ areaComparison.reference.toLocaleString() }}px</small>
-          </span>
+
+        <div class="stage" :style="{ aspectRatio }">
+          <img v-if="baseImageUrl" :src="baseImageUrl" alt="의료영상" class="base" />
+          <div v-else class="base placeholder"><span>영상 없음</span></div>
+
+          <!-- 픽셀 합성 오버레이 -->
+          <canvas v-if="pixelMode" ref="outCanvas" class="layer"></canvas>
+          <!-- 폴백: 두 마스크를 반투명하게 겹쳐 표시 -->
+          <template v-else>
+            <img v-if="showUser && userMaskDataUrl" :src="userMaskDataUrl" class="layer tint-user" alt="사용자 ROI" />
+            <img v-if="showAi && referenceMaskUrl" :src="referenceMaskUrl" class="layer tint-ai" alt="기준 마스크" />
+          </template>
         </div>
       </div>
 
-      <ul class="feedback-list">
-        <li v-for="item in spatialFeedback.items" :key="item.code" :class="feedbackTone(item.code)">
-          {{ item.message }}
-        </li>
-      </ul>
+      <p v-if="overlayNote" class="muted note">{{ overlayNote }}</p>
+      </div>
 
-      <p class="feedback-note">
-        위 내용은 표시한 영역과 기준 영역의 <strong>위치·넓이만 비교</strong>한 결과입니다.
-        영상 소견은 아래 해설을 확인하세요.
-      </p>
+      <div class="result-right">
+      <!-- 공간 피드백 (v0.5) — "왜 틀렸는지"를 문장으로.
+           geometry 로 계산된 내용만 표시한다. 영상 소견은 아래 해설(case_findings) 몫이다. -->
+      <div v-if="spatialFeedback" class="feedback">
+        <div class="feedback-head">
+          <h3>표시한 영역 분석</h3>
+          <span class="chip chip-geometry">위치·범위 비교</span>
+        </div>
+
+        <!-- 2. 맞춘 / 놓친 / 과하게 표시한 —
+             **다음에 무엇을 고쳐야 하는지**로 나눈다. -->
+        <!-- 시안 08 의 "결과 요약" 처럼 **카드 세 장**으로 나눈다.
+             시안은 종류/위치/ROI 정확도를 쓰지만 우리에겐 질환을 고르는 단계가 없다 —
+             대신 **다음에 무엇을 고쳐야 하는지**로 나눈 세 값을 같은 모양에 담는다. -->
+        <ul v-if="areaBreakdown" class="breakdown">
+          <li v-for="part in areaBreakdown" :key="part.key" class="breakdown-card">
+            <span class="breakdown-chip" :class="part.tone" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9">
+                <template v-if="part.key === 'matched'">
+                  <path d="M4 12.5l5 5L20 7" />
+                </template>
+                <template v-else-if="part.key === 'missed'">
+                  <circle cx="12" cy="12" r="8" /><path d="M12 8v5M12 16h.01" />
+                </template>
+                <template v-else>
+                  <path d="M12 4v16M4 12h16" />
+                </template>
+              </svg>
+            </span>
+            <span class="breakdown-label">{{ part.label }}</span>
+            <strong class="tnum breakdown-value">{{ part.percent }}<small>%</small></strong>
+            <ScoreBar :value="part.percent" :tone="part.tone" />
+            <p class="breakdown-hint">{{ part.hint }}</p>
+          </li>
+        </ul>
+
+        <!-- 3. 위치 차이 / 넓이 차이 — 겹침 비율과 다른 종류의 실수다 -->
+        <div v-if="centroidDistance != null || areaComparison" class="offsets">
+          <div v-if="centroidDistance != null" class="offset">
+            <span class="offset-label">중심 위치 차이</span>
+            <span class="tnum offset-value">{{ centroidDistance }}px</span>
+          </div>
+          <div v-if="areaComparison" class="offset">
+            <span class="offset-label">표시 넓이 (기준 대비)</span>
+            <span class="tnum offset-value">
+              {{ areaComparison.user.toLocaleString() }}px
+              <small>/ 기준 {{ areaComparison.reference.toLocaleString() }}px</small>
+            </span>
+          </div>
+        </div>
+
+        <ul class="feedback-list">
+          <li v-for="item in spatialFeedback.items" :key="item.code" :class="feedbackTone(item.code)">
+            {{ item.message }}
+          </li>
+        </ul>
+
+        <p class="feedback-note">
+          위 내용은 표시한 영역과 기준 영역의 <strong>위치·넓이만 비교</strong>한 결과입니다.
+          영상 소견은 아래 해설을 확인하세요.
+        </p>
+      </div>
+
+      <!-- 세부 지표는 접어 둔다. 필요한 사람은 열어 보고, 나머지는 방해받지 않는다.
+           **`spatial_feedback` 블록 안에 두면 안 된다** — 좌표 근사 채점처럼
+           공간 피드백이 없는 경우 수치가 통째로 사라진다 (테스트가 잡아냈다). -->
+      <details class="raw-metrics">
+        <summary>세부 지표 (Dice · IoU · 위치 점수)</summary>
+        <dl>
+          <div><dt>Dice</dt><dd class="tnum">{{ result.dice }}</dd></div>
+          <div><dt>IoU</dt><dd class="tnum">{{ result.iou }}</dd></div>
+          <div><dt>위치 점수</dt><dd class="tnum">{{ result.location_score }}/100</dd></div>
+          <div v-if="coverageMetrics">
+            <dt>표시한 영역 중 기준 안쪽</dt>
+            <dd class="tnum">{{ coverageMetrics.precision }}%</dd>
+          </div>
+        </dl>
+      </details>
+      </div>
     </div>
 
-    <!-- 세부 지표는 접어 둔다. 필요한 사람은 열어 보고, 나머지는 방해받지 않는다.
-         **`spatial_feedback` 블록 안에 두면 안 된다** — 좌표 근사 채점처럼
-         공간 피드백이 없는 경우 수치가 통째로 사라진다 (테스트가 잡아냈다). -->
-    <details class="raw-metrics">
-      <summary>세부 지표 (Dice · IoU · 위치 점수)</summary>
-      <dl>
-        <div><dt>Dice</dt><dd class="tnum">{{ result.dice }}</dd></div>
-        <div><dt>IoU</dt><dd class="tnum">{{ result.iou }}</dd></div>
-        <div><dt>위치 점수</dt><dd class="tnum">{{ result.location_score }}/100</dd></div>
-        <div v-if="coverageMetrics">
-          <dt>표시한 영역 중 기준 안쪽</dt>
-          <dd class="tnum">{{ coverageMetrics.precision }}%</dd>
-        </div>
-      </dl>
-    </details>
-
-    <!-- 오버레이 -->
-    <div class="viewer-frame overlay-frame">
-      <div class="viewer-bar">
-        <label class="toggle">
-          <input type="checkbox" v-model="showUser" />
-          <i class="sw user"></i>
-          내 ROI
-        </label>
-        <label class="toggle">
-          <input type="checkbox" v-model="showAi" />
-          <i class="sw ai"></i>
-          기준 마스크
-        </label>
-        <span v-if="pixelMode" class="toggle static">
-          <i class="sw both"></i>
-          겹침
-        </span>
-        <span class="spacer"></span>
-        <span class="dim">기준 마스크 대조</span>
-      </div>
-
-      <div class="stage" :style="{ aspectRatio }">
-        <img v-if="baseImageUrl" :src="baseImageUrl" alt="의료영상" class="base" />
-        <div v-else class="base placeholder"><span>영상 없음</span></div>
-
-        <!-- 픽셀 합성 오버레이 -->
-        <canvas v-if="pixelMode" ref="outCanvas" class="layer"></canvas>
-        <!-- 폴백: 두 마스크를 반투명하게 겹쳐 표시 -->
-        <template v-else>
-          <img v-if="showUser && userMaskDataUrl" :src="userMaskDataUrl" class="layer tint-user" alt="사용자 ROI" />
-          <img v-if="showAi && referenceMaskUrl" :src="referenceMaskUrl" class="layer tint-ai" alt="기준 마스크" />
-        </template>
-      </div>
-    </div>
-
-    <p v-if="overlayNote" class="muted note">{{ overlayNote }}</p>
 
     <!-- AI 예측은 참고 정보일 뿐 채점에 쓰이지 않는다 (api-spec v0.4) -->
     <div v-if="aiPrediction" class="ai-note">
@@ -458,6 +467,44 @@ function ratio(value, max = 1) {
 </template>
 
 <style scoped>
+/* --- 시안 08 의 좌우 2단 (왼쪽 영상 / 오른쪽 분석) --- */
+.result-cols {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+  gap: var(--sp-5);
+  align-items: start;
+}
+.result-left,
+.result-right {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+/* 오른쪽 칸은 폭이 절반이라 요약 카드를 3열로 두면 숫자가 눌린다 */
+.result-right .breakdown {
+  grid-template-columns: 1fr;
+}
+.result-right .breakdown-card {
+  grid-template-areas:
+    'chip label value'
+    'bar  bar   bar'
+    'hint hint  hint';
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  align-items: center;
+}
+.result-right .breakdown-value {
+  justify-self: end;
+  font-size: 22px;
+}
+
+@media (max-width: 980px) {
+  .result-cols {
+    grid-template-columns: 1fr;
+  }
+}
+
 .provisional {
   margin-bottom: var(--sp-4);
 }

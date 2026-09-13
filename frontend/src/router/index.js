@@ -81,8 +81,9 @@ router.beforeEach((to) => {
   if (to.meta.requiresAuth && !authState.token) {
     return { name: 'login', query: { redirect: to.fullPath } }
   }
+  // 이미 로그인한 사람이 /login 으로 오면 **홈**으로 보낸다 (로그인 직후 이동과 같은 곳).
   if (to.name === 'login' && authState.token) {
-    return { name: 'cases' }
+    return { name: 'home' }
   }
   return true
 })

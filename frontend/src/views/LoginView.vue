@@ -62,7 +62,10 @@ onMounted(async () => {
 })
 
 function goNext() {
-  router.push(route.query.redirect || { name: 'cases' })
+  // **홈으로 보낸다.** 이 줄은 홈 화면이 생기기 전 코드 그대로 `cases` 를 가리키고 있었다 —
+  // 대시보드를 만들어 놓고 로그인은 거기로 보내지 않아, 들어오자마자 격자만 보였다.
+  // (`redirect` 쿼리가 있으면 사용자가 원래 가려던 곳이 우선이다)
+  router.push(route.query.redirect || { name: 'home' })
 }
 
 async function run(fn) {

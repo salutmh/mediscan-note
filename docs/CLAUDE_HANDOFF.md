@@ -15,7 +15,7 @@
 | 원격 | `https://github.com/salutmh/mediscan-note.git` (Public) |
 | 현재 모드 | **지속 자율 개발 루프** (Phase 1~8 은 최초 백로그였고 전부 완료) |
 | STATUS | `IN_PROGRESS` — 사이클마다 제품 재평가 → 최고가치 작업 선정 |
-| 마지막 전체 검증 | 백엔드 **1066 passed** (SQLite·PostgreSQL 양쪽) / 프론트 **136 passed** / E2E 7종 / 접근성·좁은화면 점검 0건 / `verify_cases` 6케이스 |
+| 마지막 전체 검증 | 백엔드 **1066 passed** (SQLite·PostgreSQL 양쪽) / 프론트 **139 passed** / E2E 7종 / 접근성·좁은화면 점검 0건 / `verify_cases` 6케이스 |
 
 > **push 는 매번 사용자 승인이 필요하다.**
 > force push / rebase / reset --hard / history rewrite 는 하지 않는다.
@@ -54,6 +54,37 @@
 ---
 
 ## 3. 완료된 작업
+
+### UI 개편 #5 — 평가하고 나서 고친 세 가지
+
+사용자가 **작업 전에 평가부터 하라**고 했다. 화면별로 시안과 대조한 결과
+실제로 어긋난 곳은 세 군데였다.
+
+**1. 로그인하면 케이스 목록으로 갔다 (버그).**
+`LoginView.goNext()` 가 **홈이 생기기 전 코드 그대로** `{ name: 'cases' }` 였다.
+"지금 뭘 해야 하는지"를 알려주는 대시보드를 만들어 놓고 아무도 거기로 보내지 않았다 —
+만들어 두고 연결하지 않으면 없는 것과 같다. 라우터 가드(`/login` 재방문)도 같았다.
+`src/router/index.test.js` 로 고정했다.
+
+**2. 판독 영상이 280px 로 쪼그라들고 왼쪽에 빈 여백만 컸다.**
+`--roi-max-width: min(100%, calc(100vh - 300px))` 가 원인이었다.
+세로로 잘리지 않게 하려던 것인데 **창이 낮으면 가로까지 같이 줄어든다.**
+시안 07 은 영상이 화면의 절반 이상을 쓴다 — **칸을 그대로 채우게** 바꿨다(`100%`).
+낮은 창에서는 아래가 조금 잘려 스크롤이 생기지만, 그건 스크롤로 해결되는 문제이고
+영상이 손톱만 해지는 것보다 판독에 낫다. (1024px 화면 캔버스 466 → 617px)
+
+**3. 결과 화면이 세로 1단이라 2,400px 을 넘어갔다.**
+시안 08 은 **왼쪽 영상 / 오른쪽 분석** 두 단이다. 그대로 바꿨다 —
+영상과 수치를 같이 볼 수 있어야 "어디를 놓쳤는지"가 읽힌다.
+오른쪽 칸은 폭이 절반이라 요약 카드를 세로로 쌓고 수치를 오른쪽 정렬했다.
+
+**평가에서 "다르지만 그대로 둔다"로 판단한 것**: 케이스 목록(시안의 3단계 선택은
+우리 데이터로 각 단계 선택지가 하나뿐), 사이드바(시안 자체가 화면마다 엇갈린다),
+시안 04 하단 통계 띠(지표 카드와 숫자가 겹친다).
+
+**검증**: 프론트 **139** / 빌드 / 접근성 0건 / 좁은화면 0건 / E2E user-flow·error-paths 통과.
+
+---
 
 ### UI 개편 #4 — "피그마 UI 가 아니잖아" — 프레임을 다시 만들었다
 
@@ -192,7 +223,7 @@ E2E user-flow·roi-undo·error-paths 통과.
   해설까지 내려온 사람에게는 보이지 않는다 — 다 읽은 자리에서도 고를 수 있어야 한다.
 - 대시보드 `recent_activity` 에 `thumbnail_url` 추가 (표에 어떤 영상이었는지 보이게).
 
-**검증**: 백엔드 **1066 passed** / 프론트 **136 passed** / 빌드 통과 /
+**검증**: 백엔드 **1066 passed** / 프론트 **139 passed** / 빌드 통과 /
 E2E user-flow·roi-undo·slice-navigation·error-paths 통과 / 접근성 0건 / 좁은화면 0건.
 
 ---
@@ -508,7 +539,7 @@ head 뒤처짐, alembic_version 삭제, 테이블 삭제, 운영 계정 혼입 �
 - `AnalyzeView` 6개: 준비 상태를 하드코딩하지 않는다, 불가능하면 업로드 전에 이유를 알리고
   요청 버튼을 막는다, **확인 실패 시에는 잠그지 않는다**
 
-프론트 25 → **136개**.
+프론트 25 → **139개**.
 
 ---
 
@@ -1142,7 +1173,7 @@ cd backend && alembic revision --autogenerate -m "<설명>"
 | 백엔드 (SQLite) | `cd backend && pytest` | **1066 passed** |
 | 백엔드 (PostgreSQL) | `python -m scripts.verify_postgres --url ... --with-tests` | 마이그레이션 up/down/up + 전체 테스트 통과 |
 | 케이스 | `python -m scripts.verify_cases` | 6케이스 통과 |
-| 프론트 단위 | `cd frontend && npx vitest run` | **136 passed** |
+| 프론트 단위 | `cd frontend && npx vitest run` | **139 passed** |
 | 빌드 | `npm run build` | 통과 |
 | 브라우저 E2E | `tools/browser-verify/*.mjs` (user-flow / slice-navigation / consent-and-sns / screenshot-all / error-paths / case-review / admin-ux / **roi-undo**) | 통과 |
 | 접근성 | `tools/browser-verify/a11y-audit.mjs` | 지적 0건 |
