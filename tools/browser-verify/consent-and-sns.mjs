@@ -181,6 +181,23 @@ await goto('/login', 1800)
 await clickText('회원가입')
 await sleep(700)
 
+// 가입은 시안 02 처럼 **두 단계**다. 동의는 2단계(계정이 실제로 만들어지는 버튼 바로 앞)에 있다.
+await evaluate(`
+  (() => {
+    const set = (el, v) => {
+      el.value = v
+      el.dispatchEvent(new Event('input', { bubbles: true }))
+    }
+    const inputs = document.querySelectorAll('.field input')
+    set(inputs[0], 'consent-step@example.com')
+    set(inputs[1], 'pw12345678')
+    return 'step1'
+  })()
+`)
+await sleep(300)
+await clickText('다음')
+await sleep(700)
+
 let state = await consentState()
 console.log(`   동의 항목 ${state.rows.length}개 (필수 ${state.rows.filter((r) => r.required).length})`)
 check(state.rows.length === 6, '동의 항목 6개가 렌더링된다')
@@ -251,24 +268,43 @@ await shoot('c03-required-only')
 // ---------------------------------------------- 2) 이메일 가입 -> 케이스 목록
 console.log('2) 이메일 회원가입 → 케이스 목록')
 const email = `consent${Date.now()}@example.com`
+// 여기까지는 2단계 화면이다 — 1단계로 돌아가 이메일을 새로 넣고 다시 온다
+await clickText('이전')
+await sleep(500)
 await evaluate(`
   (() => {
     const set = (el, v) => { el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })) }
     const inputs = document.querySelectorAll('.field input')
     set(inputs[0], ${JSON.stringify(email)})
     set(inputs[1], 'pw12345678')
-    set(inputs[2], '동의테스트')
-    return 'filled'
+    return 'step1'
   })()
 `)
 await sleep(300)
+await clickText('다음')
+await sleep(600)
+await evaluate(`
+  (() => {
+    const set = (el, v) => { el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })) }
+    const inputs = document.querySelectorAll('.field input')
+    set(inputs[0], '동의테스트')   // 닉네임만 필수
+    document.querySelector('.consents .row.all input').click()
+    return 'step2'
+  })()
+`)
+await sleep(400)
 await clickText('가입 완료')
 await sleep(2500)
 let path = await evaluate('location.pathname')
 let cases = await evaluate(`document.querySelectorAll('.case-card').length`)
 let ids = await evaluate(`[...document.querySelectorAll('.case-card h3, .case-card .case-id, .case-card strong')].map(e=>e.textContent.trim()).join(',')`)
-check(path === '/cases', `이메일 가입 후 케이스 목록 이동 (현재 ${path})`)
-check(cases === 6, `VS-SEG 6개 케이스 표시 (현재 ${cases}개)`)
+// 신규 가입은 **기본정보 설정(시안 03)** 으로 간다. 건너뛸 수 있는 화면이다.
+check(path === '/onboarding', `이메일 가입 후 기본정보 설정 이동 (현재 ${path})`)
+await clickText('나중에 하기')
+await sleep(1500)
+path = await evaluate('location.pathname')
+cases = await evaluate(`document.querySelectorAll('.case-card').length`)
+check(path === '/', `건너뛰면 홈으로 (현재 ${path})`)
 check(!!(await evaluate("localStorage.getItem('mediscan.access_token')")), '이메일 가입: access token 저장')
 console.log(`   케이스: ${ids}`)
 await shoot('c04-email-cases')
@@ -296,11 +332,14 @@ for (const [provider, label] of [['kakao', '카카오로 시작하기'], ['googl
   }
 
   path = await evaluate('location.pathname')
-  cases = await evaluate(`document.querySelectorAll('.case-card').length`)
   const token = await evaluate("localStorage.getItem('mediscan.access_token')")
   check(!!token, `${provider}: access token 저장`)
-  check(path === '/cases', `${provider}: 케이스 목록 이동 (현재 ${path})`)
-  check(cases === 6, `${provider}: VS-SEG 6개 케이스 표시 (현재 ${cases}개)`)
+  // **신규 가입은 기본정보 설정(시안 03)으로 간다.** 건너뛸 수 있는 화면이다.
+  check(path === '/onboarding', `${provider}: 신규 가입 → 기본정보 설정 (현재 ${path})`)
+  await clickText('나중에 하기')
+  await sleep(1500)
+  path = await evaluate('location.pathname')
+  check(path === '/', `${provider}: 건너뛰면 홈으로 (현재 ${path})`)
   await shoot(`c05-sns-${provider}`)
 
   // 같은 provider 로 다시 누르면 기존 계정 로그인 (동의 화면 없이 바로 이동).
@@ -311,7 +350,8 @@ for (const [provider, label] of [['kakao', '카카오로 시작하기'], ['googl
   await clickText(label)
   await sleep(2500)
   path = await evaluate('location.pathname')
-  check(path === '/cases', `${provider}: 재로그인 시 동의 없이 바로 이동 (현재 ${path})`)
+  // 기존 계정 로그인은 기본정보 설정을 거치지 않고 **홈**으로 간다
+  check(path === '/', `${provider}: 재로그인 시 동의 없이 홈으로 (현재 ${path})`)
 }
 
 /**

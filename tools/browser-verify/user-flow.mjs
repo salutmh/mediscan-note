@@ -273,6 +273,7 @@ await evaluate("localStorage.clear(); 'ok'")
 await goto('/login', 1800)
 await clickText('회원가입')
 await sleep(400)
+// 가입은 시안 02 처럼 **두 단계**다 (1 계정 정보 -> 2 프로필·학교 + 동의).
 await evaluate(`
   (async () => {
     const set = (el, v) => {
@@ -282,11 +283,25 @@ await evaluate(`
     const inputs = document.querySelectorAll('.field input')
     set(inputs[0], ${JSON.stringify(email)})
     set(inputs[1], 'pw12345678')
-    set(inputs[2], '흐름테스트')
+    return 'step1 filled'
+  })()
+`)
+await sleep(300)
+await clickText('다음')
+await sleep(600)
+await evaluate(`
+  (async () => {
+    const set = (el, v) => {
+      el.value = v
+      el.dispatchEvent(new Event('input', { bubbles: true }))
+    }
+    const inputs = document.querySelectorAll('.field input')
+    // 2단계: 닉네임만 필수, 생년월일·학교·전공은 선택이라 비워 둔 채로 진행한다
+    set(inputs[0], '흐름테스트')
     await new Promise((r) => setTimeout(r, 100))
     // 전체 동의 체크
     document.querySelector('.consents .row.all input').click()
-    return 'filled'
+    return 'step2 filled'
   })()
 `)
 await sleep(400)

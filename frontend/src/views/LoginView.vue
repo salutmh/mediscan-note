@@ -14,7 +14,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ConsentForm from '../components/ConsentForm.vue'
-import { getConsentVersion, login, resetPassword, signup, socialLogin } from '../api/endpoints'
+import { getConsentVersion, login, resetPassword, signup, socialLogin, updateProfile } from '../api/endpoints'
 import { applyAuthResult } from '../stores/auth'
 
 const router = useRouter()
@@ -30,6 +30,19 @@ const mode = ref('login') // 'login' | 'signup'
 const email = ref('')
 const password = ref('')
 const nickname = ref('')
+/* 시안 02-2 의 프로필 항목. **닉네임만 필수이고 나머지는 선택이다** —
+   없어도 학습에 아무 지장이 없으므로 가입을 막지 않는다. */
+const birthDate = ref('')
+const school = ref('')
+const major = ref('')
+
+/** 가입 2단계 (시안 02: 1 계정 정보 → 2 프로필·학교) */
+const signupStep = ref(1)
+/** 비밀번호 규칙은 서버와 같은 값을 쓴다 (backend/app/schemas.py) */
+const MIN_PASSWORD_LENGTH = 8
+const canGoToStep2 = computed(
+  () => email.value.includes('@') && password.value.length >= MIN_PASSWORD_LENGTH,
+)
 
 const consentVersion = ref('')
 const consentItems = ref([])
@@ -90,15 +103,35 @@ async function run(fn) {
 
 const onLogin = () => run(() => login({ email: email.value, password: password.value }))
 
-const onSignup = () =>
-  run(() =>
-    signup({
+function onSignup() {
+  // 1단계에서는 아직 계정을 만들지 않는다 — 다음 단계로만 넘어간다
+  if (signupStep.value === 1) {
+    if (canGoToStep2.value) signupStep.value = 2
+    return
+  }
+  return submitSignup()
+}
+
+const submitSignup = () =>
+  run(async () => {
+    const result = await signup({
       email: email.value,
       password: password.value,
       nickname: nickname.value,
       consents: consents.value,
-    }),
-  )
+    })
+    // 가입이 끝난 뒤에 선택 항목을 저장한다. **실패해도 가입은 유효하다** —
+    // 학교·전공 때문에 방금 만든 계정으로 못 들어가는 일은 없어야 한다.
+    const optional = {}
+    if (birthDate.value) optional.birth_date = birthDate.value
+    if (school.value) optional.school = school.value
+    if (major.value) optional.major = major.value
+    if (Object.keys(optional).length) {
+      applyAuthResult(result) // 토큰이 있어야 프로필을 저장할 수 있다
+      await updateProfile(optional).catch(() => {})
+    }
+    return result
+  })
 
 /** mock SNS 인증: 실제 SDK 대신 provider 별 고정 토큰을 만들어 재사용한다(= 같은 계정으로 인식됨). */
 function mockProviderToken(provider) {
@@ -185,6 +218,7 @@ async function onReset() {
 function switchMode(next) {
   resetDone.value = false
   mode.value = next
+  signupStep.value = 1 // 탭을 옮기면 가입 단계도 처음으로
   errorMessage.value = ''
 }
 
@@ -317,33 +351,57 @@ const PROVIDERS = [
         </form>
 
         <form v-if="mode !== 'reset'" @submit.prevent="mode === 'login' ? onLogin() : onSignup()">
-          <!-- 시안 02 의 단계 표시기. **우리 가입은 한 화면에서 끝난다** —
-               시안처럼 두 페이지로 쪼개지 않고, 같은 화면 안에서 어디까지 왔는지만 보여준다.
-               (동의는 법적으로 반드시 받아야 해서 계정 정보와 떼어 놓지 않는다.) -->
+          <!-- 시안 02 의 2단계 가입 (1 계정 정보 / 2 프로필·학교).
+               **동의는 시안에 없지만 반드시 받는다** — 2단계의 마지막,
+               즉 계정이 실제로 만들어지는 버튼 바로 앞에 둔다. -->
           <ol v-if="mode === 'signup'" class="signup-steps" aria-label="가입 단계">
-            <li :class="{ done: email && password && nickname }">
+            <li :class="{ current: signupStep === 1, done: signupStep > 1 }">
               <span class="step-num">1</span> 계정 정보
             </li>
-            <li :class="{ done: allRequiredChecked }">
-              <span class="step-num">2</span> 필수 동의
+            <li :class="{ current: signupStep === 2 }">
+              <span class="step-num">2</span> 프로필 · 학교
             </li>
           </ol>
 
-          <label class="field">
-            <span>이메일</span>
-            <input v-model.trim="email" type="email" required autocomplete="email" placeholder="you@example.com" />
-          </label>
-          <label class="field">
-            <span>비밀번호</span>
-            <input v-model="password" type="password" required autocomplete="current-password" placeholder="••••••••" />
-          </label>
-          <label v-if="mode === 'signup'" class="field">
-            <span>닉네임</span>
-            <input v-model.trim="nickname" type="text" required placeholder="화면에 표시될 이름" />
-          </label>
+          <template v-if="mode !== 'signup' || signupStep === 1">
+            <label class="field">
+              <span>이메일</span>
+              <input v-model.trim="email" type="email" required autocomplete="email" placeholder="you@example.com" />
+            </label>
+            <label class="field">
+              <span>비밀번호</span>
+              <input
+                v-model="password"
+                type="password"
+                required
+                :autocomplete="mode === 'signup' ? 'new-password' : 'current-password'"
+                placeholder="••••••••"
+              />
+            </label>
+          </template>
+
+          <!-- 2단계: 프로필 (시안 02-2). **닉네임만 필수이고 나머지는 선택이다** -->
+          <template v-if="mode === 'signup' && signupStep === 2">
+            <label class="field">
+              <span>이름 (닉네임)</span>
+              <input v-model.trim="nickname" type="text" required placeholder="화면에 표시될 이름" />
+            </label>
+            <label class="field">
+              <span>생년월일 <small class="optional">선택</small></span>
+              <input v-model="birthDate" type="date" />
+            </label>
+            <label class="field">
+              <span>학교 <small class="optional">선택</small></span>
+              <input v-model.trim="school" type="text" placeholder="예: 메드렌즈대학교" />
+            </label>
+            <label class="field">
+              <span>전공 <small class="optional">선택</small></span>
+              <input v-model.trim="major" type="text" placeholder="예: 방사선학과" />
+            </label>
+          </template>
 
           <ConsentForm
-            v-if="showConsents"
+            v-if="showConsents && (mode !== 'signup' || signupStep === 2)"
             v-model="consents"
             :items="consentItems"
             :version="consentVersion"
@@ -352,16 +410,30 @@ const PROVIDERS = [
 
           <p v-if="errorMessage" class="error">{{ errorMessage }}</p>
 
+          <div v-if="mode === 'signup' && signupStep === 2" class="step-actions">
+            <button type="button" :disabled="busy" @click="signupStep = 1">이전</button>
+            <button
+              class="primary lg grow submit"
+              type="submit"
+              :disabled="busy || !allRequiredChecked"
+            >
+              {{ busy ? '처리 중...' : '가입 완료' }}
+            </button>
+          </div>
           <button
+            v-else
             class="primary lg submit"
             type="submit"
-            :disabled="busy || (mode === 'signup' && !allRequiredChecked)"
+            :disabled="busy || (mode === 'signup' && !canGoToStep2)"
           >
-            {{ busy ? '처리 중...' : mode === 'login' ? '로그인' : '가입 완료' }}
+            {{ busy ? '처리 중...' : mode === 'login' ? '로그인' : '다음' }}
           </button>
 
-          <p v-if="mode === 'signup' && !allRequiredChecked" class="muted hint">
+          <p v-if="mode === 'signup' && signupStep === 2 && !allRequiredChecked" class="muted hint">
             필수 동의 {{ requiredKeys.length }}개를 모두 체크해야 가입할 수 있습니다.
+          </p>
+          <p v-else-if="mode === 'signup' && signupStep === 1" class="muted hint">
+            이메일과 비밀번호({{ MIN_PASSWORD_LENGTH }}자 이상)를 입력하면 다음으로 넘어갑니다.
           </p>
           <p v-if="mode === 'login'" class="muted hint">
             가입한 계정과 판독 이력은 서버 DB에 저장됩니다. 로그인 상태는 7일간 유지됩니다.
@@ -398,11 +470,31 @@ const PROVIDERS = [
   font-weight: 600;
 }
 /* **색만으로 끝난 단계를 표시하지 않는다** — 테두리·굵기도 함께 바뀐다 */
+.signup-steps li.current,
 .signup-steps li.done {
   border-color: var(--brand-500);
   background: var(--brand-50);
   color: var(--brand-700);
 }
+/* 선택 항목임을 라벨에 적는다 — 필수처럼 보이면 가입을 망설이게 된다 */
+.optional {
+  margin-left: 4px;
+  padding: 1px 6px;
+  border-radius: var(--r-full);
+  background: var(--gray-100);
+  color: var(--ink-muted);
+  font-size: 10.5px;
+  font-weight: 600;
+}
+
+.step-actions {
+  display: flex;
+  gap: var(--sp-3);
+}
+.step-actions .grow {
+  flex: 1;
+}
+
 .step-num {
   display: grid;
   place-items: center;
@@ -414,6 +506,7 @@ const PROVIDERS = [
   color: var(--ink-secondary);
   font-size: 11.5px;
 }
+.signup-steps li.current .step-num,
 .signup-steps li.done .step-num {
   background: var(--brand-500);
   color: #fff;
