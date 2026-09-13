@@ -180,10 +180,12 @@ function initial(nickname) {
   background: var(--gray-50);
 }
 
+/* 시안 04·05 는 메뉴를 **가운데**에 둔다 (로고 왼쪽 / 메뉴 가운데 / 계정 오른쪽) */
 .nav {
   display: flex;
-  gap: 2px;
+  gap: var(--sp-2);
   flex-wrap: wrap;
+  margin: 0 auto;
 }
 
 .nav-link {
@@ -215,14 +217,15 @@ function initial(nickname) {
 }
 
 .nav-link:hover {
-  background: var(--gray-100);
   color: var(--ink);
 }
 
+/* 시안은 현재 위치를 **알약이 아니라 밑줄**로 표시한다 */
 .nav-link.current {
-  background: var(--brand-50);
   color: var(--brand-600);
-  font-weight: 600;
+  font-weight: 700;
+  box-shadow: inset 0 -2px 0 var(--brand-500);
+  border-radius: 0;
 }
 
 .account {

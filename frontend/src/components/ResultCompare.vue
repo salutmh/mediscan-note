@@ -331,12 +331,26 @@ function ratio(value, max = 1) {
 
       <!-- 2. 맞춘 / 놓친 / 과하게 표시한 —
            **다음에 무엇을 고쳐야 하는지**로 나눈다. -->
+      <!-- 시안 08 의 "결과 요약" 처럼 **카드 세 장**으로 나눈다.
+           시안은 종류/위치/ROI 정확도를 쓰지만 우리에겐 질환을 고르는 단계가 없다 —
+           대신 **다음에 무엇을 고쳐야 하는지**로 나눈 세 값을 같은 모양에 담는다. -->
       <ul v-if="areaBreakdown" class="breakdown">
-        <li v-for="part in areaBreakdown" :key="part.key">
-          <div class="breakdown-top">
-            <span class="breakdown-label">{{ part.label }}</span>
-            <span class="tnum breakdown-value">{{ part.percent }}%</span>
-          </div>
+        <li v-for="part in areaBreakdown" :key="part.key" class="breakdown-card">
+          <span class="breakdown-chip" :class="part.tone" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9">
+              <template v-if="part.key === 'matched'">
+                <path d="M4 12.5l5 5L20 7" />
+              </template>
+              <template v-else-if="part.key === 'missed'">
+                <circle cx="12" cy="12" r="8" /><path d="M12 8v5M12 16h.01" />
+              </template>
+              <template v-else>
+                <path d="M12 4v16M4 12h16" />
+              </template>
+            </svg>
+          </span>
+          <span class="breakdown-label">{{ part.label }}</span>
+          <strong class="tnum breakdown-value">{{ part.percent }}<small>%</small></strong>
           <ScoreBar :value="part.percent" :tone="part.tone" />
           <p class="breakdown-hint">{{ part.hint }}</p>
         </li>
@@ -576,6 +590,7 @@ function ratio(value, max = 1) {
 }
 
 /* --- 맞춘 / 놓친 / 과하게 표시한 ------------------------------------- */
+/* 시안 08 의 결과 요약 카드 세 장 */
 .breakdown {
   list-style: none;
   margin: 0 0 var(--sp-4);
@@ -584,25 +599,84 @@ function ratio(value, max = 1) {
   grid-template-columns: repeat(3, 1fr);
   gap: var(--sp-4);
 }
-.breakdown-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  margin-bottom: 5px;
+.breakdown-card {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  grid-template-areas:
+    'chip label'
+    'chip value'
+    'bar  bar'
+    'hint hint';
+  column-gap: var(--sp-3);
+  row-gap: 2px;
+  align-items: center;
+  padding: var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+.breakdown-chip {
+  grid-area: chip;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: var(--r-sm);
+}
+.breakdown-chip svg {
+  width: 19px;
+  height: 19px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+/* 색만으로 뜻을 전하지 않는다 — 라벨과 수치가 늘 함께 있다 */
+.breakdown-chip.match {
+  background: var(--match-bg);
+  color: var(--match-ink);
+}
+.breakdown-chip.mismatch {
+  background: var(--mismatch-bg);
+  color: var(--mismatch-ink);
+}
+.breakdown-chip.partial_match {
+  background: var(--partial-bg);
+  color: var(--partial-ink);
 }
 .breakdown-label {
-  font-size: 13px;
+  grid-area: label;
+  font-size: 12.5px;
   font-weight: 600;
-  color: var(--ink-secondary);
+  color: var(--ink-muted);
 }
 .breakdown-value {
-  font-size: 18px;
+  grid-area: value;
+  font-size: 26px;
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  color: var(--navy-700);
+}
+.breakdown-value small {
+  font-size: 15px;
   font-weight: 700;
+  margin-left: 2px;
+}
+.breakdown-card :deep(.bar),
+.breakdown-card > :nth-last-child(2) {
+  grid-area: bar;
+  margin-top: var(--sp-3);
 }
 .breakdown-hint {
+  grid-area: hint;
   margin: 5px 0 0;
   font-size: 11.5px;
   color: var(--ink-muted);
+}
+
+@media (max-width: 820px) {
+  .breakdown {
+    grid-template-columns: 1fr;
+  }
 }
 
 .offsets {

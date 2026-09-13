@@ -76,32 +76,64 @@ function whenLabel(iso) {
 
 <template>
   <section class="home">
-    <header class="greeting">
-      <h1>
-        안녕하세요, <span class="hi">{{ authState.user?.nickname ?? '학습자' }}</span> 님
-      </h1>
-      <p class="muted">전문가가 검수한 기준 마스크와 비교하며 훈련합니다.</p>
-    </header>
-
     <p v-if="loading" class="skeleton-block" aria-live="polite">학습 현황을 불러오는 중…</p>
     <p v-else-if="error" class="error">{{ error }}</p>
 
     <template v-else-if="data">
-      <!-- 1. 다음에 할 일 — 화면에서 가장 크다 -->
-      <article v-if="data.next_up" class="next-card" :data-reason="data.next_up.reason">
-        <div class="next-body">
-          <p class="next-kicker">{{ data.has_any_activity ? '이어서 학습하기' : '여기서 시작하세요' }}</p>
-          <h2>{{ data.next_up.case_id }}</h2>
-          <p class="next-meta">
-            {{ bodyPartLabel(data.next_up.body_part) }} · {{ diseaseLabel(data.next_up.disease) }}
+      <!-- 1. hero — 시안 04. **인사말이 화면의 머리말이고**, 오른쪽은 그림이다.
+           (예전에는 케이스 카드가 이 자리에 있어서 첫인상이 "목록"이었다) -->
+      <article class="hero">
+        <div class="hero-body">
+          <h1>안녕하세요, <span class="hi">{{ authState.user?.nickname ?? '학습자' }}</span> 님</h1>
+          <!-- **처음 온 사람과 이어서 하는 사람에게 다른 말을 한다.**
+               시안에는 인사말만 있지만, 이 한 줄이 "지금 뭘 해야 하나"에 답한다. -->
+          <p class="hero-sub">
+            <strong>{{ data.has_any_activity ? '이어서 학습하기' : '여기서 시작하세요' }}</strong>
+            <span class="dot">·</span>
+            전문가가 검수한 기준과 비교하며 판독을 연습합니다.
           </p>
-          <p class="next-reason">{{ nextReason }}</p>
-          <RouterLink class="btn primary lg" :to="`/cases/${data.next_up.case_id}`">
-            {{ nextLabel }} →
+
+          <RouterLink
+            v-if="data.next_up"
+            class="hero-cta"
+            :to="`/cases/${data.next_up.case_id}`"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true">
+              <path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H11v16H5.5A1.5 1.5 0 0 1 4 18.5z" />
+              <path d="M20 5.5A1.5 1.5 0 0 0 18.5 4H13v16h5.5a1.5 1.5 0 0 0 1.5-1.5z" />
+            </svg>
+            {{ nextLabel }}
+            <span class="cta-caret" aria-hidden="true">›</span>
           </RouterLink>
+
+          <!-- **이유 없는 추천은 신뢰받지 못한다.** 시안에는 없지만 남긴다. -->
+          <p v-if="data.next_up" class="hero-next">
+            다음 케이스 <strong>{{ data.next_up.case_id }}</strong>
+            <span class="dot">·</span> {{ nextReason }}
+          </p>
         </div>
-        <div class="next-thumb">
-          <img :src="data.next_up.thumbnail_url" alt="" />
+
+        <!-- 시안의 일러스트 자리. **실제 환자 영상을 장식으로 쓰지 않는다** —
+             책·돋보기·판독지 모티프를 직접 그린다. -->
+        <div class="hero-art" aria-hidden="true">
+          <svg viewBox="0 0 240 170" fill="none">
+            <ellipse cx="126" cy="150" rx="96" ry="12" fill="var(--brand-50)" />
+            <rect x="96" y="20" width="118" height="86" rx="8" fill="#fff" stroke="var(--brand-300)" stroke-width="2" />
+            <rect x="108" y="34" width="40" height="5" rx="2.5" fill="var(--brand-300)" />
+            <rect x="108" y="48" width="92" height="4" rx="2" fill="var(--gray-200)" />
+            <rect x="108" y="60" width="76" height="4" rx="2" fill="var(--gray-200)" />
+            <rect x="108" y="72" width="86" height="4" rx="2" fill="var(--gray-200)" />
+            <rect x="108" y="84" width="54" height="4" rx="2" fill="var(--gray-200)" />
+            <path d="M171 26c5-6 15-2 15 6 0 7-9 13-15 18-6-5-15-11-15-18 0-8 10-12 15-6z" fill="var(--brand-400)" opacity="0.9" />
+            <rect x="26" y="92" width="104" height="16" rx="5" fill="var(--brand-500)" />
+            <rect x="20" y="76" width="104" height="16" rx="5" fill="var(--brand-400)" />
+            <rect x="30" y="60" width="104" height="16" rx="5" fill="var(--brand-300)" />
+            <circle cx="168" cy="112" r="26" fill="#fff" fill-opacity="0.6" stroke="var(--navy-700)" stroke-width="5" />
+            <path d="M188 132l18 18" stroke="var(--navy-700)" stroke-width="7" stroke-linecap="round" />
+            <circle cx="46" cy="34" r="5" fill="var(--brand-300)" />
+            <circle cx="66" cy="20" r="3" fill="var(--brand-400)" />
+            <circle cx="212" cy="128" r="4" fill="var(--brand-300)" />
+          </svg>
         </div>
       </article>
 
@@ -152,73 +184,76 @@ function whenLabel(iso) {
         </RouterLink>
       </nav>
 
-      <!-- 3. 진행 상황 -->
+      <!-- 3. 진행 상황 — 시안 05 의 지표 카드 -->
       <div class="metric-row">
         <article class="card metric">
-          <p class="metric-label">
-            <span class="chip sm" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                <path d="M5 19V11" /><path d="M12 19V5" /><path d="M19 19v-6" />
-              </svg>
-            </span>
-            학습완료
-          </p>
-          <p class="metric-big">
-            <span class="tnum">{{ totals.matched }}</span
-            ><span class="metric-of">/ {{ totals.total_cases }}</span>
-          </p>
-          <ScoreBar :value="completionRate" tone="match" />
-          <p class="metric-sub">전체의 {{ completionRate }}%</p>
+        <span class="chip" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <path d="M5 19V11" /><path d="M12 19V5" /><path d="M19 19v-6" />
+          </svg>
+        </span>
+        <p class="metric-label">
+          학습완료
+          <span class="metric-big">
+            <span class="tnum">{{ totals.matched }}</span><span class="metric-of">/ {{ totals.total_cases }}</span>
+          </span>
+        </p>
+        <ScoreBar class="metric-bar" :value="completionRate" tone="match" />
+        <p class="metric-sub">전체의 {{ completionRate }}%</p>
         </article>
 
         <article class="card metric">
-          <p class="metric-label">
-            <span class="chip sm" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                <path d="M8 4h8a2 2 0 0 1 2 2v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V6a2 2 0 0 1 2-2z" />
-                <path d="M9 3h6v3H9z" />
-              </svg>
-            </span>
-            복습 필요
-          </p>
-          <p class="metric-big" :class="{ warn: totals.needs_review > 0 }">
+        <span class="chip" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <path d="M8 4h8a2 2 0 0 1 2 2v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V6a2 2 0 0 1 2-2z" /><path d="M9 3h6v3H9z" />
+          </svg>
+        </span>
+        <p class="metric-label">
+          복습 필요
+          <span class="metric-big" :class="{ warn: totals.needs_review > 0 }">
             <span class="tnum">{{ totals.needs_review }}</span>
-          </p>
-          <RouterLink v-if="totals.needs_review" class="metric-link" to="/wrong-notes">
-            복습노트 열기 →
-          </RouterLink>
-          <p v-else class="metric-sub">복습할 케이스가 없습니다</p>
+          </span>
+        </p>
+        <RouterLink v-if="totals.needs_review" class="metric-link" to="/wrong-notes">
+          복습노트 열기 →
+        </RouterLink>
+        <p v-else class="metric-sub">복습할 케이스가 없습니다</p>
         </article>
 
         <article class="card metric">
-          <p class="metric-label">
-            <span class="chip sm" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                <circle cx="12" cy="12" r="8" /><circle cx="12" cy="12" r="3" />
-              </svg>
-            </span>
-            최고 일치도
-          </p>
-          <p v-if="data.best_dice != null" class="metric-big">
-            <span class="tnum">{{ percent(data.best_dice) }}</span
-            ><span class="metric-of">%</span>
-          </p>
+        <span class="chip" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <circle cx="12" cy="12" r="8" /><circle cx="12" cy="12" r="3" />
+          </svg>
+        </span>
+        <p class="metric-label">
+          최고 일치도
           <!-- **0 으로 채우지 않는다.** 0점과 미시도는 다른 상태다 -->
-          <p v-else class="metric-empty">아직 기록 없음</p>
-          <p class="metric-sub">한 케이스에서 낸 최고 기록</p>
+          <span v-if="data.best_dice != null" class="metric-big">
+            <span class="tnum">{{ percent(data.best_dice) }}</span><span class="metric-of">%</span>
+          </span>
+          <span v-else class="metric-empty">아직 기록 없음</span>
+        </p>
+        <ScoreBar
+          v-if="data.best_dice != null"
+          class="metric-bar"
+          :value="percent(data.best_dice)"
+          tone="match"
+        />
+        <p class="metric-sub">한 케이스에서 낸 최고 기록</p>
         </article>
 
         <article class="card metric">
-          <p class="metric-label">
-            <span class="chip sm" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                <path d="M12 7v5l3 2" /><circle cx="12" cy="12" r="8" />
-              </svg>
-            </span>
-            총 시도
-          </p>
-          <p class="metric-big"><span class="tnum">{{ totals.total_attempts }}</span></p>
-          <p class="metric-sub">케이스 {{ totals.attempted }}개에 걸쳐</p>
+        <span class="chip" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <path d="M12 7v5l3 2" /><circle cx="12" cy="12" r="8" />
+          </svg>
+        </span>
+        <p class="metric-label">
+          총 시도
+          <span class="metric-big"><span class="tnum">{{ totals.total_attempts }}</span></span>
+        </p>
+        <p class="metric-sub">케이스 {{ totals.attempted }}개에 걸쳐</p>
         </article>
       </div>
 
@@ -311,66 +346,86 @@ function whenLabel(iso) {
   gap: var(--sp-6);
 }
 
-.greeting h1 {
-  margin: 0 0 var(--sp-2);
-}
-.hi {
-  color: var(--accent);
-}
-
-/* --- 다음에 할 일 -------------------------------------------------------
-   시안(04 메인 화면)의 hero: 흰 카드 위에 네이비 제목 + teal 버튼, 오른쪽에 그림.
-   시안은 일러스트를 두지만 우리는 **실제 케이스 영상**을 둔다 — 학습자가 무엇을
-   풀게 되는지 미리 보는 편이 장식보다 낫다. */
-.next-card {
+/* --- hero (시안 04) — 인사말이 머리말이고 오른쪽은 그림이다 --- */
+.hero {
   display: grid;
-  grid-template-columns: 1fr 240px;
-  gap: var(--sp-8);
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: var(--sp-6);
+  align-items: center;
+  padding: var(--sp-10) var(--sp-8);
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--r-lg);
-  padding: var(--sp-8);
-  align-items: center;
   box-shadow: var(--shadow-sm);
 }
-.next-thumb {
-  aspect-ratio: 1;
-  border-radius: var(--r-md);
-  overflow: hidden;
-  background: var(--viewer-bg);
-}
-.next-thumb img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-.next-kicker {
-  margin: 0 0 var(--sp-2);
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  color: var(--brand-600);
-}
-.next-body h2 {
+
+.hero h1 {
   margin: 0;
-  font-size: 32px;
-  letter-spacing: -0.02em;
+  font-size: 34px;
+  letter-spacing: -0.035em;
   color: var(--navy-700);
 }
-.next-meta {
-  margin: var(--sp-1) 0 0;
-  color: var(--ink-secondary);
-  font-size: 14px;
+.hi {
+  color: var(--brand-600);
 }
-.next-reason {
+
+.hero-sub {
   margin: var(--sp-3) 0 var(--sp-6);
+  color: var(--ink-secondary);
   font-size: 14.5px;
+}
+.hero-sub strong {
+  color: var(--brand-700);
+}
+
+/* 시안의 teal 알약 버튼 */
+.hero-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: 13px 22px;
+  border-radius: var(--r-md);
+  background: var(--brand-500);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  text-decoration: none;
+  transition: background var(--transition);
+}
+.hero-cta:hover {
+  background: var(--brand-600);
+  color: #fff;
+}
+.hero-cta svg {
+  width: 19px;
+  height: 19px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.cta-caret {
+  margin-left: var(--sp-4);
+  font-size: 19px;
+  line-height: 1;
+  opacity: 0.85;
+}
+
+.hero-next {
+  margin: var(--sp-4) 0 0;
+  color: var(--ink-muted);
+  font-size: 12.5px;
+}
+.hero-next strong {
   color: var(--ink-secondary);
 }
-.btn.lg {
-  padding: 12px 22px;
-  font-size: 15px;
+
+.hero-art {
+  justify-self: center;
+}
+.hero-art svg {
+  width: 100%;
+  max-width: 280px;
+  height: auto;
+  display: block;
 }
 
 /* --- 바로가기 (시안 04 의 3카드) ---------------------------------------- */
@@ -454,21 +509,49 @@ function whenLabel(iso) {
   flex-direction: column;
   gap: var(--sp-2);
 }
-.metric-label {
-  display: flex;
+/* 시안 05 의 지표 카드: **둥근 칩이 왼쪽**, 그 옆에 라벨과 큰 숫자가 세로로 놓이고,
+   진행바와 캡션이 카드 전체 폭으로 깔린다. */
+.metric {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  grid-template-areas:
+    'chip head'
+    'bar  bar'
+    'sub  sub';
+  column-gap: var(--sp-3);
+  row-gap: var(--sp-2);
   align-items: center;
-  gap: var(--sp-2);
+  padding: var(--sp-5);
+}
+.metric > .chip {
+  grid-area: chip;
+}
+.metric-label {
+  grid-area: head;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
   margin: 0;
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 600;
   color: var(--ink-muted);
 }
 .metric-big {
   margin: 0;
-  font-size: 34px;
-  font-weight: 700;
-  line-height: 1.1;
+  font-size: 30px;
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: -0.03em;
   color: var(--navy-700);
+}
+.metric > :global(.bar),
+.metric .metric-bar {
+  grid-area: bar;
+}
+.metric-sub,
+.metric-link {
+  grid-area: sub;
 }
 .metric-big.warn {
   color: var(--mark-partial);
@@ -480,11 +563,9 @@ function whenLabel(iso) {
   margin-left: 4px;
 }
 .metric-empty {
-  margin: 0;
   font-size: 17px;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--ink-muted);
-  padding: 6px 0;
 }
 .metric-sub,
 .metric-link {
@@ -697,13 +778,16 @@ function whenLabel(iso) {
 }
 
 @media (max-width: 720px) {
-  .next-card {
-    /* 좁은 화면에서는 영상이 먼저 오고 글이 아래로. 그림 칸이 눌려 찌그러지지 않게 한다 */
+  .hero {
+    /* 좁은 화면에서는 그림을 빼고 글과 버튼에 폭을 준다 (그림은 장식이다) */
     grid-template-columns: 1fr;
+    padding: var(--sp-6);
   }
-  .next-thumb {
-    order: -1;
-    max-width: 200px;
+  .hero h1 {
+    font-size: 26px;
+  }
+  .hero-art {
+    display: none;
   }
 }
 </style>
