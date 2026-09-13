@@ -49,7 +49,7 @@
   - 실제 케이스 등록: `python -m scripts.import_cases <manifest>` — 영상·기준마스크·해설을 함께 등록.
     실제 데이터 파일은 커밋하지 않는다 (`backend/data/`, `app/static/cases/` gitignore).
   - 테스트: 백엔드 pytest **1066개** (`cd backend && pytest`) — **SQLite·PostgreSQL 양쪽에서 통과**
-    (`scripts/verify_postgres.py --with-tests`). 프론트 vitest **125개** (`cd frontend && npm test`).
+    (`scripts/verify_postgres.py --with-tests`). 프론트 vitest **135개** (`cd frontend && npm test`).
     브라우저 검증은 `tools/browser-verify/` — E2E 7종(user-flow / slice-navigation /
     consent-and-sns / screenshot-all / error-paths / case-review / admin-ux)
     + 접근성 점검(`a11y-audit`) + 좁은 화면 점검(`responsive-check`).

@@ -117,15 +117,22 @@ function goHome() {
     </div>
 
     <template v-else>
-      <div class="card">
-        <h2>내 정보</h2>
-        <dl class="rows">
-          <div><dt>닉네임</dt><dd>{{ authState.user?.nickname ?? '-' }}</dd></div>
-          <div>
-            <dt>{{ isEmailAccount ? '이메일' : '로그인 방식' }}</dt>
-            <dd>{{ authState.user?.email ?? '간편 로그인 (개발용 예시)' }}</dd>
-          </div>
-        </dl>
+      <!-- 시안 11 의 프로필 카드. **시안의 학교·학과·직군은 넣지 않는다** —
+           우리는 가입할 때 그런 정보를 받지 않는다. 없는 칸을 만들지 않는다. -->
+      <div class="card profile">
+        <span class="profile-avatar" aria-hidden="true">
+          {{ (authState.user?.nickname ?? '?').trim().charAt(0) || '?' }}
+        </span>
+        <div class="profile-info">
+          <strong class="profile-name">{{ authState.user?.nickname ?? '사용자' }}</strong>
+          <p class="profile-meta">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+              <path d="M4 6h16v12H4z" /><path d="M4 7l8 6 8-6" />
+            </svg>
+            {{ authState.user?.email ?? '간편 로그인 (개발용 예시)' }}
+          </p>
+          <span class="profile-chip">{{ isEmailAccount ? '이메일 계정' : '간편 로그인 계정' }}</span>
+        </div>
       </div>
 
       <!-- 비밀번호 변경 — 이메일 계정만 -->
@@ -201,6 +208,59 @@ function goHome() {
 </template>
 
 <style scoped>
+/* --- 프로필 카드 (시안 11) --- */
+.profile {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-5);
+}
+.profile-avatar {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 64px;
+  height: 64px;
+  border-radius: var(--r-full);
+  background: var(--brand-50);
+  color: var(--brand-700);
+  font-size: 26px;
+  font-weight: 700;
+}
+.profile-info {
+  min-width: 0;
+}
+.profile-name {
+  display: block;
+  font-size: 18px;
+  color: var(--navy-700);
+}
+.profile-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0 var(--sp-2);
+  color: var(--ink-muted);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.profile-meta svg {
+  width: 15px;
+  height: 15px;
+  flex: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.profile-chip {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: var(--r-full);
+  background: var(--gray-50);
+  border: 1px solid var(--line);
+  color: var(--ink-secondary);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
 .page-narrow {
   max-width: 620px;
   margin: 0 auto;

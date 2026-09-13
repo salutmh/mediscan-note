@@ -308,6 +308,18 @@ const PROVIDERS = [
         </form>
 
         <form v-if="mode !== 'reset'" @submit.prevent="mode === 'login' ? onLogin() : onSignup()">
+          <!-- 시안 02 의 단계 표시기. **우리 가입은 한 화면에서 끝난다** —
+               시안처럼 두 페이지로 쪼개지 않고, 같은 화면 안에서 어디까지 왔는지만 보여준다.
+               (동의는 법적으로 반드시 받아야 해서 계정 정보와 떼어 놓지 않는다.) -->
+          <ol v-if="mode === 'signup'" class="signup-steps" aria-label="가입 단계">
+            <li :class="{ done: email && password && nickname }">
+              <span class="step-num">1</span> 계정 정보
+            </li>
+            <li :class="{ done: allRequiredChecked }">
+              <span class="step-num">2</span> 필수 동의
+            </li>
+          </ol>
+
           <label class="field">
             <span>이메일</span>
             <input v-model.trim="email" type="email" required autocomplete="email" placeholder="you@example.com" />
@@ -355,6 +367,49 @@ const PROVIDERS = [
 </template>
 
 <style scoped>
+/* --- 가입 단계 표시 (시안 02) --- */
+.signup-steps {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  list-style: none;
+  margin: 0 0 var(--sp-4);
+  padding: 0;
+}
+.signup-steps li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  padding: 7px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-full);
+  color: var(--ink-muted);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+/* **색만으로 끝난 단계를 표시하지 않는다** — 테두리·굵기도 함께 바뀐다 */
+.signup-steps li.done {
+  border-color: var(--brand-500);
+  background: var(--brand-50);
+  color: var(--brand-700);
+}
+.step-num {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  flex: none;
+  border-radius: var(--r-full);
+  background: var(--gray-200);
+  color: var(--ink-secondary);
+  font-size: 11.5px;
+}
+.signup-steps li.done .step-num {
+  background: var(--brand-500);
+  color: #fff;
+}
+
 .wrap {
   /* 시안 01: 왼쪽 브랜드 면 + 오른쪽 폼. 폼이 길어지는 화면(동의·재설정)도
      오른쪽 열에서만 늘어나므로 좌우가 어긋나지 않는다. */

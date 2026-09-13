@@ -480,6 +480,175 @@ function onKeydown(event) {
   else undo()
 }
 
+/* ---------------------------------------------------------------------
+   키보드로 ROI 입력하기
+   ---------------------------------------------------------------------
+   **포인터로 자유곡선을 그리는 입력은 키보드로 대체되지 않는다.**
+   지금까지 이 컴포넌트는 "여기에 무엇이 있는지 읽을 수 있다"까지만 했고,
+   실제로 칠할 방법은 마우스뿐이었다. 확대·이동·밝기 도구가 늘면서 그 간극이
+   더 벌어져서, 키보드만으로도 표시할 수 있는 길을 만든다.
+
+   모델은 **펜을 내렸다 올리는 것**이다 (플로터처럼):
+     화살표      커서 이동 (Shift 를 누르면 크게)
+     Space      펜 내리기/올리기 — 내린 채로 움직이면 선이 그려진다
+     Enter      박스 도구에서 모서리 찍기 (두 번 찍으면 사각형이 된다)
+     [ ]        굵기
+     Esc        펜 올리기 / 그리던 박스 취소
+   좌표는 포인터 입력과 **같은 원본 픽셀 좌표계**를 쓰므로 채점도 동일하다.
+--------------------------------------------------------------------- */
+const keyboardMode = ref(false)
+const penDown = ref(false)
+const cursor = ref({ x: 0, y: 0 })
+/** 스크린리더에 읽어 줄 마지막 동작 (aria-live) */
+const keyboardStatus = ref('')
+
+/** 커서를 화면에 그릴 위치 (원본 좌표 -> 퍼센트) */
+const cursorStyle = computed(() => ({
+  left: `${(cursor.value.x / props.width) * 100}%`,
+  top: `${(cursor.value.y / props.height) * 100}%`,
+  width: `${(brushSize.value / props.width) * 100}%`,
+  height: `${(brushSize.value / props.height) * 100}%`,
+}))
+
+function centerCursor() {
+  cursor.value = { x: Math.round(props.width / 2), y: Math.round(props.height / 2) }
+}
+
+function announce(text) {
+  keyboardStatus.value = text
+}
+
+const ARROWS = {
+  ArrowUp: [0, -1],
+  ArrowDown: [0, 1],
+  ArrowLeft: [-1, 0],
+  ArrowRight: [1, 0],
+}
+
+function moveCursor(dx, dy, big) {
+  // 한 칸은 브러시 반지름 정도가 자연스럽다 — 너무 잘면 끝까지 가는 데 오래 걸린다
+  const step = Math.max(2, Math.round(brushSize.value / 2)) * (big ? 4 : 1)
+  const from = { ...cursor.value }
+  cursor.value = {
+    x: Math.min(props.width, Math.max(0, from.x + dx * step)),
+    y: Math.min(props.height, Math.max(0, from.y + dy * step)),
+  }
+  if (penDown.value && (tool.value === 'brush' || tool.value === 'eraser')) {
+    drawSegment(from, cursor.value)
+    if (tool.value === 'brush') points.value.push([cursor.value.x, cursor.value.y])
+    else erasePointsNear(cursor.value)
+    notify()
+  }
+  announce(`커서 ${cursor.value.x}, ${cursor.value.y}${penDown.value ? ' (펜 내림)' : ''}`)
+}
+
+function togglePen() {
+  if (tool.value === 'box') return
+  if (penDown.value) {
+    penDown.value = false
+    pushHistory() // 획 단위로 되돌릴 수 있게 (포인터 입력과 같은 규칙)
+    announce('펜을 올렸습니다')
+    return
+  }
+  penDown.value = true
+  drawDot(cursor.value)
+  if (tool.value === 'brush') {
+    strokeCount.value += 1
+    points.value.push([cursor.value.x, cursor.value.y])
+  } else {
+    erasePointsNear(cursor.value)
+  }
+  notify()
+  announce(tool.value === 'eraser' ? '지우개를 내렸습니다' : '펜을 내렸습니다. 화살표로 움직이면 그려집니다')
+}
+
+function placeBoxCorner() {
+  if (tool.value !== 'box') return
+  if (!boxStart.value) {
+    boxStart.value = { ...cursor.value }
+    boxNow.value = { ...cursor.value }
+    announce('첫 모서리를 찍었습니다. 반대쪽으로 옮긴 뒤 Enter 를 누르세요')
+    return
+  }
+  const drew = fillRect(boxStart.value, cursor.value)
+  boxStart.value = null
+  boxNow.value = null
+  if (drew) {
+    notify()
+    pushHistory()
+    announce('사각형을 표시했습니다')
+  } else {
+    announce('너무 작아 표시하지 않았습니다')
+  }
+}
+
+function onCanvasKeydown(event) {
+  if (props.disabled) return
+  // Ctrl+Z 등 조합키는 전역 처리에 맡긴다
+  if (event.ctrlKey || event.metaKey || event.altKey) return
+
+  const arrow = ARROWS[event.key]
+  if (arrow) {
+    event.preventDefault()
+    if (!keyboardMode.value) {
+      keyboardMode.value = true
+      centerCursor()
+      announce('키보드 입력을 시작했습니다. Space 로 펜을 내리세요')
+      return
+    }
+    moveCursor(arrow[0], arrow[1], event.shiftKey)
+    return
+  }
+
+  if (event.key === ' ' || event.key === 'Spacebar') {
+    event.preventDefault()
+    if (!keyboardMode.value) {
+      keyboardMode.value = true
+      centerCursor()
+    }
+    togglePen()
+    return
+  }
+
+  if (event.key === 'Enter') {
+    event.preventDefault()
+    if (!keyboardMode.value) {
+      keyboardMode.value = true
+      centerCursor()
+    }
+    placeBoxCorner()
+    return
+  }
+
+  if (event.key === '[' || event.key === ']') {
+    event.preventDefault()
+    const next = brushSize.value + (event.key === ']' ? 4 : -4)
+    brushSize.value = Math.min(60, Math.max(4, next))
+    announce(`굵기 ${brushSize.value}`)
+    return
+  }
+
+  if (event.key === 'Escape') {
+    if (penDown.value) {
+      penDown.value = false
+      pushHistory()
+      announce('펜을 올렸습니다')
+    } else if (boxStart.value) {
+      boxStart.value = null
+      boxNow.value = null
+      announce('그리던 사각형을 취소했습니다')
+    }
+  }
+}
+
+/** 포커스를 잃으면 펜은 반드시 올린다 — 내려둔 채로 두면 다음 조작이 이어 그려진다 */
+function onCanvasBlur() {
+  if (penDown.value) {
+    penDown.value = false
+    pushHistory()
+  }
+}
+
 onMounted(() => window.addEventListener('keydown', onKeydown))
 onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 
@@ -552,14 +721,26 @@ defineExpose({
         <canvas
           ref="viewCanvas"
           class="overlay"
-          :class="[tool, { locked: disabled, panning: panMode }]"
+          :class="[tool, { locked: disabled, panning: panMode, 'pen-down': penDown }]"
           role="img"
+          :tabindex="disabled ? -1 : 0"
           :aria-label="canvasLabel"
           @pointerdown="onPointerDown"
           @pointermove="onPointerMove"
           @pointerup="onPointerUp"
           @pointercancel="onPointerUp"
+          @keydown="onCanvasKeydown"
+          @blur="onCanvasBlur"
         ></canvas>
+
+        <!-- 키보드 커서. 지금 어디를 칠하게 되는지 보여준다 -->
+        <div
+          v-if="keyboardMode && !disabled"
+          class="key-cursor"
+          :class="{ down: penDown }"
+          :style="cursorStyle"
+          aria-hidden="true"
+        ></div>
 
         <!-- 박스 도구 끌기 미리보기 (시안의 청록 점선) -->
         <div v-if="boxPreview" class="box-preview" :style="boxPreview"></div>
@@ -696,7 +877,22 @@ defineExpose({
         <span class="spacer"></span>
         <span class="dim tnum">좌표 {{ points.length }} · 스트로크 {{ strokeCount }}</span>
       </div>
+
     </div>
+
+    <!-- 키보드로도 칠할 수 있다는 것을 **화면에 적어 둔다** — 적지 않으면 없는 것과 같다.
+         다크 뷰어 안이 아니라 **밝은 배경 위**에 둔다 (안에 두면 글자 대비가 떨어진다). -->
+    <p v-if="!disabled" class="keyboard-help muted">
+      키보드로도 표시할 수 있습니다 —
+      캔버스를 <kbd>Tab</kbd> 으로 선택한 뒤
+      <kbd>←↑↓→</kbd> 이동,
+      <kbd>Space</kbd> 펜 내리기/올리기<template v-if="tools.includes('box')">,
+      <kbd>Enter</kbd> 박스 모서리</template>,
+      <kbd>[</kbd> <kbd>]</kbd> 굵기.
+    </p>
+
+    <!-- 화면을 보지 않는 사람에게 지금 무슨 일이 있었는지 알린다 -->
+    <p class="sr-only" role="status" aria-live="polite">{{ keyboardStatus }}</p>
 
     <!-- **서명 URL 을 화면에 그대로 뿌리지 않는다.** 사용자가 할 수 있는 일도 없고,
          서명·만료 파라미터까지 노출된다. 개발자용 정보는 콘솔로 보낸다. -->
@@ -822,6 +1018,43 @@ defineExpose({
 }
 .overlay.panning:active {
   cursor: grabbing;
+}
+
+/* 키보드 커서 — 지금 어디를 칠하게 되는지. 펜을 내리면 채워진다. */
+.key-cursor {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  min-width: 10px;
+  min-height: 10px;
+  border-radius: var(--r-full);
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 2px rgba(13, 17, 23, 0.75);
+  pointer-events: none;
+}
+.key-cursor.down {
+  background: rgba(47, 98, 232, 0.45);
+}
+
+.overlay:focus-visible {
+  outline: 2px solid var(--brand-400);
+  outline-offset: -2px;
+}
+
+.keyboard-help {
+  margin: var(--sp-2) 0 0;
+  font-size: 12px;
+  line-height: 1.8;
+}
+.keyboard-help kbd {
+  display: inline-block;
+  padding: 1px 5px;
+  border: 1px solid var(--line-strong);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  background: var(--surface);
+  font-family: inherit;
+  font-size: 11px;
+  color: var(--ink-secondary);
 }
 
 /* 박스 도구 끌기 미리보기 — 시안의 청록 점선 */

@@ -371,3 +371,125 @@ describe('도구 레일 접기', () => {
     expect(wrapper.find('.stage').attributes('style')).toContain('scale(1.25)')
   })
 })
+
+/* ====================================================================
+   키보드로 ROI 입력하기
+   ====================================================================
+   포인터로 자유곡선을 그리는 입력은 키보드로 저절로 대체되지 않는다.
+   **좌표계는 포인터와 같아야 한다** — 다르면 같은 곳을 칠해도 채점이 달라진다.
+==================================================================== */
+describe('키보드 입력', () => {
+  const key = (wrapper, k, opts = {}) =>
+    wrapper.find('canvas').trigger('keydown', { key: k, ...opts })
+
+  it('처음 화살표를 누르면 커서가 한가운데에 생긴다', async () => {
+    const wrapper = mountCanvas() // 64x64
+    expect(wrapper.find('.key-cursor').exists()).toBe(false)
+
+    await key(wrapper, 'ArrowRight')
+
+    expect(wrapper.find('.key-cursor').exists()).toBe(true)
+    // 첫 입력은 커서를 띄우기만 하고 움직이지 않는다 (32,32 = 한가운데)
+    expect(wrapper.find('.key-cursor').attributes('style')).toContain('left: 50%')
+  })
+
+  it('Space 로 펜을 내리면 그 자리가 칠해진다', async () => {
+    const wrapper = mountCanvas()
+    await key(wrapper, 'ArrowRight') // 커서 띄우기
+    await key(wrapper, ' ')
+
+    const [event] = wrapper.emitted('change').slice(-1)
+    expect(event[0].hasInput).toBe(true)
+    expect(event[0].strokeCount).toBe(1)
+    // 포인터와 **같은 원본 픽셀 좌표계**여야 한다
+    expect(wrapper.vm.getPoints()[0]).toEqual([32, 32])
+  })
+
+  it('펜을 내린 채 움직이면 선이 이어지고, 올리면 한 획으로 되돌릴 수 있다', async () => {
+    const wrapper = mountCanvas()
+    await key(wrapper, 'ArrowRight')
+    await key(wrapper, ' ') // 펜 내리기
+    await key(wrapper, 'ArrowRight')
+    await key(wrapper, 'ArrowRight')
+    expect(wrapper.vm.getPoints().length).toBe(3)
+
+    await key(wrapper, ' ') // 펜 올리기 = 획 확정
+    await flushPromises()
+    expect(undoButton(wrapper).attributes('disabled')).toBeUndefined()
+  })
+
+  it('펜을 올린 채 움직이면 그려지지 않는다', async () => {
+    const wrapper = mountCanvas()
+    await key(wrapper, 'ArrowRight')
+    await key(wrapper, 'ArrowRight')
+    await key(wrapper, 'ArrowDown')
+
+    const events = wrapper.emitted('change') ?? []
+    expect(events[events.length - 1][0].hasInput).toBe(false)
+  })
+
+  it('Shift 를 누르면 더 크게 움직인다', async () => {
+    const wrapper = mountCanvas()
+    await key(wrapper, 'ArrowRight') // 커서 띄우기 (32,32)
+    await key(wrapper, 'ArrowRight') // 한 칸: 굵기 24 -> 12px
+    const one = wrapper.vm.getPoints()
+    await key(wrapper, ' ')
+    const afterSmall = wrapper.find('.key-cursor').attributes('style')
+
+    const wrapper2 = mountCanvas()
+    await key(wrapper2, 'ArrowRight')
+    await key(wrapper2, 'ArrowRight', { shiftKey: true })
+    const afterBig = wrapper2.find('.key-cursor').attributes('style')
+
+    expect(afterSmall).not.toEqual(afterBig)
+    expect(one).toBeDefined()
+  })
+
+  it('박스 도구는 Enter 두 번으로 사각형이 된다', async () => {
+    const wrapper = mountCanvas({ tools: ['brush', 'box', 'eraser'] })
+    await wrapper.findAll('.tools button')[1].trigger('click') // 박스
+
+    await key(wrapper, 'Enter') // 첫 모서리 (커서 생성 + 찍기)
+    await key(wrapper, 'ArrowRight', { shiftKey: true })
+    await key(wrapper, 'ArrowDown', { shiftKey: true })
+    await key(wrapper, 'Enter') // 반대 모서리
+
+    const [event] = wrapper.emitted('change').slice(-1)
+    expect(event[0].hasInput).toBe(true)
+    expect(event[0].pointCount).toBe(4) // 네 꼭짓점
+  })
+
+  it('Esc 로 그리던 것을 멈춘다', async () => {
+    const wrapper = mountCanvas()
+    await key(wrapper, 'ArrowRight')
+    await key(wrapper, ' ')
+    await key(wrapper, 'Escape')
+    await key(wrapper, 'ArrowRight')
+
+    // 펜이 올라갔으므로 마지막 이동은 그려지지 않는다 (점은 Space 때 찍힌 1개뿐)
+    expect(wrapper.vm.getPoints().length).toBe(1)
+  })
+
+  it('[ ] 로 굵기를 바꾼다', async () => {
+    const wrapper = mountCanvas()
+    await key(wrapper, ']')
+    expect(wrapper.text()).toContain('28')
+    await key(wrapper, '[')
+    await key(wrapper, '[')
+    expect(wrapper.text()).toContain('20')
+  })
+
+  it('입력이 잠겨 있으면 키보드로도 칠할 수 없다', async () => {
+    const wrapper = mountCanvas({ disabled: true })
+    await key(wrapper, 'ArrowRight')
+    await key(wrapper, ' ')
+
+    expect(wrapper.find('.key-cursor').exists()).toBe(false)
+    expect(wrapper.vm.getPoints().length).toBe(0)
+  })
+
+  it('키보드로 칠할 수 있다는 것을 화면에 적어 둔다', () => {
+    // 적지 않으면 없는 것과 같다 (되돌리기 안내와 같은 이유)
+    expect(mountCanvas().text()).toContain('키보드로도 표시할 수 있습니다')
+  })
+})

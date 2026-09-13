@@ -13,7 +13,7 @@
  */
 import { computed, onMounted, ref } from 'vue'
 import { listCases, listWrongNotes } from '../api/endpoints'
-import { bodyPartLabel } from '../labels'
+import { bodyPartLabel, gradeLabel } from '../labels'
 
 const cases = ref([])
 const wrongNotes = ref([])
@@ -147,11 +147,11 @@ onMounted(async () => {
       <!-- 복습노트 요약 -->
       <section class="tiles">
         <div class="card tile">
-          <span class="tile-label">복습필요 · 부분 일치</span>
+          <span class="tile-label">복습필요 · {{ gradeLabel('partial_match') }}</span>
           <strong class="tile-value partial_match tnum">{{ wrongCounts.partial_match }}</strong>
         </div>
         <div class="card tile">
-          <span class="tile-label">복습필요 · 불일치</span>
+          <span class="tile-label">복습필요 · {{ gradeLabel('mismatch') }}</span>
           <strong class="tile-value mismatch tnum">{{ wrongCounts.mismatch }}</strong>
         </div>
         <RouterLink to="/wrong-notes" class="card tile link">

@@ -337,11 +337,11 @@ console.log('   기준 마스크:', referenceMaskUrl)
 
 console.log('4) 복습노트에 쌓였는지')
 await goto('/wrong-notes', 1800)
-console.log('   ', await evaluate(`[...document.querySelectorAll('.row .case-id')].map(e=>e.textContent.trim()).join(', ') || '(빈 목록)'`))
+console.log('   ', await evaluate(`[...document.querySelectorAll('.note-card .case-id')].map(e=>e.textContent.trim()).join(', ') || '(빈 목록)'`))
 await shoot('f05-review-notes')
 
 console.log('5) 재도전 — 기준 마스크 모양을 따라 칠해서 제출')
-await clickText('재도전')
+await clickText('다시 풀기')
 await sleep(2200)
 console.log('   현재 경로:', await evaluate('location.pathname'))
 await installResponseSpy()
@@ -361,7 +361,7 @@ console.log('   Dice ' + retry?.dice + ' (채점 임계값 0.60, E2E 기대치 '
 
 console.log('6) 복습노트에서 빠졌는지')
 await goto('/wrong-notes', 1800)
-console.log('   ', await evaluate(`[...document.querySelectorAll('.row .case-id')].map(e=>e.textContent.trim()).join(', ') || '(빈 목록)'`))
+console.log('   ', await evaluate(`[...document.querySelectorAll('.note-card .case-id')].map(e=>e.textContent.trim()).join(', ') || '(빈 목록)'`))
 await shoot('f07-review-after')
 
 console.log('7) 진행현황 반영')

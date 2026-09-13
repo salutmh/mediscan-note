@@ -84,40 +84,46 @@ onMounted(async () => {
     <RouterLink to="/cases" class="btn primary go">케이스 목록으로</RouterLink>
   </div>
 
-  <ul v-else class="list">
-    <li v-for="item in visible" :key="item.case_id" class="card row">
-      <span class="rail" :class="item.grade" aria-hidden="true"></span>
-      <img v-if="item.thumbnail_url" class="thumb" :src="item.thumbnail_url" alt="" />
-      <div class="row-info">
-        <div class="line">
-          <strong class="case-id">{{ item.case_id }}</strong>
-          <span class="badge" :class="item.grade">{{ gradeBadge(item.grade) }}</span>
-        </div>
-        <p class="muted">
+  <!-- 시안 09 의 카드 그리드. 한 줄짜리 목록보다 **영상이 먼저 보인다** —
+       "어떤 케이스였는지"는 ID 보다 그림으로 떠오른다. -->
+  <ul v-else class="grid">
+    <li v-for="item in visible" :key="item.case_id" class="card note-card">
+      <div class="thumb">
+        <img v-if="item.thumbnail_url" :src="item.thumbnail_url" :alt="`${item.case_id} 썸네일`" />
+        <span class="badge float" :class="item.grade">{{ gradeBadge(item.grade) }}</span>
+      </div>
+
+      <div class="note-body">
+        <strong class="case-id">{{ item.case_id }}</strong>
+        <p class="muted note-meta">
           {{ bodyPartLabel(item.body_part) }}
           <span class="dot">·</span>
-          {{ formatDate(item.attempted_at) }} 시도
+          {{ formatDate(item.attempted_at) }}
           <template v-if="item.attempts > 1">
             <span class="dot">·</span> {{ item.attempts }}회 시도
           </template>
         </p>
+
+        <!-- **재도전이 이 서비스의 핵심 학습 루프인데** 그 경과가 어디에도 없었다.
+             "틀린 것 목록"이 아니라 "얼마나 가까워졌는지"를 보여준다. -->
+        <div v-if="item.latest_dice != null" class="scores">
+          <div class="score">
+            <span class="score-label">최근</span>
+            <span class="tnum score-value">{{ percent(item.latest_dice) }}%</span>
+          </div>
+          <div v-if="showsBest(item)" class="score best">
+            <span class="score-label">최고</span>
+            <span class="tnum score-value">{{ percent(item.best_dice) }}%</span>
+          </div>
+        </div>
+        <p v-else class="muted note-meta">아직 점수 기록이 없습니다</p>
       </div>
 
-      <!-- **재도전이 이 서비스의 핵심 학습 루프인데** 그 경과가 어디에도 없었다.
-           "틀린 것 목록"이 아니라 "얼마나 가까워졌는지"를 보여준다. -->
-      <div v-if="item.latest_dice != null" class="scores">
-        <div class="score">
-          <span class="score-label">최근</span>
-          <span class="tnum score-value">{{ percent(item.latest_dice) }}%</span>
-        </div>
-        <div v-if="showsBest(item)" class="score best">
-          <span class="score-label">최고</span>
-          <span class="tnum score-value">{{ percent(item.best_dice) }}%</span>
-        </div>
-      </div>
-
-      <RouterLink class="btn primary" :to="{ name: 'retry', params: { caseId: item.case_id } }">
-        재도전
+      <RouterLink
+        class="btn primary wide"
+        :to="{ name: 'retry', params: { caseId: item.case_id } }"
+      >
+        다시 풀기
       </RouterLink>
     </li>
   </ul>
@@ -146,49 +152,69 @@ onMounted(async () => {
   padding: var(--sp-8) 0;
 }
 
-.list {
+/* 시안 09 의 카드 그리드 */
+.grid {
   list-style: none;
   padding: 0;
   margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: var(--sp-4);
+}
+
+.note-card {
   display: flex;
   flex-direction: column;
   gap: var(--sp-3);
-}
-
-.row {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: var(--sp-4);
-  padding: var(--sp-4) var(--sp-5);
+  padding: 0 0 var(--sp-4);
   overflow: hidden;
   transition: border-color var(--transition), box-shadow var(--transition);
 }
+.note-card:hover {
+  border-color: var(--brand-300);
+  box-shadow: var(--shadow-md);
+}
 
 .thumb {
-  flex: 0 0 auto;
-  width: 56px;
-  height: 56px;
-  border-radius: var(--r-sm);
-  object-fit: cover;
+  position: relative;
+  aspect-ratio: 1;
   background: var(--viewer-bg);
 }
-
-.row-info {
-  flex: 1 1 auto;
-  min-width: 0;
+.thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
-/* 점수는 오른쪽에 모아 세로로 읽히게 한다 — 목록에서 눈이 한 줄로 훑는다 */
+/* 상태 뱃지는 썸네일 위에. **색만으로 뜻을 전하지 않으므로** 글자를 함께 얹는다. */
+.badge.float {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+}
+
+.note-body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 0 var(--sp-4);
+  min-width: 0;
+}
+.note-meta {
+  margin: 0;
+  font-size: 12.5px;
+}
+
+/* 최근 / 최고를 나란히 — "얼마나 가까워졌는지"가 이 화면의 요점이다 */
 .scores {
   display: flex;
   gap: var(--sp-5);
-  flex: 0 0 auto;
+  margin-top: var(--sp-2);
 }
 .score {
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
   gap: 1px;
 }
 .score-label {
@@ -196,48 +222,18 @@ onMounted(async () => {
   color: var(--ink-muted);
 }
 .score-value {
-  font-size: 17px;
+  font-size: 18px;
   font-weight: 700;
+  color: var(--navy-700);
 }
 .score.best .score-value {
   color: var(--match-ink);
 }
 
-@media (max-width: 640px) {
-  .thumb {
-    display: none;
-  }
-  .scores {
-    gap: var(--sp-3);
-  }
+.note-card .btn.primary {
+  margin: 0 var(--sp-4);
 }
 
-.row:hover {
-  border-color: var(--line-strong);
-  box-shadow: var(--shadow-md);
-}
-
-/* 왼쪽 상태 색 띠 — 색만으로 뜻을 전하지 않게 뱃지 라벨과 함께 쓴다 */
-.rail {
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 3px;
-}
-
-.rail.partial_match {
-  background: var(--mark-partial);
-}
-
-.rail.mismatch {
-  background: var(--mark-mismatch);
-}
-
-.row-info {
-  flex: 1;
-  min-width: 0;
-}
 
 .line {
   display: flex;
