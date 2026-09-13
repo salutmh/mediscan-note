@@ -880,6 +880,15 @@ defineExpose({
 
     </div>
 
+    <!-- **박스 도구를 쓰면 점수가 낮게 나오는 이유를 미리 말해 준다.**
+         채점은 기준 마스크와 겹친 면적(Dice)으로 한다. 병변이 둥근데 사각형으로
+         감싸면 기준 밖이 함께 들어가서, 정확히 찾았더라도 일치도가 떨어진다.
+         이유를 모른 채 낮은 점수를 받으면 학습자는 자기 판독이 틀렸다고 오해한다. -->
+    <p v-if="tool === 'box' && !disabled" class="tool-note">
+      사각형은 빠르게 범위를 잡을 때 좋습니다. 다만 채점은 <strong>기준 영역과 겹친 면적</strong>으로
+      하므로, 병변 모양과 다를수록 일치도가 낮게 나옵니다 — 모양까지 맞추려면 펜을 쓰세요.
+    </p>
+
     <!-- 키보드로도 칠할 수 있다는 것을 **화면에 적어 둔다** — 적지 않으면 없는 것과 같다.
          다크 뷰어 안이 아니라 **밝은 배경 위**에 둔다 (안에 두면 글자 대비가 떨어진다). -->
     <p v-if="!disabled" class="keyboard-help muted">
@@ -1038,6 +1047,17 @@ defineExpose({
 .overlay:focus-visible {
   outline: 2px solid var(--brand-400);
   outline-offset: -2px;
+}
+
+.tool-note {
+  margin: var(--sp-3) 0 0;
+  padding: 9px 13px;
+  border-radius: var(--r-sm);
+  background: var(--partial-bg);
+  border: 1px solid var(--partial-line);
+  color: var(--partial-ink);
+  font-size: 12.5px;
+  line-height: 1.7;
 }
 
 .keyboard-help {

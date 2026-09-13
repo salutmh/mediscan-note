@@ -493,3 +493,17 @@ describe('키보드 입력', () => {
     expect(mountCanvas().text()).toContain('키보드로도 표시할 수 있습니다')
   })
 })
+
+describe('박스 도구의 한계를 먼저 말한다', () => {
+  it('박스를 고르면 왜 점수가 낮아질 수 있는지 알려준다', async () => {
+    // 이유를 모른 채 낮은 점수를 받으면 학습자는 **자기 판독이 틀렸다고 오해한다.**
+    // 채점은 겹친 면적으로 하므로 도형이 다르면 일치도가 떨어진다.
+    const wrapper = mountCanvas({ tools: ['brush', 'box', 'eraser'] })
+    expect(wrapper.find('.tool-note').exists()).toBe(false)
+
+    await wrapper.findAll('.tools button')[1].trigger('click')
+
+    expect(wrapper.find('.tool-note').text()).toContain('기준 영역과 겹친 면적')
+    expect(wrapper.find('.tool-note').text()).toContain('펜')
+  })
+})

@@ -15,7 +15,7 @@
 | 원격 | `https://github.com/salutmh/mediscan-note.git` (Public) |
 | 현재 모드 | **지속 자율 개발 루프** (Phase 1~8 은 최초 백로그였고 전부 완료) |
 | STATUS | `IN_PROGRESS` — 사이클마다 제품 재평가 → 최고가치 작업 선정 |
-| 마지막 전체 검증 | 백엔드 **1066 passed** (SQLite·PostgreSQL 양쪽) / 프론트 **135 passed** / E2E 7종 / 접근성·좁은화면 점검 0건 / `verify_cases` 6케이스 |
+| 마지막 전체 검증 | 백엔드 **1066 passed** (SQLite·PostgreSQL 양쪽) / 프론트 **136 passed** / E2E 7종 / 접근성·좁은화면 점검 0건 / `verify_cases` 6케이스 |
 
 > **push 는 매번 사용자 승인이 필요하다.**
 > force push / rebase / reset --hard / history rewrite 는 하지 않는다.
@@ -166,7 +166,7 @@ E2E user-flow·roi-undo·error-paths 통과.
   해설까지 내려온 사람에게는 보이지 않는다 — 다 읽은 자리에서도 고를 수 있어야 한다.
 - 대시보드 `recent_activity` 에 `thumbnail_url` 추가 (표에 어떤 영상이었는지 보이게).
 
-**검증**: 백엔드 **1066 passed** / 프론트 **135 passed** / 빌드 통과 /
+**검증**: 백엔드 **1066 passed** / 프론트 **136 passed** / 빌드 통과 /
 E2E user-flow·roi-undo·slice-navigation·error-paths 통과 / 접근성 0건 / 좁은화면 0건.
 
 ---
@@ -482,7 +482,7 @@ head 뒤처짐, alembic_version 삭제, 테이블 삭제, 운영 계정 혼입 �
 - `AnalyzeView` 6개: 준비 상태를 하드코딩하지 않는다, 불가능하면 업로드 전에 이유를 알리고
   요청 버튼을 막는다, **확인 실패 시에는 잠그지 않는다**
 
-프론트 25 → **135개**.
+프론트 25 → **136개**.
 
 ---
 
@@ -1108,7 +1108,7 @@ cd backend && alembic revision --autogenerate -m "<설명>"
 | 백엔드 (SQLite) | `cd backend && pytest` | **1066 passed** |
 | 백엔드 (PostgreSQL) | `python -m scripts.verify_postgres --url ... --with-tests` | 마이그레이션 up/down/up + 전체 테스트 통과 |
 | 케이스 | `python -m scripts.verify_cases` | 6케이스 통과 |
-| 프론트 단위 | `cd frontend && npx vitest run` | **135 passed** |
+| 프론트 단위 | `cd frontend && npx vitest run` | **136 passed** |
 | 빌드 | `npm run build` | 통과 |
 | 브라우저 E2E | `tools/browser-verify/*.mjs` (user-flow / slice-navigation / consent-and-sns / screenshot-all / error-paths / case-review / admin-ux / **roi-undo**) | 통과 |
 | 접근성 | `tools/browser-verify/a11y-audit.mjs` | 지적 0건 |
