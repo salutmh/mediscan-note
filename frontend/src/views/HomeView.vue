@@ -16,7 +16,6 @@ import { RouterLink } from 'vue-router'
 import { getDashboard } from '../api/endpoints'
 import { authState } from '../stores/auth'
 import { bodyPartLabel, diseaseLabel, gradeBadge } from '../labels'
-import ScoreBar from '../components/ScoreBar.vue'
 
 const data = ref(null)
 const loading = ref(true)
@@ -168,6 +167,20 @@ function whenLabel(iso) {
           <span class="shortcut-go" aria-hidden="true">›</span>
         </RouterLink>
 
+        <RouterLink class="card shortcut" to="/analyze">
+          <span class="chip" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <rect x="3" y="5" width="18" height="14" rx="2" />
+              <path d="M3 15l5-4 4 3 3-2 6 4" /><path d="M8.5 9.5h.01" />
+            </svg>
+          </span>
+          <span class="shortcut-text">
+            <strong>내 영상 분석</strong>
+            <small>가진 영상을 올려봅니다. 분석은 준비 중입니다.</small>
+          </span>
+          <span class="shortcut-go" aria-hidden="true">›</span>
+        </RouterLink>
+
         <RouterLink class="card shortcut" to="/progress">
           <span class="chip" aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
@@ -184,78 +197,81 @@ function whenLabel(iso) {
         </RouterLink>
       </nav>
 
-      <!-- 3. 진행 상황 — 시안 05 의 지표 카드 -->
-      <div class="metric-row">
-        <article class="card metric">
-        <span class="chip" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-            <path d="M5 19V11" /><path d="M12 19V5" /><path d="M19 19v-6" />
-          </svg>
-        </span>
-        <p class="metric-label">
-          학습완료
-          <span class="metric-big">
-            <span class="tnum">{{ totals.matched }}</span><span class="metric-of">/ {{ totals.total_cases }}</span>
+      <!-- 3. 학습 현황 띠 — 시안 04 하단.
+           시안 05 의 KPI 카드와 숫자가 겹쳐서, 홈에서는 **띠 하나로 합친다.**
+           자세한 지표는 진행현황 화면이 맡는다. -->
+      <article class="card stat-strip">
+        <div class="strip-lead">
+          <span class="chip" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <rect x="4" y="5" width="16" height="16" rx="2" />
+              <path d="M4 10h16M9 3v4M15 3v4" />
+            </svg>
           </span>
-        </p>
-        <ScoreBar class="metric-bar" :value="completionRate" tone="match" />
-        <p class="metric-sub">전체의 {{ completionRate }}%</p>
-        </article>
-
-        <article class="card metric">
-        <span class="chip" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-            <path d="M8 4h8a2 2 0 0 1 2 2v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V6a2 2 0 0 1 2-2z" /><path d="M9 3h6v3H9z" />
-          </svg>
-        </span>
-        <p class="metric-label">
-          복습 필요
-          <span class="metric-big" :class="{ warn: totals.needs_review > 0 }">
-            <span class="tnum">{{ totals.needs_review }}</span>
+          <span class="strip-text">
+            <strong>내 학습 현황</strong>
+            <small>전문가가 검수한 기준과 비교한 내 기록입니다.</small>
           </span>
-        </p>
-        <RouterLink v-if="totals.needs_review" class="metric-link" to="/wrong-notes">
-          복습노트 열기 →
-        </RouterLink>
-        <p v-else class="metric-sub">복습할 케이스가 없습니다</p>
-        </article>
+        </div>
 
-        <article class="card metric">
-        <span class="chip" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-            <circle cx="12" cy="12" r="8" /><circle cx="12" cy="12" r="3" />
-          </svg>
-        </span>
-        <p class="metric-label">
-          최고 일치도
-          <!-- **0 으로 채우지 않는다.** 0점과 미시도는 다른 상태다 -->
-          <span v-if="data.best_dice != null" class="metric-big">
-            <span class="tnum">{{ percent(data.best_dice) }}</span><span class="metric-of">%</span>
+        <div class="strip-item">
+          <span class="chip sm" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <path d="M4 12.5l5 5L20 7" />
+            </svg>
           </span>
-          <span v-else class="metric-empty">아직 기록 없음</span>
-        </p>
-        <ScoreBar
-          v-if="data.best_dice != null"
-          class="metric-bar"
-          :value="percent(data.best_dice)"
-          tone="match"
-        />
-        <p class="metric-sub">한 케이스에서 낸 최고 기록</p>
-        </article>
+          <span class="strip-text">
+            <small>학습완료</small>
+            <strong class="strip-value">
+              <span class="tnum">{{ totals.matched }}</span
+              ><span class="strip-of">/ {{ totals.total_cases }}</span>
+            </strong>
+          </span>
+        </div>
 
-        <article class="card metric">
-        <span class="chip" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-            <path d="M12 7v5l3 2" /><circle cx="12" cy="12" r="8" />
-          </svg>
-        </span>
-        <p class="metric-label">
-          총 시도
-          <span class="metric-big"><span class="tnum">{{ totals.total_attempts }}</span></span>
-        </p>
-        <p class="metric-sub">케이스 {{ totals.attempted }}개에 걸쳐</p>
-        </article>
-      </div>
+        <div class="strip-item">
+          <span class="chip sm" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <path d="M8 4h8a2 2 0 0 1 2 2v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V6a2 2 0 0 1 2-2z" />
+              <path d="M9 3h6v3H9z" />
+            </svg>
+          </span>
+          <span class="strip-text">
+            <small>복습 필요</small>
+            <strong class="strip-value" :class="{ warn: totals.needs_review > 0 }">
+              <span class="tnum">{{ totals.needs_review }}</span>
+            </strong>
+          </span>
+        </div>
+
+        <div class="strip-item">
+          <span class="chip sm" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <circle cx="12" cy="12" r="8" /><circle cx="12" cy="12" r="3" />
+            </svg>
+          </span>
+          <span class="strip-text">
+            <small>최고 일치도</small>
+            <!-- **0 으로 채우지 않는다.** 0점과 미시도는 다른 상태다 -->
+            <strong v-if="data.best_dice != null" class="strip-value">
+              <span class="tnum">{{ percent(data.best_dice) }}</span><span class="strip-of">%</span>
+            </strong>
+            <strong v-else class="strip-value empty">아직 기록 없음</strong>
+          </span>
+        </div>
+
+        <div class="strip-item">
+          <span class="chip sm" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <path d="M12 7v5l3 2" /><circle cx="12" cy="12" r="8" />
+            </svg>
+          </span>
+          <span class="strip-text">
+            <small>총 시도</small>
+            <strong class="strip-value"><span class="tnum">{{ totals.total_attempts }}</span></strong>
+          </span>
+        </div>
+      </article>
 
       <!-- 3. 재도전으로 얼마나 나아졌나 -->
       <article class="card">
@@ -431,7 +447,7 @@ function whenLabel(iso) {
 /* --- 바로가기 (시안 04 의 3카드) ---------------------------------------- */
 .shortcut-row {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: var(--sp-4);
 }
 .shortcut {
@@ -499,253 +515,75 @@ function whenLabel(iso) {
 }
 
 /* --- 지표 --------------------------------------------------------------- */
-.metric-row {
+/* --- 학습 현황 띠 (시안 04 하단) — 한 장짜리 카드를 얇은 구분선으로 나눈다 --- */
+.stat-strip {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: var(--sp-4);
-}
-.metric {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-2);
-}
-/* 시안 05 의 지표 카드: **둥근 칩이 왼쪽**, 그 옆에 라벨과 큰 숫자가 세로로 놓이고,
-   진행바와 캡션이 카드 전체 폭으로 깔린다. */
-.metric {
-  display: grid;
-  grid-template-columns: 44px minmax(0, 1fr);
-  grid-template-areas:
-    'chip head'
-    'bar  bar'
-    'sub  sub';
-  column-gap: var(--sp-3);
-  row-gap: var(--sp-2);
+  /* 시안은 리드 칸 + 지표 3칸이지만 우리는 보여줄 지표가 4개다.
+     리드 칸(시안의 모양)은 남기고 지표 칸만 하나 늘렸다. */
+  grid-template-columns: minmax(0, 1.6fr) repeat(4, minmax(0, 1fr));
   align-items: center;
-  padding: var(--sp-5);
+  gap: 0;
+  padding: var(--sp-5) 0;
 }
-.metric > .chip {
-  grid-area: chip;
-}
-.metric-label {
-  grid-area: head;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 1px;
-  margin: 0;
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--ink-muted);
-}
-.metric-big {
-  margin: 0;
-  font-size: 30px;
-  font-weight: 800;
-  line-height: 1.05;
-  letter-spacing: -0.03em;
-  color: var(--navy-700);
-}
-.metric > :global(.bar),
-.metric .metric-bar {
-  grid-area: bar;
-}
-.metric-sub,
-.metric-link {
-  grid-area: sub;
-}
-.metric-big.warn {
-  color: var(--mark-partial);
-}
-.metric-of {
-  font-size: 16px;
-  font-weight: 500;
-  color: var(--ink-muted);
-  margin-left: 4px;
-}
-.metric-empty {
-  font-size: 17px;
-  font-weight: 600;
-  color: var(--ink-muted);
-}
-.metric-sub,
-.metric-link {
-  margin: 0;
-  font-size: 12.5px;
-  color: var(--ink-muted);
-}
-.metric-link {
-  color: var(--accent);
-  font-weight: 600;
-  text-decoration: none;
-}
-.metric-link:hover {
-  text-decoration: underline;
-}
-
-/* --- 아래 두 칸 --------------------------------------------------------- */
-.two-col {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--sp-4);
-  align-items: start;
-}
-
-.improve-case {
-  margin: 0 0 var(--sp-3);
-  font-weight: 600;
-}
-.improve-compare {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-4);
-}
-.improve-step {
-  display: flex;
-  flex-direction: column;
-}
-.improve-when {
-  font-size: 12px;
-  color: var(--ink-muted);
-}
-.improve-score {
-  font-size: 26px;
-  font-weight: 700;
-  color: var(--ink-secondary);
-}
-.improve-score.now {
-  color: var(--ink);
-}
-.improve-arrow {
-  color: var(--gray-400);
-  font-size: 20px;
-}
-.improve-delta {
-  margin-left: auto;
-  font-weight: 700;
-  font-size: 15px;
-  padding: 4px 10px;
-  border-radius: var(--r-full);
-}
-.improve-delta.up {
-  background: var(--match-bg);
-  color: var(--match-ink);
-}
-.improve-delta.down {
-  background: var(--mismatch-bg);
-  color: var(--mismatch-ink);
-}
-.improve-note {
-  margin: var(--sp-4) 0 0;
-  font-size: 12.5px;
-}
-
-/* --- 최근 학습 활동 표 (시안 05) --- */
-.activity-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13.5px;
-}
-.activity-table th {
-  padding: 0 var(--sp-3) var(--sp-2);
-  text-align: left;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--ink-muted);
-  border-bottom: 1px solid var(--line);
-}
-.activity-table td {
-  padding: 10px var(--sp-3);
-  border-bottom: 1px solid var(--line);
-  vertical-align: middle;
-}
-.activity-table tr:last-child td {
-  border-bottom: 0;
-}
-.activity-table .num {
-  text-align: right;
-}
-.activity-table .when {
-  color: var(--ink-muted);
-  font-size: 12.5px;
-  white-space: nowrap;
-}
-.th-thumb {
-  width: 52px;
-}
-.row-thumb {
-  display: block;
-  width: 40px;
-  height: 40px;
-  border-radius: var(--r-sm);
-  overflow: hidden;
-  background: var(--viewer-bg);
-}
-.row-thumb img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-
-.activity {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-.activity li {
+.strip-lead,
+.strip-item {
   display: flex;
   align-items: center;
   gap: var(--sp-3);
-  padding: 9px 0;
-  border-top: 1px solid var(--line);
+  padding: 0 var(--sp-5);
+  min-width: 0;
 }
-.activity li:first-child {
-  border-top: 0;
+.strip-item {
+  border-left: 1px solid var(--line);
 }
-.activity-case {
-  font-weight: 600;
-  color: var(--ink);
-  text-decoration: none;
+.strip-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
 }
-.activity-case:hover {
-  color: var(--accent);
-  text-decoration: underline;
+.strip-text strong {
+  color: var(--navy-700);
+  font-size: 15px;
 }
-.activity-score {
-  font-variant-numeric: tabular-nums;
-  color: var(--ink-secondary);
-  font-size: 13.5px;
-}
-.activity-when {
-  margin-left: auto;
-  font-size: 12.5px;
-}
-
-.empty-note {
-  margin: 0;
-  padding: var(--sp-5) 0;
+.strip-text small {
   color: var(--ink-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.strip-value {
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: var(--brand-700);
+}
+.strip-value.warn {
+  color: var(--mark-partial);
+}
+.strip-value.empty {
   font-size: 14px;
-  text-align: center;
-}
-
-.all-cases {
-  align-self: flex-start;
-  color: var(--accent);
   font-weight: 600;
-  text-decoration: none;
+  color: var(--ink-muted);
 }
-.all-cases:hover {
-  text-decoration: underline;
+.strip-of {
+  margin-left: 3px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink-muted);
 }
 
-.skeleton-block {
-  padding: var(--sp-10);
-  text-align: center;
-  color: var(--ink-muted);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r-lg);
+@media (max-width: 900px) {
+  .stat-strip {
+    grid-template-columns: 1fr 1fr;
+    row-gap: var(--sp-5);
+  }
+  .strip-lead {
+    grid-column: 1 / -1;
+  }
+  /* 줄이 바뀌면 왼쪽 구분선이 어색해진다 — 각 줄의 첫 칸에서는 뗀다 */
+  .strip-item:nth-child(even) {
+    border-left: 0;
+  }
 }
 
 .card-head {
@@ -766,9 +604,6 @@ function whenLabel(iso) {
 }
 
 @media (max-width: 1080px) {
-  .metric-row {
-    grid-template-columns: repeat(2, 1fr);
-  }
   .shortcut-row {
     grid-template-columns: 1fr;
   }

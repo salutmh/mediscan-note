@@ -340,6 +340,23 @@ await goto('/wrong-notes', 1800)
 console.log('   ', await evaluate(`[...document.querySelectorAll('.note-card .case-id')].map(e=>e.textContent.trim()).join(', ') || '(빈 목록)'`))
 await shoot('f05-review-notes')
 
+// 복습 흐름이 한 단계 늘었다: 목록 -> **오답 상세**(무엇을 놓쳤는지) -> 다시 풀기.
+// 예전에는 목록에서 바로 재도전으로 갔는데, 그러면 뭘 틀렸는지 못 보고 다시 칠하게 된다.
+console.log('4-1) 오답 상세 — 다시 풀기 전에 기준 영역과 해설을 본다')
+await clickText('무엇을 놓쳤는지 보기')
+await sleep(1800)
+const detail = await evaluate(`
+  (() => ({
+    path: location.pathname,
+    hasReference: Boolean(document.querySelector('.col-left .layer')),
+    hasExplanation: Boolean(document.querySelector('.col-right')?.textContent.includes('학습 해설')),
+  }))()
+`)
+console.log('   현재 경로:', detail.path)
+if (!detail.hasReference) failures.push('오답 상세에 기준 영역이 보이지 않는다')
+if (!detail.hasExplanation) failures.push('오답 상세에 해설이 없다 — 다시 풀기 전에 볼 것이 없다')
+await shoot('f05b-wrong-note-detail')
+
 console.log('5) 재도전 — 기준 마스크 모양을 따라 칠해서 제출')
 await clickText('다시 풀기')
 await sleep(2200)

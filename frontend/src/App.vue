@@ -30,8 +30,10 @@ const NAV = [
   { name: 'home', label: '홈', prefix: '/', exact: true, icon: 'home' },
   { name: 'cases', label: '케이스', prefix: '/cases', icon: 'book' },
   { name: 'wrong-notes', label: '복습노트', prefix: '/wrong-notes', icon: 'clipboard' },
-  { name: 'analyze', label: '내 영상 분석', prefix: '/analyze', icon: 'image' },
   { name: 'progress', label: '진행현황', prefix: '/progress', icon: 'chart' },
+  // '내 영상 분석'(화면 5)은 **상단 메뉴에서 뺐다.** 단일 이미지용 2D 모델이 없어
+  // 항상 "준비 중"만 뜨는데, 그런 메뉴가 늘 떠 있으면 클로즈드 베타에서 손해다.
+  // 화면은 그대로 있고 홈 바로가기에서 닿는다 (경로 /analyze 도 그대로다).
 ]
 
 /** 선 아이콘 path 모음 (별도 아이콘 패키지를 들이지 않는다 — 의존성을 늘리지 않는 원칙) */

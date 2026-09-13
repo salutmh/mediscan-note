@@ -24,6 +24,14 @@ const routes = [
     meta: { requiresAuth: true },
   },
   // 화면 6의 재도전 — 판독 훈련 화면을 재사용하고, 제출만 retry 엔드포인트로 보낸다
+  // 오답 상세 — **다시 풀기 전에** 무엇을 놓쳤는지 보는 화면 (시안 10).
+  // `/retry` 보다 먼저 둘 필요는 없다 (경로가 겹치지 않는다).
+  {
+    path: '/wrong-notes/:caseId',
+    name: 'wrong-note-detail',
+    component: () => import('../views/WrongNoteDetailView.vue'),
+    meta: { requiresAuth: true },
+  },
   {
     path: '/wrong-notes/:caseId/retry',
     name: 'retry',

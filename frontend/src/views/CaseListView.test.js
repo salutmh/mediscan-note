@@ -1,9 +1,12 @@
 /**
- * 화면 1 — 부위 필터 탭.
+ * 화면 1 — 부위 선택과 케이스 목록.
  *
  * 여기서 지키려는 것: **없는 콘텐츠를 있는 것처럼 보여주지 않는다.**
- * 예전에는 계약에 정의된 5개 부위를 모두 탭으로 깔아뒀는데 실제 케이스는 뇌 MRI 뿐이라,
- * 나머지 4개는 눌러도 빈 목록이었다. 첫 사용자가 빈 화면을 네 번 만나게 된다.
+ * 예전에는 계약에 정의된 5개 부위를 모두 **누를 수 있는 탭**으로 깔아뒀는데 실제
+ * 케이스는 뇌 MRI 뿐이라, 나머지 4개는 눌러도 빈 목록이었다 — 빈 화면을 네 번 만났다.
+ *
+ * 지금은 시안 06 처럼 부위를 카드로 보여주되 **준비되지 않은 부위는 누를 수 없다.**
+ * 제품이 어디까지 가는지는 보이면서, 빈 화면으로 데려가지는 않는다.
  */
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
@@ -31,19 +34,36 @@ beforeEach(() => {
   listCases.mockReset()
 })
 
-describe('부위 필터 탭', () => {
-  it('부위가 하나뿐이면 탭을 아예 보여주지 않는다', async () => {
+describe('부위 선택 카드', () => {
+  const labelsOf = (w) => w.findAll('.part-card .part-label').map((b) => b.text())
+  const cardFor = (w, label) =>
+    w.findAll('.part-card').find((b) => b.text().includes(label))
+
+  it('케이스가 없는 부위도 보여주되 **누를 수 없게** 한다', async () => {
+    // 예전에는 5개 부위를 전부 누를 수 있는 탭으로 깔아서, 빈 화면을 네 번 만났다.
+    // 이제 카드는 보여주되(제품이 어디까지 가는지는 보인다) 빈 화면으로 데려가지 않는다.
     listCases.mockResolvedValue({ cases: [brainCase('VS-SEG-202'), brainCase('VS-SEG-203')] })
 
     const wrapper = mountView()
     await flushPromises()
 
-    expect(wrapper.find('.filters').exists()).toBe(false)
-    // 탭이 없어도 케이스는 보여야 한다
-    expect(wrapper.text()).toContain('VS-SEG-202')
+    expect(labelsOf(wrapper)).toContain('뇌 MRI')
+    expect(labelsOf(wrapper)).toContain('흉부 X-ray')
+
+    expect(cardFor(wrapper, '뇌 MRI').attributes('disabled')).toBeUndefined()
+    expect(cardFor(wrapper, '흉부 X-ray').attributes('disabled')).toBeDefined()
   })
 
-  it('여러 부위가 있으면 "전체" + 실제 부위만 탭으로 만든다', async () => {
+  it('준비되지 않은 부위는 **색만이 아니라 글자로도** 알린다', async () => {
+    listCases.mockResolvedValue({ cases: [brainCase('VS-SEG-202')] })
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(cardFor(wrapper, '흉부 X-ray').text()).toContain('준비 중')
+    expect(cardFor(wrapper, '뇌 MRI').text()).toContain('1케이스')
+  })
+
+  it('부위 카드를 누르면 그 부위로 다시 조회한다', async () => {
     listCases.mockResolvedValue({
       cases: [brainCase('VS-SEG-202'), { ...brainCase('CXR-0001'), body_part: 'chest_xray' }],
     })
@@ -51,30 +71,30 @@ describe('부위 필터 탭', () => {
     const wrapper = mountView()
     await flushPromises()
 
-    const labels = wrapper.findAll('.filters button').map((b) => b.text())
-    expect(labels).toEqual(['전체', '뇌 MRI', '흉부 X-ray'])
-    // 케이스가 없는 부위(뇌 CT, 복부 CT, 무릎)는 탭에 없어야 한다
-    expect(labels).not.toContain('뇌 CT')
-    expect(labels).not.toContain('복부 CT')
-  })
-
-  it('부위 탭을 누르면 그 부위로 다시 조회한다', async () => {
-    listCases.mockResolvedValue({
-      cases: [brainCase('VS-SEG-202'), { ...brainCase('CXR-0001'), body_part: 'chest_xray' }],
-    })
-
-    const wrapper = mountView()
-    await flushPromises()
-
-    const chestTab = wrapper.findAll('.filters button').find((b) => b.text() === '흉부 X-ray')
-    await chestTab.trigger('click')
+    await cardFor(wrapper, '흉부 X-ray').trigger('click')
     await flushPromises()
 
     expect(listCases).toHaveBeenLastCalledWith('chest_xray')
   })
 
-  it('부위를 필터한 뒤에도 탭 목록이 사라지지 않는다', async () => {
-    // 필터된 응답으로 탭을 다시 만들면 탭이 하나만 남아 다른 부위로 못 돌아간다
+  it('같은 부위를 다시 누르면 필터가 풀린다', async () => {
+    // 고른 것을 되돌릴 방법이 없으면 "전체" 버튼을 따로 찾아야 한다
+    listCases.mockResolvedValue({
+      cases: [brainCase('VS-SEG-202'), { ...brainCase('CXR-0001'), body_part: 'chest_xray' }],
+    })
+    const wrapper = mountView()
+    await flushPromises()
+
+    await cardFor(wrapper, '흉부 X-ray').trigger('click')
+    await flushPromises()
+    await cardFor(wrapper, '흉부 X-ray').trigger('click')
+    await flushPromises()
+
+    expect(listCases).toHaveBeenLastCalledWith(undefined)
+  })
+
+  it('부위를 필터한 뒤에도 카드 목록이 사라지지 않는다', async () => {
+    // 필터된 응답으로 카드를 다시 만들면 하나만 남아 다른 부위로 못 돌아간다
     listCases.mockResolvedValueOnce({
       cases: [brainCase('VS-SEG-202'), { ...brainCase('CXR-0001'), body_part: 'chest_xray' }],
     })
@@ -82,14 +102,10 @@ describe('부위 필터 탭', () => {
     await flushPromises()
 
     listCases.mockResolvedValueOnce({ cases: [{ ...brainCase('CXR-0001'), body_part: 'chest_xray' }] })
-    await wrapper.findAll('.filters button').find((b) => b.text() === '흉부 X-ray').trigger('click')
+    await cardFor(wrapper, '흉부 X-ray').trigger('click')
     await flushPromises()
 
-    expect(wrapper.findAll('.filters button').map((b) => b.text())).toEqual([
-      '전체',
-      '뇌 MRI',
-      '흉부 X-ray',
-    ])
+    expect(cardFor(wrapper, '뇌 MRI').attributes('disabled')).toBeUndefined()
   })
 })
 

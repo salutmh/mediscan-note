@@ -29,6 +29,39 @@ const bodyParts = computed(() => {
   return tabs.length > 1 ? [{ code: '', label: '전체' }, ...tabs] : []
 })
 
+/**
+ * 부위 선택 카드 (시안 06).
+ *
+ * **예전에 부위 탭을 뺀 이유를 그대로 지킨다.** 계약상 5개 부위를 전부 탭으로 깔았더니
+ * 등록된 건 뇌 MRI 뿐이라 나머지는 눌러도 빈 화면이었다 — 없는 콘텐츠를 있는 것처럼
+ * 보여주는 셈이었다.
+ *
+ * 그래서 카드는 시안처럼 전부 보여주되, **케이스가 없는 부위는 누를 수 없게** 하고
+ * "준비 중"이라고 적는다. 팀원 5명이 부위별로 모델을 맡는 제품이라 앞으로 무엇이
+ * 늘어나는지는 보이는 편이 낫고, 빈 화면으로 데려가지는 않는다.
+ */
+const BODY_PART_ICONS = {
+  brain_mri: ['M9 4.5a3 3 0 0 0-3 3 2.6 2.6 0 0 0-1 5 3 3 0 0 0 2.4 4.4A2.8 2.8 0 0 0 12 19V5.6A2.6 2.6 0 0 0 9 4.5z', 'M15 4.5a3 3 0 0 1 3 3 2.6 2.6 0 0 1 1 5 3 3 0 0 1-2.4 4.4A2.8 2.8 0 0 1 12 19'],
+  brain_ct: ['M9 4.5a3 3 0 0 0-3 3 2.6 2.6 0 0 0-1 5 3 3 0 0 0 2.4 4.4A2.8 2.8 0 0 0 12 19V5.6A2.6 2.6 0 0 0 9 4.5z', 'M15 4.5a3 3 0 0 1 3 3 2.6 2.6 0 0 1 1 5 3 3 0 0 1-2.4 4.4A2.8 2.8 0 0 1 12 19'],
+  chest_xray: ['M12 4v9', 'M8 5c0 5-1 7-3 8 0-4 .5-6 1-8z', 'M16 5c0 5 1 7 3 8 0-4-.5-6-1-8z'],
+  abdomen_ct: ['M6 8c0-2 2-3.5 4.5-3.5S15 6 15 8s-1 3-1 5 1 3 1 5', 'M6 8c0 3 2 4 4 4'],
+  knee_mri: ['M9 4v5a4 4 0 0 0 4 4', 'M15 20v-5a4 4 0 0 0-4-4', 'M7 12h2'],
+}
+
+const bodyPartCards = computed(() => {
+  const withCases = new Set(allCases.value.map((c) => c.body_part))
+  return Object.keys(BODY_PART_ICONS).map((code) => ({
+    code,
+    label: bodyPartLabel(code),
+    count: allCases.value.filter((c) => c.body_part === code).length,
+    ready: withCases.has(code),
+    paths: BODY_PART_ICONS[code],
+  }))
+})
+
+/** 등록된 부위가 하나뿐이면 선택할 것이 없다 — 카드 줄 자체를 띄우지 않는다 */
+const showBodyPartCards = computed(() => bodyPartCards.value.some((b) => b.ready))
+
 async function load() {
   loading.value = true
   errorMessage.value = ''
@@ -169,16 +202,30 @@ function onThumbError(event) {
     </button>
   </div>
 
-  <div v-if="bodyParts.length" class="segmented filters">
-    <button
-      v-for="bp in bodyParts"
-      :key="bp.code"
-      :class="{ active: selected === bp.code }"
-      @click="select(bp.code)"
-    >
-      {{ bp.label }}
-    </button>
-  </div>
+  <!-- 부위 선택 (시안 06 의 1단계).
+       **준비되지 않은 부위는 누를 수 없다** — 빈 화면으로 데려가지 않는다. -->
+  <section v-if="showBodyPartCards" class="part-section">
+    <h2 class="part-title">부위 선택</h2>
+    <ul class="part-row">
+      <li v-for="bp in bodyPartCards" :key="bp.code">
+        <button
+          class="part-card"
+          :class="{ active: selected === bp.code, pending: !bp.ready }"
+          :disabled="!bp.ready"
+          :aria-pressed="selected === bp.code"
+          @click="select(selected === bp.code ? '' : bp.code)"
+        >
+          <span class="part-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
+              <path v-for="(d, i) in bp.paths" :key="i" :d="d" />
+            </svg>
+          </span>
+          <span class="part-label">{{ bp.label }}</span>
+          <span class="part-meta">{{ bp.ready ? `${bp.count}케이스` : '준비 중' }}</span>
+        </button>
+      </li>
+    </ul>
+  </section>
 
   <p v-if="errorMessage" class="error">{{ errorMessage }}</p>
 
@@ -343,6 +390,77 @@ function onThumbError(event) {
   margin-bottom: 4px;
   font-size: 28px;
   color: var(--navy-700);
+}
+
+/* --- 부위 선택 카드 (시안 06) --- */
+.part-section {
+  margin-bottom: var(--sp-5);
+}
+.part-title {
+  margin: 0 0 var(--sp-3);
+  font-size: 13.5px;
+  color: var(--ink-secondary);
+}
+.part-row {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--sp-3);
+}
+.part-card {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-height: 104px;
+  padding: var(--sp-4) var(--sp-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+.part-card:hover:not(:disabled) {
+  border-color: var(--brand-300);
+  background: var(--surface);
+}
+.part-card.active {
+  border-color: var(--brand-500);
+  background: var(--brand-50);
+}
+/* 준비되지 않은 부위 — **색만으로 알리지 않는다.** "준비 중" 글자가 함께 있다 */
+.part-card.pending {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.part-icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--r-full);
+  background: var(--brand-50);
+  color: var(--brand-600);
+}
+.part-card.pending .part-icon {
+  background: var(--gray-100);
+  color: var(--gray-400);
+}
+.part-icon svg {
+  width: 22px;
+  height: 22px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.part-label {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--navy-700);
+}
+.part-meta {
+  font-size: 11.5px;
+  color: var(--ink-muted);
 }
 
 /* 시안(06 학습 선택)의 필터 칩: 회색 세그먼트가 아니라 **흰 알약**이고,

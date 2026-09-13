@@ -63,6 +63,13 @@ export const getGlossary = (disease) =>
   api.get(`/glossary${disease ? `?disease=${encodeURIComponent(disease)}` : ''}`)
 
 export const listWrongNotes = () => api.get('/wrong-notes')
+
+/**
+ * 오답 상세 — **다시 풀기 전에** 무엇을 놓쳤는지 보는 화면.
+ * 제출한 적이 없는 케이스는 404 다 (아직 안 푼 케이스의 정답을 미리 볼 수 없다).
+ */
+export const getWrongNoteDetail = (caseId) =>
+  api.get(`/wrong-notes/${encodeURIComponent(caseId)}`)
 export const retryWrongNote = (caseId, roi, durationSeconds) =>
   api.post(`/wrong-notes/${encodeURIComponent(caseId)}/retry`, {
     roi,

@@ -58,6 +58,7 @@
 | `CONSENT_REQUIRED` | 400 / 403 | 가입 시 필수 동의 누락 / 민감정보 동의 없이 분석 요청 |
 | `EMAIL_ALREADY_EXISTS` | 409 | 이메일 중복 |
 | `CASE_NOT_FOUND` | 404 | 케이스 없음 |
+| `NO_SUBMISSION` | 404 | 이 케이스를 아직 제출한 적이 없음 (오답 상세는 **제출 이력이 있을 때만** 기준 마스크를 준다) |
 | `CASE_NOT_GRADABLE` | 422 | 기준 마스크가 없어 채점 불가 (이력 저장 안 함) |
 | `INVALID_ROI` | 400 | roi 누락 / 마스크 디코딩 실패 / 빈 마스크 |
 | `IMAGE_REQUIRED` | 400 | 분석 요청에 영상이 없음 |
@@ -839,6 +840,49 @@ POST /api/cases/{case_id}/explanation-viewed     (로그인 필요)
 "0점을 받았다"와 "값이 없다"는 다른 상태다.
 `attempts` 는 그 케이스의 총 제출 횟수이며, **학습자 자신의 기록**이다
 (케이스의 의학적 난이도와 무관하다).
+
+### 2-4-1. GET /api/wrong-notes/{case_id} — 오답 상세 (v0.8)
+
+**다시 풀기 전에 무엇을 놓쳤는지 보는 화면** (화면 6-1).
+
+> 해설은 원래 **제출 직후에만** 볼 수 있었다. 복습노트에서 케이스를 누르면 바로 판독
+> 화면으로 갔고, 해설을 다시 보려면 또 제출해야 했다.
+
+**노출 경계**: 기준 마스크는 **이 사용자가 이 케이스를 제출한 적이 있을 때만** 나간다.
+제출 이력이 없으면 `404 NO_SUBMISSION` — 아직 풀지 않은 케이스의 정답을 이 경로로
+미리 볼 수 없다 (`tests/test_wrong_note_detail.py`).
+
+**Response**
+```json
+{
+  "case_id": "VS-SEG-203",
+  "body_part": "brain_mri",
+  "disease": "vestibular_schwannoma",
+  "image_url": "https://api.example.com/static/cases/VS-SEG-203/slices/slice_034.png?e=...&s=...",
+  "image_meta": { "width": 512, "height": 512 },
+  "reference_mask_url": "https://api.example.com/static/cases/VS-SEG-203/slices/mask_034.png?e=...&s=...",
+  "latest": {
+    "grade": "partial_match",
+    "dice": 0.3876,
+    "iou": 0.2404,
+    "location_score": 100,
+    "attempt_number": 2,
+    "submitted_at": "2026-09-13T16:20:00+09:00",
+    "is_provisional": false
+  },
+  "attempts": 2,
+  "best_dice": 0.3876,
+  "explanation": { "...": "화면 4 와 같은 형태" },
+  "user_mask_kept": false
+}
+```
+
+`explanation` 의 `case_facts` / `case_findings` 는 **제출 시점 스냅샷**
+(`submissions.explanation`)을 쓴다 — 전문가가 나중에 소견을 고쳐도 이 학습자가
+그때 본 것은 그때 것이다. `disease_info` 는 지금 문헌 파일에서 붙인다.
+
+`user_mask_kept` 는 항상 `false` 다. **사용자가 칠한 마스크는 저장하지 않는다** —
+화면은 이 값을 보고 "내가 칠했던 영역은 다시 보여줄 수 없습니다"라고 밝힌다.
 
 ### 2-5. POST /api/wrong-notes/{case_id}/retry
 

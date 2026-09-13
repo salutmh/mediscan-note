@@ -119,11 +119,13 @@ onMounted(async () => {
         <p v-else class="muted note-meta">아직 점수 기록이 없습니다</p>
       </div>
 
+      <!-- **먼저 보고 그다음 다시 푼다.** 바로 재도전으로 보내면 무엇을 틀렸는지
+           못 본 채로 다시 칠하게 된다 (해설은 제출 직후에만 보였다). -->
       <RouterLink
         class="btn primary wide"
-        :to="{ name: 'retry', params: { caseId: item.case_id } }"
+        :to="{ name: 'wrong-note-detail', params: { caseId: item.case_id } }"
       >
-        다시 풀기
+        무엇을 놓쳤는지 보기
       </RouterLink>
     </li>
   </ul>
