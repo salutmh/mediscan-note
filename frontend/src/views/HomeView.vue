@@ -138,7 +138,7 @@ function whenLabel(iso) {
 
       <!-- 2. 바로가기 -->
       <nav class="shortcut-row" aria-label="바로가기">
-        <RouterLink class="card shortcut" to="/cases">
+        <RouterLink class="card shortcut" to="/learn">
           <span class="chip" aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
               <path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H11v16H5.5A1.5 1.5 0 0 1 4 18.5z" />
@@ -146,8 +146,8 @@ function whenLabel(iso) {
             </svg>
           </span>
           <span class="shortcut-text">
-            <strong>케이스 학습</strong>
-            <small>전체 케이스를 보고 판독을 연습합니다.</small>
+            <strong>학습 시작</strong>
+            <small>부위와 질환을 골라 학습을 시작합니다.</small>
           </span>
           <span class="shortcut-go" aria-hidden="true">›</span>
         </RouterLink>
@@ -167,21 +167,7 @@ function whenLabel(iso) {
           <span class="shortcut-go" aria-hidden="true">›</span>
         </RouterLink>
 
-        <RouterLink class="card shortcut" to="/analyze">
-          <span class="chip" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-              <rect x="3" y="5" width="18" height="14" rx="2" />
-              <path d="M3 15l5-4 4 3 3-2 6 4" /><path d="M8.5 9.5h.01" />
-            </svg>
-          </span>
-          <span class="shortcut-text">
-            <strong>내 영상 분석</strong>
-            <small>가진 영상을 올려봅니다. 분석은 준비 중입니다.</small>
-          </span>
-          <span class="shortcut-go" aria-hidden="true">›</span>
-        </RouterLink>
-
-        <RouterLink class="card shortcut" to="/progress">
+        <RouterLink class="card shortcut" to="/dashboard">
           <span class="chip" aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
               <path d="M5 19V11" />
@@ -190,8 +176,8 @@ function whenLabel(iso) {
             </svg>
           </span>
           <span class="shortcut-text">
-            <strong>진행현황</strong>
-            <small>케이스별 학습 이력을 확인합니다.</small>
+            <strong>학습 기록</strong>
+            <small>지금까지의 진도와 일치도를 봅니다.</small>
           </span>
           <span class="shortcut-go" aria-hidden="true">›</span>
         </RouterLink>
@@ -447,7 +433,7 @@ function whenLabel(iso) {
 /* --- 바로가기 (시안 04 의 3카드) ---------------------------------------- */
 .shortcut-row {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: var(--sp-4);
 }
 .shortcut {

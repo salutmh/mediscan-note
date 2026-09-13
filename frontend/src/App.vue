@@ -28,7 +28,9 @@ async function onLogout() {
  */
 const NAV = [
   { name: 'home', label: '홈', prefix: '/', exact: true, icon: 'home' },
-  { name: 'cases', label: '케이스', prefix: '/cases', icon: 'book' },
+  { name: 'dashboard', label: '대시보드', prefix: '/dashboard', icon: 'chart' },
+  { name: 'learn', label: '학습하기', prefix: '/learn', icon: 'book' },
+  { name: 'cases', label: '케이스', prefix: '/cases', icon: 'grid' },
   { name: 'wrong-notes', label: '복습노트', prefix: '/wrong-notes', icon: 'clipboard' },
   { name: 'progress', label: '진행현황', prefix: '/progress', icon: 'chart' },
   // '내 영상 분석'(화면 5)은 **상단 메뉴에서 뺐다.** 단일 이미지용 2D 모델이 없어
@@ -43,6 +45,7 @@ const ICON_PATHS = {
   clipboard: ['M8 4h8a2 2 0 0 1 2 2v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V6a2 2 0 0 1 2-2z', 'M9 3h6v3H9z'],
   image: ['M3 5h18v14H3z', 'M3 15l5-4 4 3 3-2 6 4', 'M8.5 9.5h.01'],
   chart: ['M5 19V11', 'M12 19V5', 'M19 19v-6'],
+  grid: ['M4 4h7v7H4z', 'M13 4h7v7h-7z', 'M4 13h7v7H4z', 'M13 13h7v7h-7z'],
 }
 
 /**

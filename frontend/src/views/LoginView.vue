@@ -61,11 +61,16 @@ onMounted(async () => {
   }
 })
 
-function goNext() {
+function goNext(isNewUser = false) {
   // **홈으로 보낸다.** 이 줄은 홈 화면이 생기기 전 코드 그대로 `cases` 를 가리키고 있었다 —
   // 대시보드를 만들어 놓고 로그인은 거기로 보내지 않아, 들어오자마자 격자만 보였다.
   // (`redirect` 쿼리가 있으면 사용자가 원래 가려던 곳이 우선이다)
-  router.push(route.query.redirect || { name: 'home' })
+  if (route.query.redirect) {
+    router.push(route.query.redirect)
+    return
+  }
+  // 방금 가입한 사람만 기본정보 설정(시안 03)을 거친다. **건너뛸 수 있는 화면이다.**
+  router.push({ name: isNewUser ? 'onboarding' : 'home' })
 }
 
 async function run(fn) {
@@ -74,7 +79,8 @@ async function run(fn) {
   try {
     const result = await fn()
     applyAuthResult(result)
-    goNext()
+    // 서버가 신규 가입을 알려준다 (is_new_user). 로그인은 바로 홈으로 간다.
+    goNext(result?.is_new_user === true)
   } catch (e) {
     errorMessage.value = e.message
   } finally {
@@ -113,7 +119,7 @@ async function onSocial(provider) {
     // 1차: 동의 없이 시도 — 이미 가입된 계정이면 여기서 바로 로그인된다.
     const result = await socialLogin({ provider, provider_token })
     applyAuthResult(result)
-    goNext()
+    goNext(result?.is_new_user === true)
   } catch (e) {
     if (e.code === 'CONSENT_REQUIRED') {
       // 신규 사용자 -> 동의 화면으로

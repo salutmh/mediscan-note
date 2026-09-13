@@ -126,7 +126,13 @@ def test_login_rejects_unknown_email(client):
 def test_me_returns_current_user(user_a):
     res = user_a.get("/api/auth/me")
     assert res.status_code == 200
-    assert res.json() == {"user_id": user_a.user_id, "email": user_a.email, "nickname": "사용자A"}
+    assert res.json() == {
+        "user_id": user_a.user_id,
+        "email": user_a.email,
+        "nickname": "사용자A",
+        # 학습자 배경 (시안 02-2 / 03). **전부 선택 항목이라 가입 직후에는 비어 있다.**
+        "profile": {"job_role": None, "birth_date": None, "school": None, "major": None},
+    }
 
 
 def test_expired_token_is_rejected(client, user_a):

@@ -90,6 +90,19 @@ class ChangePasswordRequest(BaseModel):
         return _validate_password(value)
 
 
+class ProfileUpdate(BaseModel):
+    """학습자 배경 (시안 02-2 / 03). **전부 선택 항목이다.**
+
+    의료 정보가 아니라 직군·학교·전공 같은 배경이고, 비어 있어도 모든 기능이
+    그대로 동작한다. 보낸 키만 바꾼다 — 빈 문자열은 "지우겠다"는 뜻이다.
+    """
+
+    job_role: Optional[str] = None
+    birth_date: Optional[str] = None  # YYYY-MM-DD
+    school: Optional[str] = None
+    major: Optional[str] = None
+
+
 class LoginRequest(BaseModel):
     email: str
     password: str

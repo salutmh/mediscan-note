@@ -7,6 +7,27 @@ const routes = [
   { path: '/', name: 'home', component: () => import('../views/HomeView.vue'), meta: { requiresAuth: true } },
   // 화면 0
   { path: '/login', name: 'login', component: () => import('../views/LoginView.vue') },
+  // 화면 03 — 가입 직후 직군 선택 (건너뛸 수 있다)
+  {
+    path: '/onboarding',
+    name: 'onboarding',
+    component: () => import('../views/OnboardingView.vue'),
+    meta: { requiresAuth: true },
+  },
+  // 화면 05 — 학습 대시보드 (홈과 별개 화면이다)
+  {
+    path: '/dashboard',
+    name: 'dashboard',
+    component: () => import('../views/DashboardView.vue'),
+    meta: { requiresAuth: true },
+  },
+  // 화면 06 — 학습 선택 (부위 -> 영상 종류 -> 질환)
+  {
+    path: '/learn',
+    name: 'learn',
+    component: () => import('../views/LearnSelectView.vue'),
+    meta: { requiresAuth: true },
+  },
   // 화면 1
   { path: '/cases', name: 'cases', component: () => import('../views/CaseListView.vue'), meta: { requiresAuth: true } },
   // 화면 2 (+ 제출 후 화면 3·4)

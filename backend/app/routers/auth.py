@@ -30,6 +30,7 @@ from app.schemas import (
     Consents,
     DeleteAccountRequest,
     LoginRequest,
+    ProfileUpdate,
     SignupRequest,
     SocialLoginRequest,
 )
@@ -116,7 +117,9 @@ def signup(payload: SignupRequest, db: DbSession):
             raise  # 이메일 중복이 아닌 다른 무결성 오류는 숨기지 않는다
         raise _error(409, "EMAIL_ALREADY_EXISTS", "이미 가입된 이메일입니다.") from None
     db.refresh(user)
-    return _auth_response(user)
+    # 방금 가입한 사람임을 알려준다 — 화면이 기본정보 설정(시안 03)으로 보낼지 정한다.
+    # (SNS 가입은 아래에서 이미 같은 값을 내려보내고 있었다)
+    return _auth_response(user, is_new_user=True)
 
 
 @router.post("/login")
@@ -199,9 +202,46 @@ def social_login(payload: SocialLoginRequest, db: DbSession):
     return response
 
 
+def _profile(user) -> dict:
+    """프로필은 **전부 선택 항목**이다 — 비어 있는 것이 정상이고 null 로 나간다."""
+    return {
+        "job_role": user.job_role,
+        "birth_date": user.birth_date,
+        "school": user.school,
+        "major": user.major,
+    }
+
+
 @router.get("/me")
 def me(user: CurrentUser):
-    return {"user_id": user.user_id, "email": user.email, "nickname": user.nickname}
+    return {
+        "user_id": user.user_id,
+        "email": user.email,
+        "nickname": user.nickname,
+        "profile": _profile(user),
+    }
+
+
+@router.patch("/me/profile")
+def update_profile(payload: ProfileUpdate, user: CurrentUser, db: DbSession):
+    """프로필 저장 (시안 02-2 프로필·학교 / 03 기본정보 설정).
+
+    **학습에 필요한 값이 아니다.** 직군·학교·전공은 학습자 배경이고, 비어 있어도
+    모든 기능이 그대로 동작한다. 그래서 어떤 항목도 필수로 두지 않는다 —
+    건너뛴 사람을 다시 이 화면으로 끌고 오지 않는다.
+
+    보낸 키만 바꾼다(부분 수정). 빈 문자열은 **지우겠다는 뜻**으로 읽어 null 로 만든다.
+    """
+    changes = payload.model_dump(exclude_unset=True)
+    for field in ("job_role", "birth_date", "school", "major"):
+        if field not in changes:
+            continue
+        value = changes[field]
+        value = value.strip() if isinstance(value, str) else value
+        setattr(user, field, value or None)
+    db.commit()
+    db.refresh(user)
+    return {"user_id": user.user_id, "nickname": user.nickname, "profile": _profile(user)}
 
 
 @router.post("/logout")

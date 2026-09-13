@@ -37,6 +37,16 @@ class User(Base):
     sessions_valid_from: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), default=None
     )
+    # --- 프로필 (시안 02-2 / 03) -------------------------------------------
+    # **전부 선택 항목이다.** 없어도 학습에 아무 지장이 없고, 비어 있는 것이
+    # 정상 상태다 — 채우라고 막지 않는다.
+    # 의료 정보가 아니라 **학습자 배경**이다 (직군·학교·전공).
+    # 탈퇴하면 users 행과 함께 사라진다 (app/account.py 의 삭제 범위).
+    job_role: Mapped[str | None] = mapped_column(String(40), default=None)
+    birth_date: Mapped[str | None] = mapped_column(String(10), default=None)  # YYYY-MM-DD
+    school: Mapped[str | None] = mapped_column(String(100), default=None)
+    major: Mapped[str | None] = mapped_column(String(100), default=None)
+
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     consents: Mapped[list["Consent"]] = relationship(back_populates="user", cascade="all, delete-orphan")
