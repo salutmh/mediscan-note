@@ -261,7 +261,7 @@ function whenLabel(iso) {
 
       <!-- 3. 재도전으로 얼마나 나아졌나 -->
       <article class="card">
-        <h3 class="card-title">최근 재도전</h3>
+        <h2 class="card-title">최근 재도전</h2>
           <div v-if="improvement" class="improve">
             <p class="improve-case">{{ improvement.case_id }}</p>
             <div class="improve-compare">
@@ -292,7 +292,7 @@ function whenLabel(iso) {
            **모드·소견 칸은 두지 않는다** — 우리에게 없는 값이라 빈 칸만 남는다. -->
       <article class="card activity-card">
         <header class="card-head">
-          <h3 class="card-title">최근 학습 활동</h3>
+          <h2 class="card-title">최근 학습 활동</h2>
           <RouterLink v-if="data.recent_activity.length" class="card-more" to="/progress">
             전체 학습 기록 보기 ›
           </RouterLink>
@@ -578,7 +578,29 @@ function whenLabel(iso) {
   justify-content: space-between;
   gap: var(--sp-3);
 }
+/* 링크 글자만 두면 높이가 20~24px 이라 손가락으로 누르기 어렵다 (좁은화면 점검 지적).
+   보이는 모양은 그대로 두고 **누를 수 있는 면적만** 권장치(44px)까지 넓힌다. */
+.all-cases {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 var(--sp-2);
+  margin-left: calc(var(--sp-2) * -1);
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+.all-cases:hover {
+  text-decoration: underline;
+}
+
 .card-more {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 var(--sp-2);
+  margin-right: calc(var(--sp-2) * -1);
   color: var(--brand-600);
   font-size: 12.5px;
   font-weight: 600;

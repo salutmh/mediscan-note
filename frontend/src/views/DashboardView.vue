@@ -316,6 +316,12 @@ function whenLabel(iso) {
   margin-bottom: var(--sp-3);
 }
 .card-more {
+  /* 링크 글자만 두면 20px 이라 누르기 어렵다 — 면적만 넓힌다 */
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 var(--sp-2);
+  margin-right: calc(var(--sp-2) * -1);
   color: var(--brand-600);
   font-size: 12.5px;
   font-weight: 600;

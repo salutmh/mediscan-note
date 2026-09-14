@@ -197,9 +197,14 @@ const VIEWPORTS = [
   [1024, 768, '태블릿 가로 (1024)'],
 ]
 const PAGES = [
+  ['/', '홈'],
+  ['/dashboard', '학습 대시보드'],
+  ['/learn', '학습 선택'],
+  ['/onboarding', '기본정보 설정'],
   ['/cases', '케이스 목록'],
   ['/cases/VS-SEG-202', '판독훈련'],
   ['/wrong-notes', '복습노트'],
+  ['/wrong-notes/VS-SEG-202', '오답 상세'],
   ['/progress', '진행현황'],
   ['/account', '계정 설정'],
 ]

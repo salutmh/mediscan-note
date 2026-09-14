@@ -140,6 +140,35 @@ if (signedIn.startsWith('FAIL')) {
 }
 const { token: TOKEN, user: USER } = JSON.parse(signedIn)
 
+// **오답 상세는 제출 이력이 있어야 내용이 그려진다.**
+// 빈 상태만 점검하면 정작 내용이 있는 화면(영상·해설·버튼)이 검사에서 빠진다.
+// 그래서 한 번만 제출해 둔다 — 화면 조작 없이 API 로 끝낸다.
+const SEED_SUBMIT = String.raw`
+(async () => {
+  const c = document.createElement('canvas')
+  c.width = 512; c.height = 512
+  const ctx = c.getContext('2d')
+  ctx.fillStyle = '#fff'
+  ctx.beginPath(); ctx.arc(150, 170, 30, 0, Math.PI * 2); ctx.fill()
+  const res = await fetch('http://localhost:8010/api/cases/VS-SEG-202/submit', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer __TOKEN__' },
+    body: JSON.stringify({
+      roi: {
+        type: 'brush_mask',
+        points: [[150, 170]],
+        mask_png_base64: c.toDataURL('image/png').split(',')[1],
+      },
+      duration_seconds: 10,
+    }),
+  })
+  const d = await res.json()
+  return d.grade ?? ('FAIL ' + JSON.stringify(d).slice(0, 150))
+})()
+`
+const seeded = await evaluate(SEED_SUBMIT.replace('__TOKEN__', TOKEN))
+console.log(`오답 상세용 제출: ${seeded}`)
+
 // ------------------------------------------------------------------ 점검
 const AUDIT = String.raw`
 (() => {
@@ -238,12 +267,18 @@ const AUDIT = String.raw`
 
 // 로그인 화면은 위에서 로그아웃 상태로 이미 점검했다 (여기 넣으면 /cases 로 넘어간다)
 const PAGES = [
+  ['/', '홈 (시안 04)'],
+  ['/dashboard', '학습 대시보드 (시안 05)'],
+  ['/learn', '학습 선택 (시안 06)'],
+  ['/onboarding', '기본정보 설정 (시안 03)'],
   ['/cases', '화면 1 케이스 목록'],
   ['/cases/VS-SEG-202', '화면 2 판독훈련'],
   ['/analyze', '화면 5 내 영상 분석'],
   ['/wrong-notes', '화면 6 복습노트'],
+  // 오답 상세는 **제출 이력이 있어야** 열린다 (아래에서 한 번 제출한 뒤 점검한다)
+  ['/wrong-notes/VS-SEG-202', '오답 상세 (시안 10)'],
   ['/progress', '화면 7 진행현황'],
-  ['/account', '계정 설정'],
+  ['/account', '계정 설정 (시안 11)'],
 ]
 
 const all = []

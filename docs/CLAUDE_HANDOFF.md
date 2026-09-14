@@ -15,7 +15,7 @@
 | 원격 | `https://github.com/salutmh/mediscan-note.git` (Public) |
 | 현재 모드 | **지속 자율 개발 루프** (Phase 1~8 은 최초 백로그였고 전부 완료) |
 | STATUS | `IN_PROGRESS` — 사이클마다 제품 재평가 → 최고가치 작업 선정 |
-| 마지막 전체 검증 | 백엔드 **1080 passed** (SQLite·PostgreSQL 양쪽) / 프론트 **140 passed** / E2E 7종 / 접근성·좁은화면 점검 0건 / `verify_cases` 6케이스 |
+| 마지막 전체 검증 | 백엔드 **1080 passed** (SQLite·PostgreSQL 양쪽) / 프론트 **194 passed** / E2E 7종 / 접근성·좁은화면 점검 0건 / `verify_cases` 6케이스 |
 
 > **push 는 매번 사용자 승인이 필요하다.**
 > force push / rebase / reset --hard / history rewrite 는 하지 않는다.
@@ -54,6 +54,35 @@
 ---
 
 ## 3. 완료된 작업
+
+### 검증 메우기 — **새 화면 12개를 만들어 놓고 검증은 옛 화면만 보고 있었다**
+
+UI 개편을 하며 화면을 넷 새로 만들었는데(대시보드·학습선택·기본정보설정·오답상세)
+**프론트 테스트를 하나도 붙이지 않았다.** 프론트 테스트 수가 140 에서 안 늘어난 것이
+그 증거였다. 더 나쁜 건 접근성·좁은화면 점검이 도는 경로 목록에 새 화면이 **아예 없었다**는
+것이다 — "지적 0건"이 사실은 **"새 화면은 보지도 않았음"** 이었다.
+(인수인계가 경고한 그 패턴: *0건이 "제대로 봤는데 없음"인지 "아무것도 못 봤음"인지 구분되어야 한다.*)
+
+**메운 것**
+- 화면별 단위 테스트 추가: `WrongNoteDetailView`(8) `LearnSelectView`(8) `DashboardView`(9)
+  `OnboardingView`(8) `WrongNotesView`(6) `LoginView`(9) `MyProgressView`(6)
+  → 프론트 **140 → 194**. 이제 **모든 화면에 테스트가 있다.**
+- `a11y-audit` / `responsive-check` 의 경로 목록에 새 화면 5개 추가
+  (`/`, `/dashboard`, `/learn`, `/onboarding`, `/wrong-notes/:id`)
+- 오답 상세는 **제출 이력이 있어야 내용이 그려진다.** 빈 상태만 보면 정작 내용이
+  있는 화면이 검사에서 빠지므로, a11y 점검이 시작할 때 API 로 한 번 제출해 둔다.
+
+**늘린 검증이 곧바로 실제 결함 3건을 잡았다**
+1. **홈에서 제목 단계가 건너뛰어졌다** (`h1 → h3`). 스크린리더는 제목 단계로 구조를
+   읽는데 그게 끊겨 있었다. `h2` 로 고쳤다.
+2. **홈의 "전체 케이스 보기" 링크에 스타일이 통째로 없었다** — 앞선 편집에서
+   `.all-cases` 규칙이 사라져 969×24 짜리 블록 링크가 돼 있었다.
+3. 홈·대시보드의 "전체 기록 보기" 링크가 터치 목표(44px) 미달이었다.
+
+**검증**: 백엔드 **1080** / 프론트 **194** / 빌드 / 접근성 0건 / 좁은화면 0건 /
+E2E user-flow·consent-and-sns·error-paths 통과.
+
+---
 
 ### UI 개편 #8 — 마지막 두 프레임 (02-2 회원가입 프로필 · 11 마이페이지)
 
@@ -342,7 +371,7 @@ E2E user-flow·roi-undo·error-paths 통과.
   해설까지 내려온 사람에게는 보이지 않는다 — 다 읽은 자리에서도 고를 수 있어야 한다.
 - 대시보드 `recent_activity` 에 `thumbnail_url` 추가 (표에 어떤 영상이었는지 보이게).
 
-**검증**: 백엔드 **1080 passed** / 프론트 **140 passed** / 빌드 통과 /
+**검증**: 백엔드 **1080 passed** / 프론트 **194 passed** / 빌드 통과 /
 E2E user-flow·roi-undo·slice-navigation·error-paths 통과 / 접근성 0건 / 좁은화면 0건.
 
 ---
@@ -658,7 +687,7 @@ head 뒤처짐, alembic_version 삭제, 테이블 삭제, 운영 계정 혼입 �
 - `AnalyzeView` 6개: 준비 상태를 하드코딩하지 않는다, 불가능하면 업로드 전에 이유를 알리고
   요청 버튼을 막는다, **확인 실패 시에는 잠그지 않는다**
 
-프론트 25 → **140개**.
+프론트 25 → **194개**.
 
 ---
 
@@ -1292,7 +1321,7 @@ cd backend && alembic revision --autogenerate -m "<설명>"
 | 백엔드 (SQLite) | `cd backend && pytest` | **1080 passed** |
 | 백엔드 (PostgreSQL) | `python -m scripts.verify_postgres --url ... --with-tests` | 마이그레이션 up/down/up + 전체 테스트 통과 |
 | 케이스 | `python -m scripts.verify_cases` | 6케이스 통과 |
-| 프론트 단위 | `cd frontend && npx vitest run` | **140 passed** |
+| 프론트 단위 | `cd frontend && npx vitest run` | **194 passed** |
 | 빌드 | `npm run build` | 통과 |
 | 브라우저 E2E | `tools/browser-verify/*.mjs` (user-flow / slice-navigation / consent-and-sns / screenshot-all / error-paths / case-review / admin-ux / **roi-undo**) | 통과 |
 | 접근성 | `tools/browser-verify/a11y-audit.mjs` | 지적 0건 |
