@@ -259,8 +259,10 @@ function whenLabel(iso) {
         </div>
       </article>
 
-      <!-- 3. 재도전으로 얼마나 나아졌나 -->
-      <article class="card">
+      <!-- 3. 재도전으로 얼마나 나아졌나.
+           아직 재도전이 없으면 카드를 **가라앉힌다** — 빈 칸이 채워진 칸과 같은 무게로
+           보이면 신규 사용자 홈이 "없습니다"로 꽉 차 보인다. -->
+      <article class="card" :class="{ quiet: !improvement }">
         <h2 class="card-title">최근 재도전</h2>
           <div v-if="improvement" class="improve">
             <p class="improve-case">{{ improvement.case_id }}</p>
@@ -290,7 +292,7 @@ function whenLabel(iso) {
       <!-- 4. 최근 학습 활동 — 시안 05 의 표.
            반쪽 카드에 밀어 넣으면 판정·일치도·시각이 서로 겹쳐 읽힌다.
            **모드·소견 칸은 두지 않는다** — 우리에게 없는 값이라 빈 칸만 남는다. -->
-      <article class="card activity-card">
+      <article class="card activity-card" :class="{ quiet: !data.recent_activity.length }">
         <header class="card-head">
           <h2 class="card-title">최근 학습 활동</h2>
           <RouterLink v-if="data.recent_activity.length" class="card-more" to="/progress">
@@ -355,10 +357,12 @@ function whenLabel(iso) {
   gap: var(--sp-6);
   align-items: center;
   padding: var(--sp-10) var(--sp-8);
-  background: var(--surface);
-  border: 1px solid var(--line);
+  /* 강조 면(표면 3단 중 가장 위). 홈에서 **가장 먼저 읽혀야 하는 하나**라
+     아래 카드들과 같은 옷을 입으면 안 된다. 테두리 대신 그림자로 띄운다. */
+  background: var(--surface-raised);
+  border: 1px solid transparent;
   border-radius: var(--r-lg);
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--shadow-lg);
 }
 
 .hero h1 {

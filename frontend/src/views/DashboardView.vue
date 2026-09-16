@@ -160,7 +160,7 @@ function whenLabel(iso) {
       </div>
 
       <!-- 최근 학습 활동 (시안 05 의 표) -->
-      <article class="card activity-card">
+      <article class="card activity-card" :class="{ quiet: !recent.length }">
         <header class="card-head">
           <h2 class="card-title">최근 학습 활동</h2>
           <RouterLink class="card-more" to="/progress">전체 학습 기록 보기 ›</RouterLink>
@@ -388,13 +388,8 @@ function whenLabel(iso) {
   text-decoration: underline;
 }
 
-.empty-note {
-  margin: 0;
-  padding: var(--sp-8) 0;
-  color: var(--ink-muted);
-  font-size: 14px;
-  text-align: center;
-}
+/* .empty-note 는 style.css 의 공통 규칙을 쓴다 (여기서 32px 위아래 여백을 주던 지역 규칙을
+   걷어냈다 — 홈과 대시보드의 빈 상태가 서로 달라 보일 이유가 없다) */
 
 .foot {
   margin: 0;

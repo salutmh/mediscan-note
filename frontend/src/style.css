@@ -86,8 +86,13 @@
   --roi-overlap: #facc15;
 
   /* --- 의미 별칭 --- */
-  --surface: var(--gray-0);
-  --surface-sunken: var(--gray-50);
+  /* 표면은 **3단**이다. 처음에는 흰 카드 한 종류뿐이어서 hero·지표·빈 상태·목록이
+     전부 같은 옷을 입었고, 강조하고 싶어도 쓸 수 있는 더 강한 면이 없었다
+     (홈 카드 9개 = 표면 1종). 아래 세 단계를 .card / .card.raised / .card.quiet 로 쓴다. */
+  --surface: var(--gray-0); /* 기본 카드 */
+  --surface-raised: var(--gray-0); /* 강조 면 — 그림자로 띄운다 (hero, 결과 판정) */
+  --surface-quiet: var(--gray-50); /* 가라앉은 면 — 빈 상태·보조 정보 */
+  --surface-sunken: var(--gray-50); /* 페이지 배경 */
   --line: var(--gray-200);
   --line-strong: var(--gray-300);
   --ink: var(--gray-900);
@@ -117,10 +122,15 @@
   --r-full: 999px;
 
   /* --- 그림자 (얕게. 의료 UI 는 과한 그림자가 어울리지 않는다)
-     시안은 카드를 그림자보다 여백과 흰 면으로 띄운다. 네이비 기가 도는 그림자를 쓴다. */
-  --shadow-sm: 0 1px 2px rgba(14, 40, 80, 0.05);
-  --shadow-md: 0 2px 10px rgba(14, 40, 80, 0.06), 0 1px 2px rgba(14, 40, 80, 0.04);
-  --shadow-lg: 0 14px 36px rgba(14, 40, 80, 0.1), 0 2px 6px rgba(14, 40, 80, 0.05);
+     시안은 카드를 그림자보다 여백과 흰 면으로 띄운다. 네이비 기가 도는 그림자를 쓴다.
+
+     ※ 처음 잡은 --shadow-sm 은 5% 한 겹이라 배경(#f6f8fc) 위에서 **사실상 보이지 않았다.**
+       카드가 떠 보이지도, 그렇다고 납작하지도 않은 어중간한 상태가 됐다.
+       퍼지는 겹을 하나 더 얹어 "면이 배경에서 떨어져 있다"가 읽히게 한다.
+       여전히 최대 불투명도는 12% 라 과하지 않다. */
+  --shadow-sm: 0 1px 2px rgba(14, 40, 80, 0.05), 0 2px 6px rgba(14, 40, 80, 0.045);
+  --shadow-md: 0 2px 10px rgba(14, 40, 80, 0.07), 0 1px 3px rgba(14, 40, 80, 0.05);
+  --shadow-lg: 0 14px 36px rgba(14, 40, 80, 0.12), 0 2px 6px rgba(14, 40, 80, 0.06);
 
   --focus-ring: 0 0 0 3px var(--brand-100);
   --transition: 140ms cubic-bezier(0.4, 0, 0.2, 1);
@@ -165,16 +175,25 @@ h3 {
   font-weight: 700;
 }
 
+/* 타입 스케일.
+   처음 잡은 값은 h1 26 / h2 17 / h3 15 / 본문 15 였다. 문제는 **h2 와 본문이 2px 차이**라
+   섹션 제목("최근 재도전", "학습 해설")이 본문처럼 읽혔다는 것이다. 화면 전체가 평평해
+   보이던 가장 큰 원인이 여기였다. 아래는 약 1.25 비율로 다시 잡은 값이다:
+
+     h1 30 → h2 20 → h3 16 → 본문 15
+
+   h2 와 본문 사이가 5px + 굵기 700/400 이라 이제 제목이 확실히 앞으로 나온다.
+   (홈·대시보드는 h1 을 각자 34/28 로 덮어쓴다 — 화면의 주제목이라 의도한 것이다) */
 h1 {
-  font-size: 26px;
+  font-size: 30px;
 }
 
 h2 {
-  font-size: 17px;
+  font-size: 20px;
 }
 
 h3 {
-  font-size: 15px;
+  font-size: 16px;
 }
 
 p {
@@ -345,12 +364,48 @@ button.sm {
   box-shadow: var(--shadow-sm);
 }
 
+/* 강조 면 — 화면에서 **가장 먼저 읽혀야 하는 하나**에만 쓴다 (홈 hero, 결과 판정).
+   테두리를 빼고 그림자로 띄운다. 테두리와 그림자를 같이 쓰면 둘 다 흐려 보인다. */
+.card.raised {
+  border-color: transparent;
+  padding: var(--sp-6);
+  box-shadow: var(--shadow-lg);
+}
+
+/* 가라앉은 면 — 빈 상태·보조 정보. 채워진 카드와 **한눈에 구분되어야** 한다.
+   흰 카드로 두면 "내용이 있는 칸"과 똑같이 보여서 빈 화면이 꽉 차 보인다.
+   빈 칸은 **자리도 덜 차지해야** 한다 — 그래서 패딩을 줄이고 제목 아래 여백도 좁힌다.
+   (빈 상태를 카드 안의 또 다른 박스로 만들면 높이가 오히려 늘어난다. 실제로 그렇게 됐다) */
+.card.quiet {
+  padding: var(--sp-4) var(--sp-5);
+  background: var(--surface-quiet);
+  box-shadow: none;
+}
+
+.card.quiet .card-title {
+  margin-bottom: var(--sp-1);
+  color: var(--ink-secondary);
+  font-size: 15px;
+}
+
 .card-title {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--sp-3);
   margin-bottom: var(--sp-4);
+}
+
+/* 빈 상태 한 줄.
+   홈에서 이게 그냥 <p> 였다. 한 줄짜리 문장이 전체 폭 흰 카드를 차지해서
+   **신규 사용자 첫 화면의 40% 가 "없습니다"** 였다.
+   여기서는 테두리를 주지 않는다 — 이 문단을 감싸는 카드가 이미 .card.quiet 로
+   가라앉아 있어서, 박스를 한 겹 더 두르면 높이만 늘고 뜻은 더해지지 않는다.
+   (DashboardView 에 있던 지역 규칙을 여기로 올렸다 — 두 화면이 달리 보일 이유가 없다) */
+.empty-note {
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: 13.5px;
 }
 
 /* -------------------------------------------------------------------- 입력 */
@@ -556,11 +611,25 @@ input[type='range'] {
 }
 
 @media (max-width: 640px) {
+  /* 좁은 화면에서도 **위계는 유지한다** — 전부 같은 비율로 내린다.
+     h1 만 줄이면 데스크톱에서 고친 h2↔본문 간격이 모바일에서 도로 붙는다. */
   h1 {
-    font-size: 22px;
+    font-size: 24px;
+  }
+
+  h2 {
+    font-size: 18px;
+  }
+
+  h3 {
+    font-size: 15.5px;
   }
 
   body {
     font-size: 14.5px;
+  }
+
+  .card.raised {
+    padding: var(--sp-5);
   }
 }
