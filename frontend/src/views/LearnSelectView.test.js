@@ -9,6 +9,8 @@
  *  - 선택지는 **실제 케이스 목록에서** 만든다 — 화면에 하드코딩하면
  *    케이스가 늘어도 여기만 옛 상태로 남는다
  *  - 부위를 바꾸면 아래 단계는 **다시 고른다** (이전 선택이 남으면 조합이 어긋난다)
+ *  - **고를 것이 하나뿐인 단계는 대신 골라 준다.** 선택지가 1개인 버튼을 세 번 누르게
+ *    하지 않는다. 둘 이상이면 그대로 사용자가 고른다.
  */
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
@@ -32,6 +34,15 @@ const brainCase = (id) => ({
   disease: 'vestibular_schwannoma',
 })
 
+/** 부위가 둘이면 자동 선택이 걸리지 않는다 — 단계별 동작은 이 픽스처로 본다 */
+const TWO_PARTS = {
+  cases: [
+    brainCase('VS-SEG-202'),
+    brainCase('VS-SEG-203'),
+    { case_id: 'CXR-1', body_part: 'chest_xray', disease: 'pneumonia' },
+  ],
+}
+
 const partCard = (w, label) =>
   w.findAll('.pick').find((b) => b.find('.pick-label')?.text() === label)
 const modalityCard = (w, code) =>
@@ -40,7 +51,7 @@ const modalityCard = (w, code) =>
 beforeEach(() => {
   listCases.mockReset()
   push.mockReset()
-  listCases.mockResolvedValue({ cases: [brainCase('VS-SEG-202'), brainCase('VS-SEG-203')] })
+  listCases.mockResolvedValue(TWO_PARTS)
 })
 
 describe('1단계 — 부위', () => {
@@ -51,10 +62,10 @@ describe('1단계 — 부위', () => {
     expect(partCard(wrapper, '뇌 MRI').attributes('disabled')).toBeUndefined()
     expect(partCard(wrapper, '뇌 MRI').text()).toContain('2케이스')
 
-    const chest = partCard(wrapper, '흉부 X-ray')
-    expect(chest.attributes('disabled')).toBeDefined()
+    const abdomen = partCard(wrapper, '복부 CT')
+    expect(abdomen.attributes('disabled')).toBeDefined()
     // **색만으로 알리지 않는다**
-    expect(chest.text()).toContain('준비 중')
+    expect(abdomen.text()).toContain('준비 중')
   })
 
   it('준비되지 않은 부위를 눌러도 아무 일도 일어나지 않는다', async () => {
@@ -75,6 +86,14 @@ describe('2단계 — 영상 종류', () => {
     expect(modalityCard(wrapper, 'MRI').attributes('disabled')).toBeDefined()
   })
 
+  it('부위가 둘 이상이면 **자동으로 고르지 않는다** — 실제 선택이다', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(partCard(wrapper, '뇌 MRI').classes()).not.toContain('active')
+    expect(wrapper.find('.start').attributes('disabled')).toBeDefined()
+  })
+
   it('고른 부위에 딸린 영상 종류만 활성이다', async () => {
     const wrapper = mountView()
     await flushPromises()
@@ -90,11 +109,28 @@ describe('3단계 — 질환', () => {
   it('질환 목록을 **실제 케이스에서** 만든다', async () => {
     const wrapper = mountView()
     await flushPromises()
+    // 부위를 고르면 그 부위의 영상 종류는 하나뿐이라 **자동으로 정해진다**
     await partCard(wrapper, '뇌 MRI').trigger('click')
-    await modalityCard(wrapper, 'MRI').trigger('click')
+    expect(modalityCard(wrapper, 'MRI').classes()).toContain('active')
 
     const chips = wrapper.findAll('.disease-chip').map((c) => c.text())
     expect(chips.join(' ')).toContain('전정신경초종')
+  })
+
+  it('질환이 둘 이상이면 **자동으로 고르지 않는다**', async () => {
+    listCases.mockResolvedValue({
+      cases: [
+        brainCase('VS-SEG-202'),
+        { case_id: 'MEN-1', body_part: 'brain_mri', disease: 'meningioma' },
+        { case_id: 'CXR-1', body_part: 'chest_xray', disease: 'pneumonia' },
+      ],
+    })
+    const wrapper = mountView()
+    await flushPromises()
+    await partCard(wrapper, '뇌 MRI').trigger('click')
+
+    expect(wrapper.findAll('.disease-chip')).toHaveLength(2)
+    expect(wrapper.find('.start').attributes('disabled')).toBeDefined()
   })
 })
 
@@ -107,12 +143,13 @@ describe('학습 시작', () => {
     expect(wrapper.text()).toContain('세 단계를 모두 고르면')
   })
 
-  it('다 고르면 몇 케이스인지 보여주고 목록으로 넘긴다', async () => {
+  it('나머지 단계에 선택지가 하나뿐이면 부위만 골라도 시작할 수 있다', async () => {
     const wrapper = mountView()
     await flushPromises()
     await partCard(wrapper, '뇌 MRI').trigger('click')
-    await modalityCard(wrapper, 'MRI').trigger('click')
-    await wrapper.find('.disease-chip').trigger('click')
+
+    // 영상 종류·질환이 각각 하나뿐이라 **세 번 누르게 하지 않는다**
+    expect(wrapper.find('.start').attributes('disabled')).toBeUndefined()
 
     // **누르기 전에** 몇 개인지 보인다
     expect(wrapper.find('.start').text()).toContain('2케이스')
@@ -126,18 +163,16 @@ describe('학습 시작', () => {
 
   it('부위를 바꾸면 아래 단계는 다시 고른다', async () => {
     // 이전 선택이 남으면 "뇌 MRI + X-ray" 같은 조합이 만들어진다
-    listCases.mockResolvedValue({
-      cases: [brainCase('VS-SEG-202'), { ...brainCase('CXR-1'), body_part: 'chest_xray' }],
-    })
     const wrapper = mountView()
     await flushPromises()
 
     await partCard(wrapper, '뇌 MRI').trigger('click')
-    await modalityCard(wrapper, 'MRI').trigger('click')
     expect(modalityCard(wrapper, 'MRI').classes()).toContain('active')
 
     await partCard(wrapper, '흉부 X-ray').trigger('click')
+    // MRI 선택이 남아 있으면 "흉부 X-ray + MRI" 가 된다
     expect(modalityCard(wrapper, 'MRI').classes()).not.toContain('active')
-    expect(wrapper.find('.start').attributes('disabled')).toBeDefined()
+    // 새 부위에서도 선택지가 하나뿐이면 다시 자동으로 채워진다
+    expect(modalityCard(wrapper, 'X-ray').classes()).toContain('active')
   })
 })

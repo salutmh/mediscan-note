@@ -289,27 +289,6 @@ const PROVIDERS = [
 
       <!-- 기본: SNS 버튼 + 이메일 로그인/가입 -->
       <template v-else>
-        <div class="social">
-          <button
-            v-for="p in PROVIDERS"
-            :key="p.key"
-            class="lg social-btn"
-            :class="p.key"
-            :disabled="busy"
-            @click="onSocial(p.key)"
-          >
-            {{ p.label }}
-          </button>
-        </div>
-
-        <p class="social-note">
-          <strong>개발용 예시 로그인입니다.</strong>
-          아직 카카오·구글·네이버 실제 인증을 연동하지 않아, 각 제공자별 임시 토큰으로
-          계정을 만듭니다. 실제 SNS 계정 정보는 사용하지도 전송하지도 않습니다.
-        </p>
-
-        <div class="or"><span>또는 이메일로</span></div>
-
         <div class="segmented full">
           <button :class="{ active: mode === 'login' }" @click="switchMode('login')">로그인</button>
           <button :class="{ active: mode === 'signup' }" @click="switchMode('signup')">회원가입</button>
@@ -439,6 +418,32 @@ const PROVIDERS = [
             가입한 계정과 판독 이력은 서버 DB에 저장됩니다. 로그인 상태는 7일간 유지됩니다.
           </p>
         </form>
+
+        <!-- **동작하는 것을 먼저 둔다.** 예전에는 이 셋이 화면 맨 위에서 가장 큰 버튼이었고
+             바로 아래에 "개발용 예시 로그인입니다"가 붙어 있었다 — 처음 온 사람이 가장 먼저
+             보는 것이 **아직 안 되는 기능 세 개**였고, 정작 쓸 수 있는 이메일 로그인은
+             스크롤해야 나왔다. 숨기지는 않는다(제품 범위는 보이는 편이 낫다).
+             각 사에 앱을 등록해 실연동되면 다시 위로 올린다. -->
+        <div class="or"><span>SNS 계정으로</span></div>
+
+        <div class="social">
+          <button
+            v-for="p in PROVIDERS"
+            :key="p.key"
+            class="social-btn"
+            :class="p.key"
+            :disabled="busy"
+            @click="onSocial(p.key)"
+          >
+            {{ p.label }}
+          </button>
+        </div>
+
+        <p class="social-note">
+          <strong>아직 연동 전입니다.</strong>
+          카카오·구글·네이버 실제 인증을 붙이지 않아, 각 제공자별 임시 토큰으로 계정을
+          만드는 개발용 예시 로그인입니다. 실제 SNS 계정 정보는 사용하지도 전송하지도 않습니다.
+        </p>
       </template>
     </div>
 

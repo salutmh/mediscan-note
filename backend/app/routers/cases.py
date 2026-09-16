@@ -8,7 +8,7 @@
 from fastapi import APIRouter, HTTPException
 from sqlalchemy import select
 
-from app import analytics, explanations
+from app import analytics, explanations, scoring_config
 from app.deps import CurrentUser, DbSession
 from app.grading import InvalidRoi, NotGradable, evaluate_submission, is_gradable
 from app.models import Case, CaseSlice, Submission
@@ -94,6 +94,7 @@ def grade_and_store(case: Case, roi: dict, user, db, duration_seconds=None) -> d
             reference_mask_url=result["reference_mask_url"],
             evaluation_method=result["evaluation"]["method"],
             is_provisional=result["evaluation"]["is_provisional"],
+            area_ratio=(result.get("spatial_feedback") or {}).get("metrics", {}).get("area_ratio"),
             # 이력에는 **케이스 단위 블록만** 남긴다. disease_info 는 질환 콘텐츠 파일에서
             # 매번 새로 붙으므로(문헌이 갱신되면 같이 바뀐다) 제출 시점 스냅샷에 넣지 않는다.
             explanation=explanations.stored_blocks(case),
@@ -119,6 +120,19 @@ def grade_and_store(case: Case, roi: dict, user, db, duration_seconds=None) -> d
     # 여기 있는 것은 **학습자 자신의 숫자**뿐이다 — 같은 전문가 기준 마스크와의 일치도를
     # 시점만 달리해 비교한다. 의학적 판단이 아니고 grade 에도 영향을 주지 않는다.
     result["progress"] = _progress(attempt, previous, previous_best, result["dice"])
+
+    # **일치했는데 복습 목록에 담기는 경우**가 생겼다 (기준보다 지나치게 넓게 칠한 제출).
+    # 결과 화면에서 그 자리에 바로 말해주지 않으면, 학습자는 "일치"를 보고 끝냈다고
+    # 생각한 뒤 복습노트에서 같은 케이스를 다시 만나고 영문을 모른다.
+    area_ratio = (result.get("spatial_feedback") or {}).get("metrics", {}).get("area_ratio")
+    result["review"] = {
+        "needs_review": result["grade"] != "match" or scoring_config.over_marked(area_ratio),
+        "reason": "not_matched"
+        if result["grade"] != "match"
+        else ("over_marked" if scoring_config.over_marked(area_ratio) else None),
+        "area_ratio": area_ratio,
+        "review_area_ratio": scoring_config.review_area_ratio(),
+    }
 
     result["reference_mask_url"] = absolute_url(result.get("reference_mask_url"))
     if result.get("ai_prediction") and result["ai_prediction"].get("mask_url"):

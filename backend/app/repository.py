@@ -8,6 +8,7 @@ api-spec.md v0.4 기준. 3절이 WrongNote 를 "Submission 에서 grade≠match 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app import scoring_config
 from app.models import Submission
 
 
@@ -60,13 +61,36 @@ def has_matched_case_ids(db: Session, user_id: str) -> set[str]:
     return set(db.scalars(stmt).all())
 
 
+def review_reason(submission: Submission) -> str | None:
+    """이 제출을 복습 목록에 담는 이유. 담지 않으면 None.
+
+    두 가지다:
+      - `not_matched`  : 기준과 일치하지 않았다 (원래부터 있던 기준)
+      - `over_marked`  : **일치했지만 기준보다 지나치게 넓게 칠했다**
+
+    두 번째가 새로 생긴 이유다. Dice 만 보면 기준을 통째로 덮되 훨씬 넓게 칠한 제출이
+    match 가 되고, 그대로 학습완료가 되어 다시 그려볼 기회가 사라진다. 실제로
+    기준의 2.2배를 칠하고 정상 조직으로 55% 넘긴 제출이 그렇게 빠져나갔다 —
+    그러는 동안 같은 화면은 "경계를 조금 더 좁혀 보세요"라고 말하고 있었다.
+
+    **grade 는 바꾸지 않는다.** 이 사람은 병변을 찾았고 그 사실은 그대로 남는다
+    (`has_matched` 유지). 다만 "한 번 더 그려볼 것"으로 함께 표시된다 —
+    두 상태가 동시에 성립하는 것은 api-spec v0.4 가 이미 허용한다.
+    """
+    if submission.grade != "match":
+        return "not_matched"
+    if scoring_config.over_marked(submission.area_ratio):
+        return "over_marked"
+    return None
+
+
 def wrong_note_items(db: Session, user_id: str) -> list[Submission]:
-    """최신 제출이 match 가 아닌 케이스들 = 복습노트 (화면 표기: 복습필요)."""
-    return [s for s in latest_submissions(db, user_id) if s.grade != "match"]
+    """복습노트에 담기는 최신 제출들 (화면 표기: 복습필요)."""
+    return [s for s in latest_submissions(db, user_id) if review_reason(s) is not None]
 
 
 def needs_review_case_ids(db: Session, user_id: str) -> set[str]:
-    """가장 최근 제출이 match 가 아닌 케이스."""
+    """복습 대상 케이스 = 최신 제출이 복습 사유를 가진 케이스."""
     return {s.case_id for s in wrong_note_items(db, user_id)}
 
 

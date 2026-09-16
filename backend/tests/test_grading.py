@@ -87,7 +87,14 @@ def test_response_uses_reference_mask_contract(user_a):
     # (0.60/0.15 가 확정된 의학 기준처럼 읽히면 안 되므로 상태를 응답에 남긴다)
     thresholds = body["evaluation"]["thresholds"]
     assert thresholds["validation_status"] == "not_yet_educationally_validated"
-    assert set(thresholds) == {"match_dice", "partial_dice", "validation_status"}
+    # review_area_ratio 는 grade 를 정하지 않는다 — **복습 경로**를 정하는 값이라
+    # 같은 블록에 실어 배포된 서버가 무엇으로 복습을 권하는지 보이게 한다.
+    assert set(thresholds) == {
+        "match_dice",
+        "partial_dice",
+        "review_area_ratio",
+        "validation_status",
+    }
     assert set(body["evaluation"]) == {"method", "is_provisional", "thresholds"}
     assert body["ai_prediction"] is None  # 체크포인트가 없으므로 참고 정보도 없다
     assert "ai_mask_url" not in body, "v0.2 필드가 남아 있으면 안 된다"

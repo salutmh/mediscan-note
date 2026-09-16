@@ -32,6 +32,8 @@ const disease = ref('')
 onMounted(async () => {
   try {
     cases.value = (await listCases()).cases ?? []
+    // 선택지가 하나뿐인 단계는 미리 골라 둔다 (autoAdvance 주석 참고)
+    autoAdvance()
   } catch (e) {
     errorMessage.value = e.message
   } finally {
@@ -107,12 +109,38 @@ const matchCount = computed(
     ).length,
 )
 
+/**
+ * **고를 것이 하나뿐인 단계는 대신 골라 준다.**
+ *
+ * 지금 데이터로는 부위 1 / 영상 종류 1 / 질환 1 이라, 세 단계를 다 눌러도 도착지가 하나다.
+ * 실제로 써 보면 "선택지가 1개인 버튼"을 세 번 누르는 화면이 된다 — 화면 스스로도 위에
+ * "케이스 목록에서 바로 고를 수도 있습니다"라고 더 빠른 길을 안내하고 있었다.
+ *
+ * 그렇다고 화면을 없애지는 않는다. 부위가 늘면(팀원 5명이 부위별로 맡는다) 이 단계들이
+ * 실제 선택이 된다. **선택지가 둘 이상인 단계는 그대로 사용자가 고른다** —
+ * 하나뿐일 때만 건너뛴다.
+ */
+function autoAdvance() {
+  if (!bodyPart.value) {
+    const ready = partCards.value.filter((p) => p.ready)
+    if (ready.length === 1) bodyPart.value = ready[0].code
+  }
+  if (bodyPart.value && !modality.value && availableModality.value) {
+    modality.value = availableModality.value
+  }
+  if (bodyPart.value && diseaseOptions.value.length === 1) {
+    disease.value = diseaseOptions.value[0].code
+  }
+}
+
 function pickPart(card) {
   if (!card.ready) return
   bodyPart.value = bodyPart.value === card.code ? '' : card.code
   // 부위가 바뀌면 아래 단계는 다시 고른다 (이전 선택이 남으면 조합이 어긋난다)
   modality.value = ''
   disease.value = ''
+  // 새로 고른 부위에서도 선택지가 하나뿐이면 또 건너뛴다
+  if (bodyPart.value) autoAdvance()
 }
 
 function start() {

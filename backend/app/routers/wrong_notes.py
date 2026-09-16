@@ -9,7 +9,7 @@ from sqlalchemy import select
 
 from app.deps import CurrentUser, DbSession
 from app.models import Case, Submission
-from app.repository import attempt_index, case_progress_map, wrong_note_items
+from app.repository import attempt_index, case_progress_map, review_reason, wrong_note_items
 from app.routers.cases import grade_and_store
 from app import explanations
 from app.static_files import absolute_url
@@ -52,6 +52,11 @@ def list_wrong_notes(user: CurrentUser, db: DbSession):
                 "disease": case_map[s.case_id].disease,
                 "thumbnail_url": absolute_url(case_map[s.case_id].thumbnail_url),
                 "grade": s.grade,
+                # **왜 여기 담겼는지**를 함께 보낸다. grade 가 match 인데 목록에 있는
+                # 항목이 생겼으므로(over_marked), 이유를 말하지 않으면 화면이
+                # "일치했는데 왜 복습이지?"를 설명할 수 없다.
+                "review_reason": review_reason(s),
+                "area_ratio": s.area_ratio,
                 "attempted_at": _to_kst_iso(s.submitted_at),
                 # 값이 없으면 넣지 않는다 — 0 으로 채우면 "0점을 받았다"로 읽힌다
                 "latest_dice": s.dice,

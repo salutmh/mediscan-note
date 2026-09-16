@@ -36,4 +36,7 @@ def get_glossary(user: CurrentUser, disease: str | None = None) -> dict:
         "content_version": (content or {}).get("content_version"),
         "source": "literature_based",
         "terms": (content or {}).get("medical_terms", []),
+        # 제출 **전에** 무엇을 찾아야 하는지 알려주는 유일한 자리다.
+        # 문헌 일반론뿐이라 이 케이스의 답은 여기 없다 (tests/test_glossary.py 가 지킨다).
+        "imaging_features": (content or {}).get("imaging_features", []),
     }

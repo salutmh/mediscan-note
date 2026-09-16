@@ -240,3 +240,36 @@ def test_equal_thresholds_are_allowed(monkeypatch):
 def test_default_thresholds_are_self_consistent():
     # 기본값이 스스로 모순이면 아무도 기동하지 못한다.
     scoring_config.assert_valid()
+
+
+# --------------------------------------- 과대 표시 복습 기준 (v0.6)
+def test_review_area_ratio_is_a_multiple_not_a_fraction(monkeypatch):
+    """Dice 임계값과 **단위가 다르다.** 0~1 로 강제하면 기본값 2.0 조차 못 넣는다."""
+    monkeypatch.delenv("MEDISCAN_REVIEW_AREA_RATIO", raising=False)
+    assert scoring_config.review_area_ratio() == 2.0
+
+    monkeypatch.setenv("MEDISCAN_REVIEW_AREA_RATIO", "1.5")
+    assert scoring_config.review_area_ratio() == 1.5
+
+
+def test_review_area_ratio_below_one_is_rejected(monkeypatch):
+    """1.0 미만이면 기준보다 **작게** 칠한 것까지 과대 표시로 담게 된다."""
+    monkeypatch.setenv("MEDISCAN_REVIEW_AREA_RATIO", "0.5")
+    with pytest.raises(ConfigError) as exc:
+        scoring_config.review_area_ratio()
+    assert "배수" in str(exc.value), "단위를 알려줘야 한다"
+
+
+def test_review_area_ratio_rejects_garbage(monkeypatch):
+    monkeypatch.setenv("MEDISCAN_REVIEW_AREA_RATIO", "두배")
+    with pytest.raises(ConfigError):
+        scoring_config.review_area_ratio()
+
+
+def test_unknown_area_ratio_is_never_flagged(monkeypatch):
+    """기록 전 제출(None)을 과대 표시로 단정하지 않는다."""
+    monkeypatch.delenv("MEDISCAN_REVIEW_AREA_RATIO", raising=False)
+    assert scoring_config.over_marked(None) is False
+    assert scoring_config.over_marked(1.2) is False
+    assert scoring_config.over_marked(2.0) is True
+    assert scoring_config.over_marked(3.5) is True

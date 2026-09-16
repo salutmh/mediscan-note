@@ -128,3 +128,78 @@ def test_partial_match_also_needs_review(user_a):
     assert body["grade"] == "partial_match"
     assert _flags(user_a) == {"has_matched": False, "needs_review": True}
     assert _wrong_note_ids(user_a) == [CASE_ID]
+
+
+# ------------------------------------------- 과대 표시 복습 (v0.6)
+#
+# 실제 사용자 walkthrough 에서 나온 문제다: 기준 1,539px 병변에 3,400px(2.2배)을 칠해
+# 정상 조직으로 55% 가 넘친 제출이 Dice 0.62 로 `match` 를 받고 **학습완료로 끝났다.**
+# 같은 응답의 spatial_feedback 은 그 순간 "경계를 조금 더 좁혀 보세요"라고 말하고 있었다 —
+# 피드백과 등급이 다른 말을 하는데 학습 경로가 등급만 따랐다.
+#
+# 여기서 고정하려는 것: **grade 는 그대로 두고 복습 경로만 바뀐다.**
+def test_over_marked_match_is_still_a_match(user_a, roi_over_marked):
+    """넓게 칠했다고 **등급을 깎지 않는다.** 병변을 찾은 사실은 그대로다."""
+    body = user_a.submit(roi_over_marked).json()
+
+    assert body["grade"] == "match"
+    assert body["review"]["reason"] == "over_marked"
+    assert body["review"]["area_ratio"] >= body["review"]["review_area_ratio"]
+
+
+def test_over_marked_match_goes_to_review(user_a, roi_over_marked):
+    """일치했어도 지나치게 넓으면 **다시 그려볼 기회**를 준다."""
+    user_a.submit(roi_over_marked)
+
+    # 학습완료는 유지되고 복습필요가 함께 켜진다 (두 축은 배타적이지 않다)
+    assert _flags(user_a) == {"has_matched": True, "needs_review": True}
+    assert _wrong_note_ids(user_a) == [CASE_ID]
+
+
+def test_review_list_says_why_a_match_is_there(user_a, roi_over_marked):
+    """`grade: match` 인 항목이 목록에 있으므로 **이유가 함께 나가야** 한다."""
+    user_a.submit(roi_over_marked)
+    item = user_a.get("/api/wrong-notes").json()["items"][0]
+
+    assert item["grade"] == "match"
+    assert item["review_reason"] == "over_marked"
+    assert item["area_ratio"] is not None
+
+
+def test_tight_match_is_not_sent_to_review(user_a, roi_match):
+    """경계를 잘 맞춘 제출은 그대로 끝난다 — 모든 match 를 복습으로 보내지 않는다."""
+    body = user_a.submit(roi_match).json()
+
+    assert body["grade"] == "match"
+    assert body["review"]["needs_review"] is False
+    assert body["review"]["reason"] is None
+    assert _wrong_note_ids(user_a) == []
+
+
+def test_redrawing_tighter_clears_review(user_a, roi_over_marked, roi_match):
+    """넓게 칠해 복습에 담긴 뒤, 좁혀서 다시 그리면 빠진다."""
+    user_a.submit(roi_over_marked)
+    assert _wrong_note_ids(user_a) == [CASE_ID]
+
+    user_a.submit(roi_match)
+    assert _wrong_note_ids(user_a) == []
+    assert _flags(user_a) == {"has_matched": True, "needs_review": False}
+
+
+def test_submissions_without_area_ratio_are_not_flagged(user_a, roi_match):
+    """area_ratio 를 기록하기 **전에 쌓인 제출**은 복습으로 끌어오지 않는다.
+
+    모르는 값을 "과했다"로도 "괜찮았다"로도 단정하지 않는다. 마이그레이션 직후
+    과거 이력이 통째로 복습노트에 쏟아지면, 그건 학습자에게 일어나지 않은 일이다.
+    """
+    from app.db import SessionLocal
+    from app.models import Submission
+
+    user_a.submit(roi_match)
+    with SessionLocal() as db:
+        row = db.query(Submission).filter(Submission.case_id == CASE_ID).one()
+        row.area_ratio = None  # 옛 행을 흉내낸다
+        db.commit()
+
+    assert _wrong_note_ids(user_a) == []
+    assert _flags(user_a) == {"has_matched": True, "needs_review": False}

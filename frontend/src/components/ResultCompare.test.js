@@ -126,3 +126,65 @@ describe('겹쳐보기를 그릴 수 없는 환경', () => {
     expect(wrapper.find('.note').text()).toContain('그릴 수 없습니다')
   })
 })
+
+
+/**
+ * **일치했는데 복습 목록에 담긴 경우** (계약 v0.6).
+ *
+ * 실제로 겪은 일이다: 기준 1,539px 병변에 3,400px(2.2배)을 칠해 정상 조직으로 55% 가
+ * 넘친 제출이 Dice 0.62 로 `match` 를 받았다. 화면은 같은 순간 "경계를 조금 더 좁혀
+ * 보세요"라고 말하고 있었는데, 학습자는 "기준과 일치"만 보고 끝냈다고 생각했다.
+ * 여기서 말해 주지 않으면 복습노트에서 같은 케이스를 다시 만나고 영문을 모른다.
+ */
+describe('과대 표시 안내', () => {
+  const overMarked = (extra = {}) =>
+    mount(ResultCompare, {
+      props: {
+        result: {
+          ...BASE_RESULT,
+          grade: 'match',
+          dice: 0.62,
+          review: { needs_review: true, reason: 'over_marked', area_ratio: 2.21, review_area_ratio: 2.0 },
+          ...extra,
+        },
+        submittedMaskDataUrl: null,
+      },
+    })
+
+  it('몇 배 칠했는지와 복습에 담겼다는 사실을 말한다', () => {
+    const text = overMarked().find('.over-marked').text()
+
+    expect(text).toContain('2.2배')
+    expect(text).toContain('복습노트에 담았습니다')
+  })
+
+  it('**등급을 깎은 것이 아니라는 점**을 함께 밝힌다', () => {
+    const wrapper = overMarked()
+
+    // 판정 자체는 그대로 "기준과 일치"로 남는다
+    expect(wrapper.find('.grade').text()).toBe('기준과 일치')
+    expect(wrapper.find('.over-marked').text()).toContain('판정(기준과 일치)은 그대로입니다')
+  })
+
+  it('경계를 잘 맞춘 일치에는 안내가 뜨지 않는다', () => {
+    const wrapper = mount(ResultCompare, {
+      props: {
+        result: {
+          ...BASE_RESULT,
+          grade: 'match',
+          dice: 0.93,
+          review: { needs_review: false, reason: null, area_ratio: 1.05, review_area_ratio: 2.0 },
+        },
+        submittedMaskDataUrl: null,
+      },
+    })
+    expect(wrapper.find('.over-marked').exists()).toBe(false)
+  })
+
+  it('review 블록이 없는 응답에서도 깨지지 않는다', () => {
+    const wrapper = mount(ResultCompare, {
+      props: { result: { ...BASE_RESULT, grade: 'match' }, submittedMaskDataUrl: null },
+    })
+    expect(wrapper.find('.over-marked').exists()).toBe(false)
+  })
+})

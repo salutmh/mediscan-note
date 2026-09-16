@@ -695,6 +695,7 @@ defineExpose({
       </div>
 
       <!-- 영상 + ROI 오버레이 -->
+      <div class="stage-area">
       <div class="stage-clip" :style="{ aspectRatio }">
       <div class="stage" :style="{ transform: stageTransform }">
         <img
@@ -746,6 +747,34 @@ defineExpose({
         <div v-if="boxPreview" class="box-preview" :style="boxPreview"></div>
       </div>
 
+
+      <!-- 밝기·대비 조절 -->
+      <div v-if="windowOpen" class="window-pop">
+        <label>
+          <span>밝기 <b class="tnum">{{ brightness }}%</b></span>
+          <input type="range" min="40" max="180" step="5" v-model.number="brightness" />
+        </label>
+        <label>
+          <span>대비 <b class="tnum">{{ contrast }}%</b></span>
+          <input type="range" min="40" max="220" step="5" v-model.number="contrast" />
+        </label>
+        <p class="window-note">
+          보기만 바뀝니다. 칠한 영역과 채점에는 영향이 없습니다.
+        </p>
+      </div>
+
+      <!-- 좌하단 상태 (시안의 W/L·Zoom 자리). 우리는 원본 HU 가 없어 밝기·대비로 적는다 -->
+      <div class="stage-readout tnum">
+        <span>밝기 {{ brightness }}% · 대비 {{ contrast }}%</span>
+        <span>Zoom {{ zoom.toFixed(2) }}x</span>
+      </div>
+
+      <span v-if="disabled" class="lock-tag">입력 잠김</span>
+      </div>
+
+      <!-- 도구 레일은 **stage-clip 밖**에 둔다.
+           안에 두면 overflow:hidden 에 잘린다 — 좁은 화면에서 레일을 영상 아래로
+           내렸더니 한 칸("축소")만 삐죽 나오고 나머지가 통째로 잘려 나갔다. -->
       <!-- 좌측 도구 레일 (시안 07). 확대·이동·밝기는 **보기만 바꾼다** —
            칠한 ROI 와 제출되는 마스크에는 영향을 주지 않는다. -->
       <button
@@ -821,29 +850,6 @@ defineExpose({
           <span>리셋</span>
         </button>
       </div>
-
-      <!-- 밝기·대비 조절 -->
-      <div v-if="windowOpen" class="window-pop">
-        <label>
-          <span>밝기 <b class="tnum">{{ brightness }}%</b></span>
-          <input type="range" min="40" max="180" step="5" v-model.number="brightness" />
-        </label>
-        <label>
-          <span>대비 <b class="tnum">{{ contrast }}%</b></span>
-          <input type="range" min="40" max="220" step="5" v-model.number="contrast" />
-        </label>
-        <p class="window-note">
-          보기만 바뀝니다. 칠한 영역과 채점에는 영향이 없습니다.
-        </p>
-      </div>
-
-      <!-- 좌하단 상태 (시안의 W/L·Zoom 자리). 우리는 원본 HU 가 없어 밝기·대비로 적는다 -->
-      <div class="stage-readout tnum">
-        <span>밝기 {{ brightness }}% · 대비 {{ contrast }}%</span>
-        <span>Zoom {{ zoom.toFixed(2) }}x</span>
-      </div>
-
-      <span v-if="disabled" class="lock-tag">입력 잠김</span>
       </div>
 
       <!-- 상태 줄 -->
@@ -970,6 +976,12 @@ defineExpose({
 
 /* 확대·이동은 .stage 에 transform 으로 걸고, .stage-clip 이 잘라낸다.
    도구 레일·상태 표시는 clip 에 붙어 있어 **확대해도 같이 커지지 않는다.** */
+/* 영상 + 도구 레일을 함께 담는 칸. 레일의 absolute 기준이 여기다
+   (stage-clip 안에 두면 overflow:hidden 에 잘린다). */
+.stage-area {
+  position: relative;
+}
+
 .stage-clip {
   position: relative;
   width: 100%;
@@ -1247,5 +1259,37 @@ defineExpose({
 
 .note {
   margin-top: var(--sp-2);
+}
+
+
+/* 좁은 화면 — **도구 레일을 영상 위에서 내린다.**
+   420px 폭에서는 영상이 370px 남짓인데, 레일이 그 위 왼쪽을 덮고 있었다.
+   가장 볼 것이 많은 부분(좌측 소뇌교각 쪽)이 가려지고, 손가락으로 칠할 면적도 줄었다.
+   접을 수는 있었지만 **접는 법을 알아야 접는다** — 기본 상태가 가려져 있으면 안 된다.
+   좁은 화면에서는 영상 아래 가로 줄로 내리고, 세로는 영상이 전부 가져간다. */
+@media (max-width: 640px) {
+  .tool-rail {
+    position: static;
+    transform: none;
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 4px;
+    margin: 0;
+    border-radius: 0;
+    border-width: 1px 0 0;
+    background: var(--viewer-panel);
+    backdrop-filter: none;
+  }
+
+  /* 가로로 눕히면 접기 화살표(‹)는 방향이 맞지 않고, 애초에 가릴 것도 없다 */
+  .tool-rail .rail-collapse,
+  .rail-handle {
+    display: none;
+  }
+
+  .tool-rail button {
+    min-width: 52px;
+  }
 }
 </style>

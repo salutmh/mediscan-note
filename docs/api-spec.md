@@ -543,6 +543,12 @@
     "best_dice": 0.4213,
     "improved": true
   },
+  "review": {
+    "needs_review": true,
+    "reason": "over_marked",
+    "area_ratio": 2.21,
+    "review_area_ratio": 2.0
+  },
   "ai_prediction": null,
   "explanation": {
     "content_levels": ["dataset_verified", "literature_based"],
@@ -585,6 +591,31 @@
 > - `improved` 는 **직전 제출과의 비교**다 (최고 기록과의 비교가 아니다).
 > - 여기 있는 것은 전부 **학습자 자신의 숫자**다. 같은 전문가 기준 마스크와의 일치도를
 >   시점만 달리해 비교한 것이라 의학적 판단이 아니고, `grade` 에도 영향을 주지 않는다.
+
+> **복습 경로 `review` (v0.6)** — 이 제출이 복습 목록에 담기는지와 **그 이유**.
+>
+> `grade` 와는 **다른 축이다.** grade 는 "기준과 얼마나 겹쳤나"이고, `review` 는
+> "한 번 더 그려볼 가치가 있나"다. 둘이 어긋날 수 있다:
+>
+> | reason | 뜻 |
+> |---|---|
+> | `not_matched` | `grade != match`. 원래부터 있던 복습 기준이다 |
+> | `over_marked` | **`grade == match` 인데 기준보다 지나치게 넓게 칠했다** (`area_ratio >= review_area_ratio`) |
+> | `null` | 복습 대상이 아니다 |
+>
+> `over_marked` 를 넣은 이유: Dice 만 보면 기준을 통째로 덮되 훨씬 넓게 칠한 제출이
+> `match` 가 된다. 실제로 기준 1,539px 병변에 3,400px(2.2배)을 칠해 정상 조직으로 55% 가
+> 넘친 제출이 Dice 0.62 로 `match` 를 받고 학습완료 처리돼 복습에서 빠졌다 —
+> 그러는 동안 같은 응답의 `spatial_feedback` 은 "경계를 조금 더 좁혀 보세요"라고 말하고 있었다.
+> **피드백과 등급이 다른 말을 하는데 학습 경로가 등급만 따르던 문제다.**
+>
+> - **`grade` 는 바꾸지 않는다.** 병변을 찾은 사실은 그대로 남고 `has_matched` 도 유지된다.
+>   `has_matched` 와 `needs_review` 가 **동시에 true** 인 상태이며, 이는 v0.4 가 이미 허용한다.
+> - `area_ratio` 가 없는(= 이 필드가 생기기 전의) 제출은 복습 대상으로 보지 않는다.
+>   모르는 것을 "과했다"로도 "괜찮았다"로도 단정하지 않는다.
+> - `review_area_ratio` 기본값 2.0 은 **검증된 값이 아니다** — Dice 임계값과 같은 지위이고
+>   `MEDISCAN_REVIEW_AREA_RATIO` 로 덮을 수 있다. 임계값 0.60 자체의 타당성(E3)은
+>   **여전히 전문가 검토 대기이며 이 블록이 그것을 대신하지 않는다.**
 
 > **공간 피드백 `spatial_feedback` (v0.5)** — "왜 틀렸는지"를 알려주기 위한 블록이다.
 >
@@ -843,10 +874,18 @@ POST /api/cases/{case_id}/explanation-viewed     (로그인 필요)
 
 ### 2-4. GET /api/wrong-notes
 
-로그인한 사용자의 복습노트 목록 (grade가 partial_match/mismatch인 케이스)
+로그인한 사용자의 복습노트 목록 (**한 번 더 그려볼 가치가 있는** 케이스)
 
-> **구현됨**: 별도 테이블 없이 `submissions` 에서 **케이스별 최신 제출**이 `match` 가 아닌 것을 뽑는다.
-> 재도전해서 맞히면 이 목록에서 빠진다.
+> **구현됨**: 별도 테이블 없이 `submissions` 의 **케이스별 최신 제출**에서 뽑는다.
+> 재도전해서 기준을 맞히면 이 목록에서 빠진다.
+>
+> **v0.6 부터 기준이 둘이다** (`review_reason`):
+>   - `not_matched` — 최신 제출이 `match` 가 아니다
+>   - `over_marked` — `match` 이지만 **기준보다 지나치게 넓게 칠했다**
+>
+> 그래서 이 목록에는 `grade: "match"` 인 항목이 들어올 수 있다. 화면은 `review_reason` 으로
+> 이유를 구분해 표시해야 한다 — 이유를 말하지 않으면 "일치했는데 왜 복습이지?"가 된다.
+> 자세한 배경은 2-3 의 `review` 블록 설명 참고.
 
 **Response**
 ```json
@@ -858,6 +897,8 @@ POST /api/cases/{case_id}/explanation-viewed     (로그인 필요)
       "disease": "vestibular_schwannoma",
       "thumbnail_url": "https://api.example.com/static/cases/VS-SEG-115/thumb.png?e=...&s=...",
       "grade": "mismatch",
+      "review_reason": "not_matched",
+      "area_ratio": 0.48,
       "attempted_at": "2026-09-10T14:00:00+09:00",
       "latest_dice": 0.31,
       "best_dice": 0.52,

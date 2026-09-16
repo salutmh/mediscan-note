@@ -97,3 +97,34 @@ def test_real_shipped_content_loads(user_a):
     assert all(t["term"] for t in payload["terms"])
     # 설명에는 출처가 함께 남아 있어야 한다 (CONTENT_GUIDELINES)
     assert any("(" in t["description"] for t in payload["terms"])
+
+
+def test_imaging_features_are_served_before_submitting(user_a):
+    """**제출 전에** 무엇을 찾아야 하는지 알 수 있어야 한다.
+
+    이 값이 없던 동안 판독 화면은 "이상으로 판단되는 부위를 표시하세요"라고만 했고,
+    병변이 어떻게 보이는지(소뇌교각·내이도에 발생, 조영증강 T1 에서 강하게 조영)는
+    **제출한 뒤 해설에만** 있었다. 처음 온 학습자에게 첫 시도가 찍기였다.
+    """
+    payload = user_a.get("/api/glossary?disease=vestibular_schwannoma").json()
+
+    assert payload["imaging_features"], "문헌 콘텐츠에 있는 영상 특징이 화면까지 가야 한다"
+    # 문헌 일반론이므로 문장마다 출처가 달려 있다 (CONTENT_GUIDELINES)
+    assert all("(" in line for line in payload["imaging_features"])
+
+
+def test_imaging_features_do_not_leak_this_case(user_a, content_dir):
+    """추가한 필드도 **같은 불변조건**을 지킨다 — 케이스별 정답이 새면 안 된다."""
+    write(
+        content_dir,
+        "vestibular_schwannoma",
+        {
+            "medical_terms": [{"term": "소뇌교각", "description": "일반 설명"}],
+            "imaging_features": ["소뇌교각에 발생한다. (문헌 2019)"],
+        },
+    )
+    body = json.dumps(
+        user_a.get("/api/glossary?disease=vestibular_schwannoma").json(), ensure_ascii=False
+    )
+    for field in CASE_SPECIFIC_LEAKS:
+        assert field not in body, f"사전 응답에 케이스별 정보가 들어 있다: {field}"

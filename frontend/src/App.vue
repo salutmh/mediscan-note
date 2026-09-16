@@ -29,13 +29,18 @@ async function onLogout() {
 const NAV = [
   { name: 'home', label: '홈', prefix: '/', exact: true, icon: 'home' },
   { name: 'dashboard', label: '대시보드', prefix: '/dashboard', icon: 'chart' },
-  { name: 'learn', label: '학습하기', prefix: '/learn', icon: 'book' },
   { name: 'cases', label: '케이스', prefix: '/cases', icon: 'grid' },
   { name: 'wrong-notes', label: '복습노트', prefix: '/wrong-notes', icon: 'clipboard' },
   { name: 'progress', label: '진행현황', prefix: '/progress', icon: 'chart' },
   // '내 영상 분석'(화면 5)은 **상단 메뉴에서 뺐다.** 단일 이미지용 2D 모델이 없어
   // 항상 "준비 중"만 뜨는데, 그런 메뉴가 늘 떠 있으면 클로즈드 베타에서 손해다.
   // 화면은 그대로 있고 홈 바로가기에서 닿는다 (경로 /analyze 도 그대로다).
+  //
+  // '학습하기'(/learn)도 같은 이유로 뺐다. 지금은 부위·영상·질환이 각각 하나뿐이라
+  // **케이스 목록과 같은 곳에 더 느리게 도착한다** — 그 화면 스스로도 위에
+  // "케이스 목록에서 바로 고를 수도 있습니다"라고 적고 있었다.
+  // 메뉴에 둘을 나란히 두면 처음 온 사람이 어디를 눌러야 할지 고민한다.
+  // 경로와 화면은 그대로이고 홈 바로가기에서 닿는다. 부위가 늘면 메뉴로 되돌린다.
 ]
 
 /** 선 아이콘 path 모음 (별도 아이콘 패키지를 들이지 않는다 — 의존성을 늘리지 않는 원칙) */

@@ -26,6 +26,12 @@
 - 2026-09-09: 잘못된 환경변수를 조용히 무시하던 것을 오류로 바꿨다. partial > match 순서
   뒤집힘도 막는다 (뒤집히면 partial_match 판정이 통째로 도달 불가능해진다).
   **기본값은 그대로 0.60 / 0.15** — 판정 의미는 바꾸지 않았다.
+- 2026-09-16: `review_area_ratio`(기본 2.0) 추가. **Dice 임계값은 그대로 두었고
+  grade 도 바꾸지 않았다** — 과대 표시 제출을 복습 목록에 담는 **경로**만 조정한다.
+  계기: 기준 1,539px 에 3,400px(2.2배)을 칠해 정상 조직으로 55% 넘긴 제출이
+  Dice 0.62 로 match 를 받고 학습완료 처리돼 복습에서 빠졌다. 같은 화면이
+  "경계를 조금 더 좁혀 보세요"라고 말하는 중이었다.
+  E3(임계값 0.60 자체의 타당성)는 **여전히 열려 있다** — 이 변경이 대신하지 않는다.
 """
 import os
 
@@ -35,12 +41,28 @@ from app.config import ConfigError
 DEFAULT_MATCH_DICE = 0.60
 DEFAULT_PARTIAL_DICE = 0.15
 
+# 복습 대상으로 담는 **과대 표시** 배수 (기준 면적 대비).
+#
+# 왜 필요한가: Dice 0.60 만으로 판정하면 **기준을 통째로 덮되 훨씬 넓게 칠한** 제출이
+# `match` 가 된다. 실제로 기준 1,539px 짜리 병변에 3,400px(2.2배)을 칠하고 정상 조직으로
+# 55% 가 넘친 제출이 Dice 0.62 로 `match` 를 받았고, 그대로 학습완료 처리돼 복습 목록에서
+# 빠졌다. 화면은 같은 순간에 "경계를 조금 더 좁혀 보세요"라고 말하고 있었다 —
+# **피드백과 등급이 서로 다른 말을 하는데 학습 경로는 등급만 따르고 있었다.**
+#
+# 여기서 하는 일은 **경로 조정뿐이다. grade 는 건드리지 않는다.**
+# "이 정도면 맞게 그린 것인가"(= 임계값 0.60 이 타당한가)는 전문가가 판단할 문제이고
+# 아직 열려 있다(E3). 그 판단과 무관하게 "한 번 더 그려볼 가치가 있다"는 말은 할 수 있다.
+#
+# 값 2.0 역시 **검증된 값이 아니다** — Dice 임계값과 같은 지위다.
+DEFAULT_REVIEW_AREA_RATIO = 2.0
+
 # 검증 상태 — 응답·문서에 그대로 노출해 "확정된 기준"으로 오해되지 않게 한다.
 VALIDATION_STATUS = "not_yet_educationally_validated"
 
 
 MATCH_ENV = "MEDISCAN_MATCH_DICE"
 PARTIAL_ENV = "MEDISCAN_PARTIAL_DICE"
+REVIEW_AREA_ENV = "MEDISCAN_REVIEW_AREA_RATIO"
 
 
 def _float_env(name: str, default: float) -> float:
@@ -72,6 +94,44 @@ def partial_dice() -> float:
     return _float_env(PARTIAL_ENV, DEFAULT_PARTIAL_DICE)
 
 
+def review_area_ratio() -> float:
+    """과대 표시 복습 기준. Dice 임계값과 달리 **1.0 이상의 배수**다.
+
+    `_float_env` 를 쓰지 않는 이유가 여기 있다 — 그 함수는 0.0~1.0 을 강제하므로
+    2.0 을 넣으면 "범위를 벗어났다"고 막는다. 단위가 다른 값이라 검사도 따로 한다.
+    """
+    raw = os.getenv(REVIEW_AREA_ENV, "").strip()
+    if not raw:
+        return DEFAULT_REVIEW_AREA_RATIO
+    try:
+        value = float(raw)
+    except ValueError:
+        raise ConfigError(
+            f"{REVIEW_AREA_ENV} 를 숫자로 읽을 수 없습니다: {raw!r}. "
+            f"기준 면적 대비 **배수**입니다 (예: {DEFAULT_REVIEW_AREA_RATIO} = 2배)."
+        ) from None
+    if value < 1.0:
+        # 1.0 미만이면 기준보다 **작게** 칠한 것까지 과대 표시로 담게 된다.
+        # 조용히 되돌리지 않고 막는다 (이 파일의 다른 값들과 같은 원칙).
+        raise ConfigError(
+            f"{REVIEW_AREA_ENV} 가 1.0 보다 작습니다: {value}. "
+            "기준 면적 대비 배수이므로 1.0 이상이어야 합니다 "
+            "(1.0 = 기준과 같은 넓이, 2.0 = 기준의 두 배)."
+        )
+    return value
+
+
+def over_marked(area_ratio: float | None) -> bool:
+    """이 제출이 **과대 표시로 복습 대상**인가.
+
+    `area_ratio` 가 None 이면 False 다 — 기록하기 전에 쌓인 제출들이 여기 해당한다.
+    모르는 것을 "괜찮았다"로도 "과했다"로도 단정하지 않는다.
+    """
+    if area_ratio is None:
+        return False
+    return area_ratio >= review_area_ratio()
+
+
 def assert_valid() -> None:
     """기동 시점 점검. 채점이 처음 일어나는 순간이 아니라 뜰 때 막는다.
 
@@ -99,5 +159,8 @@ def thresholds() -> dict:
     return {
         "match_dice": match_dice(),
         "partial_dice": partial_dice(),
+        # grade 를 정하는 값이 아니라 **복습 경로**를 정하는 값이다. 같이 실어야
+        # 배포된 서버가 무엇을 기준으로 복습을 권하는지 확인할 수 있다.
+        "review_area_ratio": review_area_ratio(),
         "validation_status": VALIDATION_STATUS,
     }

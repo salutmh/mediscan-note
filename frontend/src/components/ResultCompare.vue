@@ -25,6 +25,16 @@ const props = defineProps({
 
 // v0.3 이후: 채점 기준은 전문가 검수 reference mask (이전 ai_mask_url)
 const referenceMaskUrl = computed(() => props.result.reference_mask_url ?? null)
+
+/**
+ * 기준과 일치했지만 **지나치게 넓게 칠해** 복습 대상이 된 경우 (계약 v0.6).
+ * `grade` 는 손대지 않았고 경로만 바뀐 것이라, 화면에서도 그렇게 말한다.
+ */
+const overMarked = computed(() => props.result.review?.reason === 'over_marked')
+const overMarkedTimes = computed(() => {
+  const ratio = props.result.review?.area_ratio
+  return ratio == null ? null : ratio.toFixed(1)
+})
 const aiPrediction = computed(() => props.result.ai_prediction ?? null)
 const isProvisional = computed(() => props.result.evaluation?.is_provisional === true)
 const evaluationMethod = computed(() => props.result.evaluation?.method ?? 'reference_mask')
@@ -302,6 +312,17 @@ function ratio(value, max = 1) {
         </div>
       </div>
 
+      <!-- **일치했는데 복습 목록에 담긴 경우** (v0.6).
+           여기서 말해 주지 않으면 학습자는 "기준과 일치"를 보고 끝냈다고 생각한 뒤,
+           복습노트에서 같은 케이스를 다시 만나고 영문을 모른다.
+           등급을 깎았다는 뜻이 아니라는 것도 함께 적는다 — 찾은 건 맞다. -->
+      <p v-if="overMarked" class="over-marked">
+        <strong>병변은 찾았지만 기준보다 {{ overMarkedTimes }}배 넓게 칠했습니다.</strong>
+        정상 조직까지 표시한 만큼, 경계를 좁혀 한 번 더 그려볼 수 있게
+        <strong>복습노트에 담았습니다.</strong>
+        판정({{ gradeLabel(result.grade) }})은 그대로입니다.
+      </p>
+
       <!-- 재도전 경과 (v0.7).
            같은 케이스를 다시 푼 사람은 "나아졌는지"를 가장 알고 싶어 한다.
            서버는 원래도 회차를 세고 있었지만 분석 로그로만 갔다.
@@ -531,6 +552,21 @@ function ratio(value, max = 1) {
   border-radius: var(--r-sm);
   max-width: 560px;
   font-size: 13px;
+}
+
+/* 일치했지만 과대 표시라 복습에 담긴 안내.
+   판정 알약과 같은 색을 쓰지 않는다 — 등급이 내려간 것이 아니라 **다른 축의 안내**다.
+   그렇다고 지나가듯 흐리게 두지도 않는다(이 줄을 놓치면 복습노트에서 당황한다). */
+.over-marked {
+  flex: 1 1 100%;
+  margin: 14px 0 0;
+  padding: 11px 13px;
+  border: 1px solid var(--partial-line);
+  border-radius: var(--r-sm);
+  background: var(--partial-bg);
+  color: var(--partial-ink);
+  font-size: 13.5px;
+  line-height: 1.6;
 }
 
 .attempt {

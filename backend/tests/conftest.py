@@ -184,6 +184,30 @@ def roi_mismatch() -> dict:
     }
 
 
+@pytest.fixture
+def roi_over_marked() -> dict:
+    """병변 **중심은 맞췄지만 훨씬 넓게** 칠한 ROI — `match` 인데 과대 표시.
+
+    이 값을 아무렇게나 고를 수 없다. 기준을 통째로 덮는 동심원이면 `Dice = 2/(k+1)`
+    (k = 면적비)이므로, 두 조건이 동시에 성립하는 구간이 **좁다**:
+
+        면적비 >= 2.0 (과대 표시)  AND  Dice >= 0.60 (match)
+          -> k 는 2.00 ~ 2.33, 반지름 배수로는 1.414 ~ 1.528
+
+    반지름 1.47배 -> 면적 약 2.16배 -> Dice 약 0.633. 양쪽에 여유가 있다.
+    (처음에 1.6배로 잡았다가 면적 2.56배 / Dice 0.56 이 되어 partial_match 가 나왔다 —
+     과대이긴 한데 애초에 match 가 아니라서 검증하려던 상황이 아니었다.)
+
+    실제 사용자 walkthrough 와 같은 모양이다: 기준 1,539px 에 3,400px(2.21배)을 칠하고
+    Dice 0.62 로 match 를 받았다 — 위 공식 2/(2.21+1)=0.623 과 맞는다.
+    """
+    return {
+        "type": "brush_mask",
+        "points": [[LESION["cx"], LESION["cy"]]],
+        "mask_png_base64": _mask_base64(LESION["cx"], LESION["cy"], round(LESION["r"] * 1.47)),
+    }
+
+
 class UserSession:
     """가입까지 끝난 테스트 사용자."""
 

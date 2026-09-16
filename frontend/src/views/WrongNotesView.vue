@@ -58,8 +58,12 @@ onMounted(async () => {
 <template>
   <header class="head">
     <h1>복습노트</h1>
+    <!-- 예전 문구는 "완전히 일치하지 않았던 케이스"였는데, 62% 로 일치 판정을 받은
+         케이스가 여기 안 들어오면서 문구와 동작이 어긋나 있었다. 이제는 일치했어도
+         지나치게 넓게 칠했으면 담기므로, **한 줄로 두 경우를 다 말한다.** -->
     <p class="lead">
-      기준 마스크와 완전히 일치하지 않았던 케이스입니다. 다시 풀어 얼마나 가까워지는지 확인하세요.
+      기준과 달랐거나, <strong>일치했지만 지나치게 넓게 칠한</strong> 케이스입니다.
+      다시 풀어 얼마나 가까워지는지 확인하세요.
     </p>
   </header>
 
@@ -90,7 +94,12 @@ onMounted(async () => {
     <li v-for="item in visible" :key="item.case_id" class="card note-card">
       <div class="thumb">
         <img v-if="item.thumbnail_url" :src="item.thumbnail_url" :alt="`${item.case_id} 썸네일`" />
-        <span class="badge float" :class="item.grade">{{ gradeBadge(item.grade) }}</span>
+        <!-- grade 가 match 인 항목이 이 목록에 있을 수 있다 (과대 표시).
+             등급 뱃지만 두면 "일치인데 왜 여기 있지?"가 되므로 이유를 대신 보여준다. -->
+        <span v-if="item.review_reason === 'over_marked'" class="badge float partial_match">
+          넓게 표시
+        </span>
+        <span v-else class="badge float" :class="item.grade">{{ gradeBadge(item.grade) }}</span>
       </div>
 
       <div class="note-body">
@@ -117,6 +126,11 @@ onMounted(async () => {
           </div>
         </div>
         <p v-else class="muted note-meta">아직 점수 기록이 없습니다</p>
+
+        <p v-if="item.review_reason === 'over_marked'" class="muted why">
+          기준과 일치했지만 기준 영역의
+          <strong>{{ item.area_ratio?.toFixed(1) }}배</strong>를 칠했습니다 — 경계를 좁혀 보세요.
+        </p>
       </div>
 
       <!-- **먼저 보고 그다음 다시 푼다.** 바로 재도전으로 보내면 무엇을 틀렸는지
@@ -206,6 +220,13 @@ onMounted(async () => {
 .note-meta {
   margin: 0;
   font-size: 12.5px;
+}
+
+/* 왜 이 카드가 복습에 담겼는지 (일치했는데 넓게 칠한 경우) */
+.why {
+  margin: var(--sp-2) 0 0;
+  font-size: 12.5px;
+  color: var(--partial-ink);
 }
 
 /* 최근 / 최고를 나란히 — "얼마나 가까워졌는지"가 이 화면의 요점이다 */

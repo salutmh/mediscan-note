@@ -20,6 +20,10 @@ const props = defineProps({
 defineEmits(['close'])
 
 const terms = ref([])
+// 제출 **전에** 무엇을 찾아야 하는지 알려주는 문헌 일반론 (계약 v0.6).
+// 이 케이스의 마스크·위치·크기는 들어 있지 않다.
+const imagingFeatures = ref([])
+const featuresOpen = ref(true)
 const loading = ref(false)
 const errorMessage = ref('')
 const query = ref('')
@@ -28,6 +32,7 @@ const openIndex = ref(-1)
 async function load() {
   if (!props.disease) {
     terms.value = []
+    imagingFeatures.value = []
     return
   }
   loading.value = true
@@ -35,10 +40,12 @@ async function load() {
   try {
     const data = await getGlossary(props.disease)
     terms.value = data.terms ?? []
+    imagingFeatures.value = data.imaging_features ?? []
   } catch (e) {
     // 사전은 **부가 기능**이다. 실패해도 판독은 계속할 수 있어야 한다.
     errorMessage.value = '용어를 불러오지 못했습니다. 판독과 제출은 그대로 진행할 수 있습니다.'
     terms.value = []
+    imagingFeatures.value = []
   } finally {
     loading.value = false
   }
@@ -89,6 +96,24 @@ function splitTerm(raw) {
       <span class="chip-tag">{{ diseaseLabel }}</span>
       <span class="muted">문헌 기반 용어</span>
     </p>
+
+    <!-- **무엇을 찾아야 하는지 제출 전에 알려주는 유일한 자리.**
+         예전에는 병변이 어떻게 보이는지가 제출 후 해설에만 있어서, 처음 온 학습자는
+         찍고 나서야 배웠다. 용어 목록보다 위에 두고 처음부터 펼쳐 둔다 —
+         접어 두면 없는 것과 같다. 문헌 일반론이라 이 케이스의 답은 여기 없다. -->
+    <section v-if="imagingFeatures.length" class="g-features">
+      <button
+        class="g-features-head"
+        :aria-expanded="featuresOpen"
+        @click="featuresOpen = !featuresOpen"
+      >
+        <strong>이 질환은 영상에서 어떻게 보이나</strong>
+        <span class="g-caret" aria-hidden="true">{{ featuresOpen ? '▾' : '▸' }}</span>
+      </button>
+      <ul v-if="featuresOpen" class="g-features-list">
+        <li v-for="line in imagingFeatures" :key="line">{{ line }}</li>
+      </ul>
+    </section>
 
     <p v-if="loading" class="g-note muted">불러오는 중…</p>
     <p v-else-if="errorMessage" class="g-note error">{{ errorMessage }}</p>
@@ -248,6 +273,47 @@ function splitTerm(raw) {
   margin: var(--sp-3) 0;
   font-size: 12.5px;
   text-align: center;
+}
+
+/* 영상 특징 — 용어 목록보다 먼저 읽히도록 살짝 띄운다 */
+.g-features {
+  margin-bottom: var(--sp-3);
+  border: 1px solid var(--brand-100);
+  border-radius: var(--r-md);
+  background: var(--brand-50);
+  overflow: hidden;
+}
+
+.g-features-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  width: 100%;
+  min-height: 40px;
+  padding: 9px 12px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--brand-700);
+  font-size: 13px;
+  text-align: left;
+}
+
+.g-features-head:hover:not(:disabled) {
+  background: var(--brand-100);
+  border-color: transparent;
+}
+
+.g-features-list {
+  margin: 0;
+  padding: 0 12px 11px 27px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--ink-secondary);
 }
 
 .g-foot {

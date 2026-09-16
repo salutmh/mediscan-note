@@ -236,6 +236,10 @@ class Submission(Base):
     reference_mask_url: Mapped[str | None] = mapped_column(String(255), default=None)
     evaluation_method: Mapped[str] = mapped_column(String(30), default="reference_mask")
     is_provisional: Mapped[bool] = mapped_column(Boolean, default=False)
+    # 표시 넓이 / 기준 넓이. 복습 경로를 정하는 데 쓴다 (scoring_config.over_marked).
+    # spatial_feedback 에서 계산되던 값인데 저장하지 않아, 나중에 "이 제출이 과했는지"를
+    # 되물을 수 없었다. **기록 전 제출은 None 이고 그대로 둔다** — 모르는 것을 채우지 않는다.
+    area_ratio: Mapped[float | None] = mapped_column(Float, default=None)
     # **제출 시점 스냅샷.** 지금은 쓰는 곳만 있고 읽는 곳이 없다 — 죽은 컬럼처럼 보이지만
     # 의도적으로 남긴다. 전문가가 나중에 case_findings 를 고치면 케이스의 해설은 바뀌는데,
     # "이 학습자가 답할 당시 무엇을 보고 있었는지" 는 여기 말고는 남지 않는다.

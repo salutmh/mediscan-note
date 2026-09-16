@@ -106,3 +106,40 @@ describe('비어 있을 때', () => {
     expect(wrapper.find('.empty a').text()).toContain('케이스 목록')
   })
 })
+
+
+/**
+ * `grade: "match"` 인 항목이 이 목록에 들어올 수 있다 (과대 표시, 계약 v0.6).
+ * 등급 뱃지만 두면 **"일치인데 왜 여기 있지?"** 가 되므로 이유가 화면에 있어야 한다.
+ */
+describe('일치했지만 넓게 칠한 케이스', () => {
+  const overMarked = () =>
+    item({ grade: 'match', latest_dice: 0.62, best_dice: 0.62, review_reason: 'over_marked', area_ratio: 2.21 })
+
+  it('등급 대신 **왜 담겼는지**를 뱃지로 보여준다', async () => {
+    listWrongNotes.mockResolvedValue({ items: [overMarked()] })
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(wrapper.find('.badge.float').text()).toBe('넓게 표시')
+    // "기준과 일치" 뱃지를 그대로 달면 목록에 있는 이유가 설명되지 않는다
+    expect(wrapper.find('.badge.float').text()).not.toContain('일치')
+  })
+
+  it('몇 배 칠했는지 숫자로 적는다', async () => {
+    listWrongNotes.mockResolvedValue({ items: [overMarked()] })
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(wrapper.find('.why').text()).toContain('2.2배')
+  })
+
+  it('기준과 달랐던 케이스는 원래대로 등급 뱃지를 단다', async () => {
+    listWrongNotes.mockResolvedValue({ items: [item({ review_reason: 'not_matched' })] })
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(wrapper.find('.why').exists()).toBe(false)
+    expect(wrapper.find('.badge.float').text()).not.toBe('넓게 표시')
+  })
+})

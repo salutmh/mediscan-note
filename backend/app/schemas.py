@@ -213,12 +213,19 @@ class GlossaryResponse(BaseModel):
 
     이 케이스의 기준 마스크·병변 위치는 들어 있지 않다. 콘텐츠가 없으면 `terms` 는 빈 목록이고,
     그것은 오류가 아니라 "아직 쓰지 않았다"는 뜻이다.
+
+    **`imaging_features` 는 v0.6 에서 추가됐다.** 판독 화면이 "이상으로 판단되는 부위를
+    표시하세요"라고만 말하고, 정작 **그 병변이 어떻게 보이는지는 제출한 뒤에야** 알려주고
+    있었다 — 처음 온 학습자에게 첫 시도가 사실상 찍기였다.
+    여기 담기는 것은 `explanation.disease_info.imaging_features` 와 **같은 문헌 일반론**이고,
+    이 케이스의 마스크·위치·크기는 들어가지 않는다 (위 불변조건은 그대로다).
     """
 
     disease: Optional[str] = None
     content_version: Optional[str] = None
     source: Literal["literature_based"] = "literature_based"
     terms: list[MedicalTerm] = []
+    imaging_features: list[str] = []
 
 
 class DiseaseInfo(BaseModel):
