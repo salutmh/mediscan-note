@@ -38,6 +38,8 @@ const roiCanvas = ref(null)
 const hasInput = ref(false)
 // 시안 07 의 우측 사전 패널. 닫아 두면 영상에 더 집중할 수 있으므로 접을 수 있게 둔다.
 const glossaryOpen = ref(true)
+// 판독 캔버스를 펼쳐 둘지. 제출 전에는 항상 펼쳐져 있고, 제출하면 접힌다 (onSubmit 참고).
+const viewerOpen = ref(true)
 
 const activeTime = useActiveTime()
 const explanationPanel = ref(null)
@@ -167,6 +169,7 @@ function resetSubmission() {
   submittedMaskDataUrl.value = null
   phase.value = 'idle'
   nextTarget.value = null
+  viewerOpen.value = true
 }
 
 function onRoiChange(state) {
@@ -196,6 +199,11 @@ async function onSubmit() {
       ? await retryWrongNote(caseId.value, roi, seconds)
       : await submitRoi(caseId.value, roi, seconds)
     phase.value = 'done'
+    // 제출하고 나면 **결과가 주인공이다.** 판독 캔버스는 이미 잠겨 있고, 아래 결과 비교가
+    // 같은 slice 를 내 표시·기준 마스크와 겹쳐서 다시 보여준다. 접어 두지 않으면
+    // 정작 보려고 제출한 결과가 1,000px 아래로 밀린다 (예전에 실제로 그랬다).
+    // 없애지는 않는다 — slice 를 다시 넘겨 보고 싶을 수 있어서 펼칠 수 있게 남긴다.
+    viewerOpen.value = false
     findNextTarget()
     // 해설 블록이 DOM 에 올라온 뒤에 관찰을 건다
     await nextTick()
@@ -305,8 +313,17 @@ onBeforeRouteUpdate((to) => {
       등록되지 않았거나 삭제된 케이스일 수 있습니다 — 케이스 목록에서 다시 선택해 주세요.
     </p>
 
-    <div class="layout">
-      <div class="viewer-col">
+    <!-- 제출한 뒤에는 판독 캔버스를 접는다. 접힌 상태에서도 **무엇이 접혀 있는지**와
+         펴는 방법이 한 줄로 보여야 한다 (숨기기만 하면 slice 탐색이 사라진 것처럼 보인다). -->
+    <div v-if="phase === 'done'" class="viewer-toggle">
+      <button class="sm" :aria-expanded="viewerOpen" @click="viewerOpen = !viewerOpen">
+        {{ viewerOpen ? '▾' : '▸' }} 판독 화면 {{ viewerOpen ? '접기' : '다시 보기' }}
+      </button>
+      <span class="muted">slice 를 다시 넘겨 보려면 펼치세요 · 표시 입력은 잠겨 있습니다</span>
+    </div>
+
+    <div class="layout" :class="{ 'layout-done': phase === 'done' }">
+      <div v-show="viewerOpen" class="viewer-col">
         <RoiCanvas
           ref="roiCanvas"
           :image-url="viewerImageUrl"
@@ -395,57 +412,25 @@ onBeforeRouteUpdate((to) => {
         </div>
       </div>
 
-      <aside class="side">
-        <!-- 푸는 동안은 시안대로 **의학용어 사전**이 옆에 있다.
-             제출한 뒤에는 같은 자리를 "다음에 무엇을 할지"가 대신한다. -->
+      <!-- 푸는 동안만 옆 칸이 있다. 제출한 뒤에는 사전도 팁도 닫히고, "다음 학습" 은
+           결과·해설을 다 읽은 자리(아래 bottom-actions)에서 고르게 한다 —
+           예전에는 이 칸에 같은 버튼이 한 벌 더 있었고, 800px 짜리 캔버스 옆에서
+           **오른쪽 칸의 90% 가 비어 있었다.** -->
+      <aside v-if="phase !== 'done'" class="side">
         <GlossaryPanel
-          v-if="phase !== 'done' && glossaryOpen"
+          v-if="glossaryOpen"
           :disease="caseDetail.disease"
           :disease-label="diseaseLabel(caseDetail.disease)"
           @close="glossaryOpen = false"
         />
-        <button
-          v-else-if="phase !== 'done'"
-          class="wide reopen-glossary"
-          @click="glossaryOpen = true"
-        >
+        <button v-else class="wide reopen-glossary" @click="glossaryOpen = true">
           의학용어 사전 열기
         </button>
 
-        <div v-if="phase === 'done'" class="card submit-card">
-          <div class="card-title">
-            <h2>다음 학습</h2>
-            <span class="badge match">제출 완료</span>
-          </div>
-
-          <!-- 학습 루프를 닫는다: 끝냈으면 다음에 무엇을 할지 바로 제시한다 -->
-            <RouterLink
-              v-if="nextTarget"
-              :to="nextTarget.to"
-              class="btn primary lg wide next-action"
-            >
-              {{ nextTarget.label }} →
-            </RouterLink>
-            <button class="lg wide" @click="retry">다시 풀기</button>
-            <RouterLink
-              :to="isRetry ? '/wrong-notes' : '/cases'"
-              class="btn lg wide next-action"
-            >
-              {{ isRetry ? '복습노트로' : '케이스 목록으로' }}
-            </RouterLink>
-            <p v-if="nextTarget" class="muted hint">
-              {{ isRetry ? '복습할 케이스' : '아직 학습완료가 아닌 케이스' }}
-              {{ nextTarget.remaining }}개가 남아 있습니다.
-            </p>
-            <p v-else class="muted hint">
-            {{ isRetry ? '복습할 케이스를 모두 마쳤습니다.' : '모든 케이스를 학습완료했습니다.' }}
-          </p>
-        </div>
-
         <!-- **되돌리기를 아무도 모르면 없는 것과 같다.**
              도구 막대의 ↺ 아이콘만으로는 발견되지 않는다.
-             제출 전에만 보여준다 — 제출 뒤에는 입력이 잠긴다. -->
-        <div v-if="phase !== 'done'" class="card tips">
+             제출 뒤에는 입력이 잠기므로 이 칸 전체가 사라진다. -->
+        <div class="card tips">
           <h3>표시하다 실수했다면</h3>
           <ul>
             <li><kbd>Ctrl</kbd>+<kbd>Z</kbd> 마지막 획 되돌리기</li>
@@ -476,11 +461,24 @@ onBeforeRouteUpdate((to) => {
       <!-- 시안 08 처럼 **결과를 다 읽은 자리에서도** 다음 행동을 고를 수 있게 한다.
            오른쪽 패널은 화면 위쪽에 있어서, 해설까지 내려온 사람에게는 보이지 않는다. -->
       <div class="stack bottom-actions">
-        <RouterLink v-if="nextTarget" :to="nextTarget.to" class="btn primary lg">
-          {{ nextTarget.label }} →
-        </RouterLink>
-        <button class="lg" @click="retry">다시 풀기</button>
-        <RouterLink to="/wrong-notes" class="btn lg">복습노트 보기</RouterLink>
+        <div class="bottom-buttons">
+          <RouterLink v-if="nextTarget" :to="nextTarget.to" class="btn primary lg">
+            {{ nextTarget.label }} →
+          </RouterLink>
+          <button class="lg" @click="retry">다시 풀기</button>
+          <RouterLink :to="isRetry ? '/wrong-notes' : '/cases'" class="btn lg">
+            {{ isRetry ? '복습노트로' : '케이스 목록으로' }}
+          </RouterLink>
+        </div>
+        <!-- 옆 칸에 있던 "남은 케이스" 안내를 여기로 옮겼다. 그 칸을 없앴다고
+             안내까지 없애면 다음에 무엇이 남았는지 알 수 없다. -->
+        <p v-if="nextTarget" class="muted hint">
+          {{ isRetry ? '복습할 케이스' : '아직 학습완료가 아닌 케이스' }}
+          {{ nextTarget.remaining }}개가 남아 있습니다.
+        </p>
+        <p v-else class="muted hint">
+          {{ isRetry ? '복습할 케이스를 모두 마쳤습니다.' : '모든 케이스를 학습완료했습니다.' }}
+        </p>
       </div>
     </template>
   </template>
@@ -503,8 +501,27 @@ onBeforeRouteUpdate((to) => {
 /* 결과를 다 읽은 뒤의 행동 (시안 08 하단 버튼 줄) */
 .bottom-actions {
   display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.bottom-buttons {
+  display: flex;
   gap: var(--sp-3);
   flex-wrap: wrap;
+}
+
+/* 제출 뒤 판독 캔버스를 접는 줄 */
+.viewer-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--sp-4);
+}
+
+.viewer-toggle .muted {
+  font-size: 12.5px;
 }
 .bottom-actions .btn.primary {
   background: var(--navy-700);
@@ -601,6 +618,12 @@ onBeforeRouteUpdate((to) => {
   grid-template-columns: minmax(0, 1fr) 330px;
   gap: var(--sp-5);
   align-items: start;
+}
+
+/* 제출 뒤에는 옆 칸(사전·팁)이 사라지므로 한 단으로 돌린다.
+   두 단 그대로 두면 330px 짜리 빈 칸이 남는다. */
+.layout-done {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .viewer-col {
@@ -730,15 +753,6 @@ onBeforeRouteUpdate((to) => {
 
 .slice-locked button {
   flex: 0 0 auto;
-}
-
-/* 채점 후 다음 행동 — RouterLink 라 .btn 을 쓰고, 버튼과 같은 폭으로 맞춘다 */
-.next-action {
-  display: block;
-  width: 100%;
-  text-align: center;
-  text-decoration: none;
-  margin-bottom: var(--sp-2);
 }
 
 .slices input[type='range'] {

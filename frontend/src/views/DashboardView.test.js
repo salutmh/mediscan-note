@@ -14,7 +14,12 @@ import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 
 const getDashboard = vi.fn()
-vi.mock('../api/endpoints', () => ({ getDashboard: (...a) => getDashboard(...a) }))
+const listCases = vi.fn()
+vi.mock('../api/endpoints', () => ({
+  getDashboard: (...a) => getDashboard(...a),
+  // 케이스별 최고 일치도 막대는 케이스 목록의 per-case progress 를 쓴다
+  listCases: (...a) => listCases(...a),
+}))
 vi.mock('vue-router', () => ({
   RouterLink: { props: ['to'], template: '<a><slot /></a>' },
 }))
@@ -41,8 +46,20 @@ const ACTIVE = {
   best_dice: 1.0,
 }
 
+/** 케이스 목록 — `progress.best_dice` 가 있는 것만 막대가 된다 */
+const CASES = {
+  cases: [
+    { case_id: 'VS-SEG-202', body_part: 'brain_mri', progress: { best_dice: 1.0, attempts: 2, latest_grade: 'match' } },
+    { case_id: 'VS-SEG-204', body_part: 'brain_mri', progress: { best_dice: 0.12, attempts: 1, latest_grade: 'mismatch' } },
+    // 아직 풀지 않은 케이스 — 막대로 그리면 0% 로 보여서 "0점"과 구분되지 않는다
+    { case_id: 'VS-SEG-207', body_part: 'brain_mri', progress: null },
+  ],
+}
+
 beforeEach(() => {
   getDashboard.mockReset()
+  listCases.mockReset()
+  listCases.mockResolvedValue({ cases: [] })
 })
 
 describe('처음 온 사용자', () => {
@@ -54,6 +71,27 @@ describe('처음 온 사용자', () => {
 
     expect(wrapper.text()).toContain('아직 기록 없음')
     expect(wrapper.text()).toContain('아직 제출한 판독이 없습니다')
+  })
+
+  it('지표 대신 **시작할 자리**를 준다 (화면 아래를 백지로 두지 않는다)', async () => {
+    getDashboard.mockResolvedValue({
+      ...EMPTY,
+      has_any_activity: false,
+      next_up: { case_id: 'VS-SEG-202', reason: 'not_started' },
+    })
+    const wrapper = mountView()
+    await flushPromises()
+
+    const start = wrapper.find('.start-card')
+    expect(start.exists()).toBe(true)
+    expect(start.text()).toContain('VS-SEG-202')
+  })
+
+  it('기록이 생기면 시작 안내는 사라진다', async () => {
+    getDashboard.mockResolvedValue({ ...ACTIVE, has_any_activity: true, next_up: null })
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.find('.start-card').exists()).toBe(false)
   })
 })
 
@@ -110,6 +148,49 @@ describe('학습 중인 사용자', () => {
     const wrapper = mountView()
     await flushPromises()
     expect(wrapper.text()).toContain('의학적 난이도를 뜻하지 않습니다')
+  })
+})
+
+/**
+ * 케이스별 최고 일치도 막대.
+ *
+ * 이 화면만 답하는 질문("어느 케이스를 덜 맞췄나")이라 넣었다. 대신 지켜야 할 선이 있다:
+ * 케이스마다 병변이 달라 **막대끼리는 견줄 수 없고**, 안 푼 케이스를 0% 로 그리면
+ * 미시도가 0점으로 보인다.
+ */
+describe('케이스별 최고 일치도', () => {
+  beforeEach(() => {
+    getDashboard.mockResolvedValue(ACTIVE)
+    listCases.mockResolvedValue(CASES)
+  })
+
+  it('낮은 것부터 세우고 값을 막대 옆에 직접 적는다', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+
+    const names = wrapper.findAll('.bar-name').map((n) => n.text())
+    expect(names).toEqual(['VS-SEG-204', 'VS-SEG-202'])
+    expect(wrapper.findAll('.bar-value').map((v) => v.text())).toEqual(['12%', '100%'])
+  })
+
+  it('**아직 풀지 않은 케이스는 막대로 그리지 않는다** (0% 로 그리면 0점처럼 보인다)', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.findAll('.bar-row')).toHaveLength(2)
+    expect(wrapper.find('.bars').text()).not.toContain('VS-SEG-207')
+  })
+
+  it('케이스끼리 비교하는 값이 아니라고 화면에 적는다', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.find('.chart-note').text()).toContain('케이스끼리 견주는 값이 아닙니다')
+  })
+
+  it('막대가 하나뿐이면 분포가 아니므로 띄우지 않는다', async () => {
+    listCases.mockResolvedValue({ cases: [CASES.cases[0], CASES.cases[2]] })
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.find('.chart-card').exists()).toBe(false)
   })
 })
 

@@ -59,8 +59,22 @@ const bodyPartCards = computed(() => {
   }))
 })
 
-/** 등록된 부위가 하나뿐이면 선택할 것이 없다 — 카드 줄 자체를 띄우지 않는다 */
-const showBodyPartCards = computed(() => bodyPartCards.value.some((b) => b.ready))
+/**
+ * 등록된 부위가 하나뿐이면 **고를 것이 없다.**
+ *
+ * 주석에는 원래도 그렇게 적혀 있었는데 조건이 `.some(ready)` 였다 — 하나만 준비돼도
+ * 참이라 카드 줄이 늘 떴고, 결과적으로 **5칸 중 4칸이 "준비 중"** 인 줄이 목록 맨 위에
+ * 자리잡고 있었다. 고를 수 없는 칸이 고를 수 있는 칸보다 많으면 그건 선택 UI 가 아니다.
+ *
+ * 그래서 **실제로 고를 수 있을 때(2개 이상)만** 카드 줄을 띄운다.
+ * 하나뿐일 때도 앞으로 무엇이 늘어나는지는 알린다 — 카드 4장 대신 아래 한 줄로.
+ */
+const readyParts = computed(() => bodyPartCards.value.filter((b) => b.ready))
+const pendingParts = computed(() => bodyPartCards.value.filter((b) => !b.ready))
+const showBodyPartCards = computed(() => readyParts.value.length >= 2)
+const soleReadyPart = computed(() =>
+  readyParts.value.length === 1 && pendingParts.value.length ? readyParts.value[0] : null,
+)
 
 async function load() {
   loading.value = true
@@ -226,6 +240,13 @@ function onThumbError(event) {
       </li>
     </ul>
   </section>
+
+  <!-- 부위가 하나뿐일 때. 카드 4장을 "준비 중"으로 깔아 두는 대신 한 줄로 적는다 —
+       고를 수 없는 칸을 줄줄이 보여주는 것보다 무엇이 있고 무엇이 없는지가 더 잘 읽힌다. -->
+  <p v-else-if="soleReadyPart" class="muted parts-line">
+    지금은 <strong>{{ soleReadyPart.label }}</strong> {{ soleReadyPart.count }}케이스가 있습니다.
+    {{ pendingParts.map((p) => p.label).join(' · ') }} 는 준비 중입니다.
+  </p>
 
   <p v-if="errorMessage" class="error">{{ errorMessage }}</p>
 
@@ -395,6 +416,9 @@ function onThumbError(event) {
 /* --- 부위 선택 카드 (시안 06) --- */
 .part-section {
   margin-bottom: var(--sp-5);
+}
+.parts-line {
+  margin: 0 0 var(--sp-5);
 }
 .part-title {
   margin: 0 0 var(--sp-3);
@@ -603,11 +627,18 @@ a.case-card:hover {
   margin: 0 var(--sp-4) var(--sp-4);
   padding: 9px 14px;
   border-radius: var(--r-sm);
-  background: var(--brand-50);
+  /* 카드마다 **하나뿐인 행동**인데 --brand-50 면에 테두리가 없어서 눌리는 것처럼
+     보이지 않았다 (비활성 칸으로 읽혔다). 글자 대비는 원래도 8:1 로 충분했으니
+     문제는 글자가 아니라 **면**이다.
+     테두리를 --brand-300 으로 두려다 흰 카드 대비 1.79:1 이라 사실상 안 보여서
+     (비텍스트 요소 기준 3:1 미달) --brand-500(4.98:1)로 잡았다. */
+  border: 1px solid var(--brand-500);
+  background: var(--brand-100);
   color: var(--brand-700);
   font-size: 13px;
   font-weight: 700;
-  transition: background var(--transition), color var(--transition);
+  transition: background var(--transition), color var(--transition),
+    border-color var(--transition);
 }
 a.case-card:hover .go {
   background: var(--brand-500);

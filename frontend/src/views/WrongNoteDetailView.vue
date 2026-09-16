@@ -204,6 +204,16 @@ function percent(value) {
   min-width: 0;
 }
 
+/* 해설은 길고(1,300px 넘는다) 영상은 짧다. 붙여 두지 않으면 **해설을 읽는 내내
+   기준 영역이 화면 밖에 있다** — 무엇을 놓쳤는지 보려고 들어온 화면인데 정작
+   그 그림을 못 본 채로 글만 읽게 된다. 스크롤을 따라오게 붙인다. */
+@media (min-width: 861px) {
+  .col-left {
+    position: sticky;
+    top: 76px;
+  }
+}
+
 .stage {
   position: relative;
   width: 100%;

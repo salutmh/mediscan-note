@@ -39,28 +39,49 @@ describe('부위 선택 카드', () => {
   const cardFor = (w, label) =>
     w.findAll('.part-card').find((b) => b.text().includes(label))
 
-  it('케이스가 없는 부위도 보여주되 **누를 수 없게** 한다', async () => {
+  it('고를 수 있는 부위가 둘 이상이면 카드를 깔고, 없는 부위는 **누를 수 없게** 한다', async () => {
     // 예전에는 5개 부위를 전부 누를 수 있는 탭으로 깔아서, 빈 화면을 네 번 만났다.
     // 이제 카드는 보여주되(제품이 어디까지 가는지는 보인다) 빈 화면으로 데려가지 않는다.
-    listCases.mockResolvedValue({ cases: [brainCase('VS-SEG-202'), brainCase('VS-SEG-203')] })
+    listCases.mockResolvedValue({
+      cases: [brainCase('VS-SEG-202'), { ...brainCase('CXR-0001'), body_part: 'chest_xray' }],
+    })
 
     const wrapper = mountView()
     await flushPromises()
 
     expect(labelsOf(wrapper)).toContain('뇌 MRI')
-    expect(labelsOf(wrapper)).toContain('흉부 X-ray')
+    expect(labelsOf(wrapper)).toContain('복부 CT')
 
     expect(cardFor(wrapper, '뇌 MRI').attributes('disabled')).toBeUndefined()
-    expect(cardFor(wrapper, '흉부 X-ray').attributes('disabled')).toBeDefined()
+    expect(cardFor(wrapper, '복부 CT').attributes('disabled')).toBeDefined()
+    // 준비되지 않은 부위는 **색만이 아니라 글자로도** 알린다
+    expect(cardFor(wrapper, '복부 CT').text()).toContain('준비 중')
   })
 
-  it('준비되지 않은 부위는 **색만이 아니라 글자로도** 알린다', async () => {
-    listCases.mockResolvedValue({ cases: [brainCase('VS-SEG-202')] })
+  it('부위가 하나뿐이면 **카드 줄을 띄우지 않는다** — 고를 것이 없다', async () => {
+    // 이 조건이 예전에는 `.some(ready)` 여서, 하나만 준비돼도 참이 됐다.
+    // 결과적으로 5칸 중 4칸이 "준비 중"인 줄이 목록 맨 위에 늘 붙어 있었다.
+    listCases.mockResolvedValue({ cases: [brainCase('VS-SEG-202'), brainCase('VS-SEG-203')] })
+
     const wrapper = mountView()
     await flushPromises()
 
-    expect(cardFor(wrapper, '흉부 X-ray').text()).toContain('준비 중')
-    expect(cardFor(wrapper, '뇌 MRI').text()).toContain('1케이스')
+    expect(wrapper.find('.part-section').exists()).toBe(false)
+    expect(wrapper.findAll('.part-card')).toHaveLength(0)
+  })
+
+  it('카드를 접어도 **무엇이 있고 무엇이 준비 중인지는 한 줄로 알린다**', async () => {
+    listCases.mockResolvedValue({ cases: [brainCase('VS-SEG-202'), brainCase('VS-SEG-203')] })
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    const line = wrapper.find('.parts-line')
+    expect(line.exists()).toBe(true)
+    expect(line.text()).toContain('뇌 MRI')
+    expect(line.text()).toContain('2케이스')
+    expect(line.text()).toContain('흉부 X-ray')
+    expect(line.text()).toContain('준비 중')
   })
 
   it('부위 카드를 누르면 그 부위로 다시 조회한다', async () => {

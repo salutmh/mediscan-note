@@ -208,6 +208,85 @@ describe('채점 후 다음 행동', () => {
   })
 })
 
+/**
+ * 제출하고 나면 **결과가 주인공이다.**
+ *
+ * 예전에는 제출 뒤에도 판독 캔버스(800px 넘는다)와 옆 칸이 그대로 남아서,
+ * 정작 보려고 제출한 결과 비교가 1,700px 아래에 있었다. 이제 캔버스를 접는다 —
+ * 다만 **없애지는 않는다**: slice 를 다시 넘겨 보고 싶을 수 있어서 펼칠 수 있게 남긴다.
+ */
+describe('제출 뒤 판독 캔버스', () => {
+  const GRADED = { case_id: 'VS-SEG-202', grade: 'match', dice: 0.9, explanation: {} }
+
+  const submitOnce = async (wrapper) => {
+    wrapper.vm.hasInput = true
+    wrapper.vm.roiCanvas = {
+      getPoints: () => [[1, 1]],
+      getMaskBase64: () => 'data',
+      getMaskDataUrl: () => 'data:image/png;base64,x',
+      clear: () => {},
+    }
+    await wrapper.vm.onSubmit()
+    await flushPromises()
+  }
+
+  it('제출 전에는 펼쳐져 있고 접는 줄이 없다', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(wrapper.vm.viewerOpen).toBe(true)
+    expect(wrapper.find('.viewer-toggle').exists()).toBe(false)
+  })
+
+  it('제출하면 접히고, 다시 펼 수 있는 줄이 생긴다', async () => {
+    submitRoi.mockResolvedValue(GRADED)
+    listCases.mockResolvedValue({ cases: [] })
+
+    const wrapper = mountView()
+    await flushPromises()
+    await submitOnce(wrapper)
+
+    expect(wrapper.vm.viewerOpen).toBe(false)
+    // **숨기기만 하면 slice 탐색이 사라진 것처럼 보인다.** 펴는 방법이 화면에 있어야 한다
+    const toggle = wrapper.find('.viewer-toggle button')
+    expect(toggle.exists()).toBe(true)
+
+    await toggle.trigger('click')
+    expect(wrapper.vm.viewerOpen).toBe(true)
+  })
+
+  it('다시 풀기를 누르면 도로 펼쳐진다', async () => {
+    submitRoi.mockResolvedValue(GRADED)
+    listCases.mockResolvedValue({ cases: [] })
+
+    const wrapper = mountView()
+    await flushPromises()
+    await submitOnce(wrapper)
+    expect(wrapper.vm.viewerOpen).toBe(false)
+
+    // 제출 뒤 다시 그려지면서 ref 가 새로 바인딩되므로 스텁을 다시 넣는다
+    wrapper.vm.roiCanvas = { clear: () => {} }
+    wrapper.vm.retry()
+    await flushPromises()
+
+    // 접힌 채로 두면 다시 칠할 캔버스가 화면에 없다
+    expect(wrapper.vm.viewerOpen).toBe(true)
+    expect(wrapper.vm.phase).toBe('idle')
+  })
+
+  it('제출 뒤에는 옆 칸(사전·팁)이 사라진다 — 빈 칸을 남기지 않는다', async () => {
+    submitRoi.mockResolvedValue(GRADED)
+    listCases.mockResolvedValue({ cases: [] })
+
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.find('.side').exists()).toBe(true)
+
+    await submitOnce(wrapper)
+    expect(wrapper.find('.side').exists()).toBe(false)
+  })
+})
+
 // ------------------------------------------------------------------ 경계
 describe('경계 상황', () => {
   it('채점 기준이 없는 케이스는 제출을 막는다', async () => {

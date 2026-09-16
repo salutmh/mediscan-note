@@ -14,10 +14,11 @@
  */
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
-import { getDashboard } from '../api/endpoints'
+import { getDashboard, listCases } from '../api/endpoints'
 import { gradeBadge } from '../labels'
 
 const data = ref(null)
+const cases = ref([])
 const loading = ref(true)
 const error = ref('')
 
@@ -31,7 +32,9 @@ const rangeDays = ref(0)
 
 onMounted(async () => {
   try {
-    data.value = await getDashboard()
+    const [dash, caseData] = await Promise.all([getDashboard(), listCases()])
+    data.value = dash
+    cases.value = caseData.cases ?? []
   } catch (e) {
     error.value = e.message || '학습 현황을 불러오지 못했습니다.'
   } finally {
@@ -64,6 +67,34 @@ const matchRate = computed(() => {
 
 /** 평균 일치도 — 케이스별 최고 기록의 평균이 아니라 **지금 가진 최고 기록**만 쓴다 */
 const bestRate = computed(() => percent(data.value?.best_dice))
+
+/**
+ * 케이스별 최고 일치도 — 낮은 것부터.
+ *
+ * **왜 시계열이 아니라 케이스별인가.** 처음엔 "제출 순서에 따른 일치도 추이"를 그리려 했는데,
+ * 그건 이 제품에서 그리면 안 되는 그림이다. 케이스마다 병변이 다르므로 서로 다른 케이스의
+ * 점수를 이어 붙여 선으로 만들면 **없는 추세를 있는 것처럼 보여준다**
+ * (백엔드가 `_latest_improvement` 를 같은 케이스의 두 시도로만 계산하는 것과 같은 이유다).
+ *
+ * 그래서 케이스를 **각각 따로** 세운다. 막대끼리의 높이 차이는 "어느 케이스가 더 어렵다"가
+ * 아니라 "내가 어디를 덜 맞췄다"로만 읽어야 하고, 그 문장을 화면에도 적어 둔다.
+ *
+ * 시도하지 않은 케이스는 넣지 않는다 — 0% 막대로 그리면 **안 푼 것이 0점으로 보인다**.
+ */
+const caseScores = computed(() =>
+  cases.value
+    .filter((c) => c.progress?.best_dice != null)
+    .map((c) => ({
+      case_id: c.case_id,
+      value: Math.round(c.progress.best_dice * 100),
+      attempts: c.progress.attempts,
+      grade: c.progress.latest_grade,
+    }))
+    .sort((a, b) => a.value - b.value),
+)
+
+/** 막대를 붙일 케이스가 2개는 되어야 "분포"라고 할 수 있다. 1개면 숫자 하나가 낫다. */
+const showChart = computed(() => caseScores.value.length >= 2)
 
 const recent = computed(() => {
   const items = data.value?.recent_activity ?? []
@@ -159,6 +190,49 @@ function whenLabel(iso) {
         </article>
       </div>
 
+      <!-- 케이스별 최고 일치도.
+           대시보드가 화면의 40% 를 백지로 두고 있었고, 나머지는 홈·진행현황과 같은 숫자였다.
+           이 칸이 이 화면만 답하는 질문이다: **어느 케이스를 덜 맞췄나.**
+           진행현황의 표는 특정 케이스를 찾아보는 곳이고, 여기는 약한 것이 한눈에 보이는 곳이다. -->
+      <!-- 한 번도 풀지 않았으면 그릴 것이 없다. 그렇다고 화면 아래 절반을 백지로 두지 않는다 —
+           지표를 보러 왔는데 지표가 없는 사람에게 필요한 건 **시작할 자리**다.
+           없는 값을 지어내서 채우는 것과는 다르다. -->
+      <article v-if="!data.has_any_activity && data.next_up" class="card quiet start-card">
+        <h2 class="card-title">아직 지표를 만들 기록이 없습니다</h2>
+        <p class="muted">
+          한 케이스를 풀고 나면 여기에 케이스별 일치도가 쌓입니다.
+        </p>
+        <RouterLink class="btn primary start-btn" :to="`/cases/${data.next_up.case_id}`">
+          {{ data.next_up.case_id }} 판독하기 →
+        </RouterLink>
+      </article>
+
+      <article v-if="showChart" class="card chart-card">
+        <header class="card-head">
+          <h2 class="card-title">케이스별 최고 일치도</h2>
+          <RouterLink class="card-more" to="/progress">케이스별 이력 보기 ›</RouterLink>
+        </header>
+        <p class="muted chart-note">
+          낮은 것부터입니다. 각 막대는 <strong>그 케이스의 기준 마스크와 내 표시가 얼마나
+          겹쳤는지</strong>이며, <strong>케이스끼리 견주는 값이 아닙니다</strong> —
+          병변이 케이스마다 달라 서로 비교되지 않습니다. 기간 필터와 무관한 전체 기간 기록입니다.
+        </p>
+
+        <ul class="bars">
+          <li v-for="row in caseScores" :key="row.case_id" class="bar-row">
+            <RouterLink class="bar-name" :to="`/cases/${row.case_id}`">
+              {{ row.case_id }}
+            </RouterLink>
+            <div class="bar-track">
+              <!-- 막대는 단일 계열이라 범례가 없다. 값은 끝에 직접 적는다. -->
+              <i class="bar-fill" :style="{ width: Math.max(row.value, 1) + '%' }"></i>
+            </div>
+            <span class="tnum bar-value">{{ row.value }}%</span>
+            <span class="bar-attempts muted">{{ row.attempts }}회</span>
+          </li>
+        </ul>
+      </article>
+
       <!-- 최근 학습 활동 (시안 05 의 표) -->
       <article class="card activity-card" :class="{ quiet: !recent.length }">
         <header class="card-head">
@@ -240,6 +314,93 @@ function whenLabel(iso) {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--sp-4);
+}
+
+.start-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sp-2);
+}
+.start-btn {
+  margin-top: var(--sp-2);
+  text-decoration: none;
+}
+
+/* --- 케이스별 최고 일치도 막대 --- */
+.chart-note {
+  /* 한 줄이 1,240px 를 가로지르면 읽히지 않는다. 읽기 좋은 줄 길이로 묶는다 */
+  max-width: 78ch;
+  margin: 0 0 var(--sp-5);
+}
+
+.bars {
+  /* 막대도 폭을 제한한다 — 100% 막대가 1,000px 을 가로지르면 길이 차이가 오히려 안 읽힌다 */
+  max-width: 720px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.bar-row {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr) 46px 40px;
+  align-items: center;
+  gap: var(--sp-3);
+}
+
+.bar-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-secondary);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.bar-name:hover {
+  color: var(--brand-700);
+  text-decoration: underline;
+}
+
+.bar-track {
+  /* 막대는 슬롯을 꽉 채우지 않는다 — 14px 로 잡고 남는 높이는 여백으로 둔다 */
+  height: 14px;
+  border-radius: var(--r-full);
+  background: var(--chart-track);
+  overflow: hidden;
+}
+
+.bar-fill {
+  display: block;
+  height: 100%;
+  background: var(--chart-bar);
+  /* 기준선(왼쪽)은 각지게, 데이터 끝만 둥글게 */
+  border-radius: 0 4px 4px 0;
+}
+
+.bar-value {
+  /* **숫자는 막대 색을 입지 않는다.** 색은 막대가 갖고 글자는 글자 토큰을 쓴다 */
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--ink);
+  text-align: right;
+}
+
+.bar-attempts {
+  font-size: 12px;
+  text-align: right;
+}
+
+@media (max-width: 640px) {
+  .bar-row {
+    grid-template-columns: 92px minmax(0, 1fr) 42px;
+  }
+  .bar-attempts {
+    display: none;
+  }
 }
 .kpi {
   display: grid;
