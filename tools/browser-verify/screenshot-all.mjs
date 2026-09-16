@@ -189,6 +189,22 @@ await evaluate(`
   })()
 `).then((r) => console.log('   ', r))
 
+// 3-1) 시안 03 — 기본정보 설정 (가입 직후 거치는 화면)
+await goto('/onboarding', { settle: 1600 })
+await shoot('03b-onboarding')
+
+// 3-2) 시안 04 — 홈
+await goto('/', { settle: 1800 })
+await shoot('03c-home')
+
+// 3-3) 시안 05 — 학습 대시보드
+await goto('/dashboard', { settle: 1800 })
+await shoot('03d-dashboard')
+
+// 3-4) 시안 06 — 학습 선택
+await goto('/learn', { settle: 1800 })
+await shoot('03e-learn-select')
+
 // 4) 화면 1 — 케이스 목록
 await goto('/cases', { settle: 1800 })
 await shoot('04-cases')
@@ -235,6 +251,10 @@ await shoot('07-result-compare')
 // 7) 화면 6 — 복습노트
 await goto('/wrong-notes', { settle: 1600 })
 await shoot('08-review-notes')
+
+// 7-1) 시안 10 — 오답 상세 (**제출 이력이 있어야 내용이 그려진다**. 위에서 제출했다)
+await goto('/wrong-notes/VS-SEG-202', { settle: 2000 })
+await shoot('08b-wrong-note-detail')
 
 // 8) 화면 5 — 내 영상 분석 (업로드 전)
 await goto('/analyze', { settle: 1600 })
@@ -292,6 +312,10 @@ await shoot('09c-analyze-result')
 // 9) 화면 7 — 진행현황
 await goto('/progress', { settle: 1800 })
 await shoot('10-progress')
+
+// 9-1) 시안 11 — 마이페이지(계정 설정)
+await goto('/account', { settle: 1600 })
+await shoot('10b-account')
 
 // 10) 모바일 폭에서 판독 화면 (반응형 확인)
 await cdp.send('Emulation.setDeviceMetricsOverride', {
