@@ -38,7 +38,7 @@ AI 보조 피드백(참고) → 오답 재학습.
 | 스키마 | Alembic이 기준, 기동 시 자동 upgrade + 레거시 DB 감지 | `app/db.py:47` |
 | 정적 자산 | 요청 주소 기준 절대 URL 생성 + **케이스 영상·마스크는 서명 URL 로만** (인증 없이 받을 수 없다) | `app/static_files.py`, `app/asset_urls.py` |
 | 보안 헤더 | nosniff / X-Frame-Options DENY / Referrer-Policy / COOP / Permissions-Policy. CSP 는 **추측해서 만들지 않는다**(MEDISCAN_CSP 로 지정) | `app/security_headers.py` |
-| 테스트 | 백엔드 **1080개**(SQLite·PostgreSQL 양쪽) + 프론트 **194개** + E2E 7종 + 접근성·좁은화면 점검 | `backend/tests/`, `frontend/src/**/*.test.js` |
+| 테스트 | 백엔드 **1092개**(SQLite·PostgreSQL 양쪽) + 프론트 **214개** + E2E 7종 + 접근성·좁은화면 점검 | `backend/tests/`, `frontend/src/**/*.test.js` |
 
 **이미 해결된 것은 다시 만들지 않는다.** 위 항목은 재구현 대상이 아니다.
 
@@ -146,7 +146,7 @@ AI 보조 피드백(참고) → 오답 재학습.
 |---|---|
 | E1 | 6케이스 전부 `case_findings` 미작성. 전문가가 작성해야 하며 **Claude가 임의 생성하지 않는다** |
 | E2 | 케이스 난이도(difficulty) 판정 |
-| E3 | Dice 임계값 0.60/0.15의 교육적 타당성 — 값은 `app/scoring_config.py` 로 분리했고 응답에 `not_yet_educationally_validated` 를 함께 내려보낸다. **값 자체의 검증은 여전히 필요** |
+| E3 | Dice 임계값 0.60/0.15의 교육적 타당성 — 값은 `app/scoring_config.py` 로 분리했고 응답에 `not_yet_educationally_validated` 를 함께 내려보낸다. **값 자체의 검증은 여전히 필요.**<br>2026-09-16: 사용자 walkthrough 에서 **기준의 2.2배를 칠하고 `match`** 를 받는 것을 확인했다(Dice 0.62). 임계값은 그대로 두고 **복습 경로만** 분리했다(`review_area_ratio`, 기본 2.0 — 이 값도 미검증). 등급 판정 자체는 **여전히 이 항목의 검토 대상**이다 |
 | E4 | spatial feedback 문구가 학습자에게 오해를 주지 않는지 (문구는 `app/feedback.py` 에 모여 있고, 의료 어휘 금지를 테스트로 고정했다) |
 
 ---
