@@ -118,7 +118,7 @@ function splitTerm(raw) {
     <p v-if="loading" class="g-note muted">불러오는 중…</p>
     <p v-else-if="errorMessage" class="g-note error">{{ errorMessage }}</p>
     <p v-else-if="!terms.length" class="g-note muted">
-      이 질환은 아직 준비된 용어가 없습니다.
+      {{ disease ? '이 질환은 아직 준비된 용어가 없습니다.' : '질환별 용어는 제출 후 학습 해설과 함께 확인할 수 있습니다.' }}
     </p>
     <p v-else-if="!visible.length" class="g-note muted">검색 결과가 없습니다.</p>
 

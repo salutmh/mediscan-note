@@ -36,6 +36,27 @@ const overMarkedTimes = computed(() => {
   return ratio == null ? null : ratio.toFixed(1)
 })
 const aiPrediction = computed(() => props.result.ai_prediction ?? null)
+
+/**
+ * "병변 없음" 답 / 빈 기준 마스크 (계약 v0.9).
+ * 한쪽이 비면 비율의 분모가 0 이라 서버가 비율을 null 로 준다 — 여기서 나눗셈을 흉내 내지 않고
+ * 서버가 준 명시적인 값(under/over_segmentation_ratio)과 두 플래그만으로 카드를 채운다.
+ * 문구는 "이 케이스의 전문가 기준 마스크"에 대해서만 말한다 ("정상"이라고 쓰지 않는다).
+ */
+const answeredNoAbnormality = computed(() => props.result.answer_type === 'no_abnormality')
+const referenceEmpty = computed(() => props.result.evaluation?.reference_empty === true)
+const emptyNote = computed(() => {
+  if (referenceEmpty.value && answeredNoAbnormality.value) {
+    return "전문가 기준 마스크에 표시된 병변 영역이 없고, '병변 없음'으로 답해 표시한 영역도 없습니다."
+  }
+  if (referenceEmpty.value) {
+    return '이 학습 케이스의 전문가 기준 마스크에는 표시된 병변 영역이 없습니다. 파란 영역이 표시한 부분입니다.'
+  }
+  if (answeredNoAbnormality.value) {
+    return "'병변 없음'으로 답해 표시한 영역이 없습니다. 초록 영역이 전문가 기준 마스크입니다."
+  }
+  return ''
+})
 const isProvisional = computed(() => props.result.evaluation?.is_provisional === true)
 const evaluationMethod = computed(() => props.result.evaluation?.method ?? 'reference_mask')
 const GRADE_DESC = {
@@ -82,6 +103,9 @@ const FEEDBACK_TONE = {
   POSITION_OFF_TARGET: 'bad',
   UNDER_SEGMENTED: 'bad',
   OVER_SEGMENTED: 'bad',
+  NO_ABNORMALITY_MATCHED: 'good',
+  MARKED_ON_EMPTY_REFERENCE: 'bad',
+  MISSED_REFERENCE: 'bad',
 }
 function feedbackTone(code) {
   return FEEDBACK_TONE[code] ?? 'neutral'
@@ -97,8 +121,43 @@ function feedbackTone(code) {
  * 여기서 하는 것은 **산술 변환뿐이다.** 새로운 의학적 주장을 만들지 않는다
  * (`1 - gt_coverage` 는 "놓친 비율"이지 "이 병변을 놓쳤다"가 아니다).
  */
+function emptyBreakdown(m) {
+  // 기준 마스크 빔 + 병변 없음: 일치, 놓친 것도 넘친 것도 없다
+  // 기준 마스크 빔 + 영역 표시: 겹칠 기준 영역이 없고, 표시한 것 전부가 기준 밖이다
+  // 기준 마스크 있음 + 병변 없음: 기준 영역 전부를 놓쳤다
+  const matched = referenceEmpty.value && answeredNoAbnormality.value ? 100 : 0
+  const missed = Math.round((m.under_segmentation_ratio ?? 0) * 100)
+  const excess = referenceEmpty.value && !answeredNoAbnormality.value ? 100 : 0
+  return [
+    {
+      key: 'matched',
+      label: '기준과 겹친 부분',
+      hint: referenceEmpty.value
+        ? '전문가 기준 마스크에 표시된 병변 없음'
+        : '기준 영역 중 표시한 비율',
+      percent: matched,
+      tone: 'match',
+    },
+    {
+      key: 'missed',
+      label: '놓친 부분',
+      hint: '기준 영역 중 표시하지 않은 비율',
+      percent: missed,
+      tone: 'mismatch',
+    },
+    {
+      key: 'excess',
+      label: '과하게 표시한 부분',
+      hint: answeredNoAbnormality.value ? "'병변 없음'으로 답해 표시한 영역 없음" : '표시한 영역 중 기준 밖 비율',
+      percent: excess,
+      tone: 'partial_match',
+    },
+  ]
+}
+
 const areaBreakdown = computed(() => {
   const m = spatialFeedback.value?.metrics
+  if (m && (referenceEmpty.value || answeredNoAbnormality.value)) return emptyBreakdown(m)
   if (!m || m.gt_coverage == null || m.user_precision == null) return null
   const coverage = m.gt_coverage
   const precision = m.user_precision
@@ -381,6 +440,7 @@ function ratio(value, max = 1) {
         </div>
       </div>
 
+      <p v-if="emptyNote" class="muted note">{{ emptyNote }}</p>
       <p v-if="overlayNote" class="muted note">{{ overlayNote }}</p>
       </div>
 

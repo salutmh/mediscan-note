@@ -312,3 +312,156 @@ describe('경계 상황', () => {
     expect(wrapper.text()).toContain('찾을 수 없어')
   })
 })
+
+// ------------------------------------------------------------ 병변 없음 (v0.9)
+describe('"병변 없음" 답', () => {
+  const GRADED = {
+    case_id: 'VS-SEG-202',
+    grade: 'match',
+    dice: 1,
+    answer_type: 'no_abnormality',
+    evaluation: { reference_empty: true },
+    explanation: {},
+  }
+  const fakeCanvas = (overrides = {}) => ({
+    getPoints: () => [[1, 1]],
+    getMaskBase64: () => 'data',
+    getMaskDataUrl: () => 'data:image/png;base64,x',
+    clear: vi.fn(),
+    ...overrides,
+  })
+  const noAbnButton = (wrapper) => wrapper.find('button.no-abnormality')
+
+  it('아무것도 칠하지 않은 상태만으로는 제출할 수 없다 (자동으로 병변 없음이 되지 않는다)', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(wrapper.find('button.submit-inline').attributes('disabled')).toBeDefined()
+    expect(noAbnButton(wrapper).attributes('aria-pressed')).toBe('false')
+  })
+
+  it('병변 없음을 고르면 마스크 없이 no_abnormality 로 제출한다', async () => {
+    submitRoi.mockResolvedValue(GRADED)
+    const wrapper = mountView()
+    await flushPromises()
+    wrapper.vm.roiCanvas = fakeCanvas()
+
+    await noAbnButton(wrapper).trigger('click')
+    expect(noAbnButton(wrapper).attributes('aria-pressed')).toBe('true')
+    const submit = wrapper.find('button.submit-inline')
+    expect(submit.attributes('disabled')).toBeUndefined()
+    expect(submit.text()).toContain('병변 없음으로 제출')
+
+    await submit.trigger('click')
+    await flushPromises()
+
+    const roi = submitRoi.mock.calls[0][1]
+    expect(roi.type).toBe('no_abnormality')
+    expect(roi.mask_png_base64).toBeUndefined()
+    expect(wrapper.vm.submittedMaskDataUrl).toBe(null)
+  })
+
+  it('칠해 둔 영역이 있으면 병변 없음을 고를 때 지우고 알린다', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    const canvas = fakeCanvas()
+    wrapper.vm.roiCanvas = canvas
+    wrapper.vm.hasInput = true
+
+    await noAbnButton(wrapper).trigger('click')
+
+    expect(canvas.clear).toHaveBeenCalled()
+    expect(wrapper.vm.noAbnormality).toBe(true)
+    expect(wrapper.text()).toContain('칠해 둔 영역은 지웠습니다')
+  })
+
+  it('다시 칠하기 시작하면 병변 없음 선택이 풀린다', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    wrapper.vm.roiCanvas = fakeCanvas()
+
+    await noAbnButton(wrapper).trigger('click')
+    expect(wrapper.vm.noAbnormality).toBe(true)
+
+    wrapper.vm.onRoiChange({ hasInput: true })
+    await flushPromises()
+    expect(wrapper.vm.noAbnormality).toBe(false)
+    expect(noAbnButton(wrapper).attributes('aria-pressed')).toBe('false')
+  })
+
+  it('영역을 칠해 제출하면 기존처럼 brush_mask 로 나간다', async () => {
+    submitRoi.mockResolvedValue({ ...GRADED, answer_type: 'roi' })
+    const wrapper = mountView()
+    await flushPromises()
+    wrapper.vm.roiCanvas = fakeCanvas()
+    wrapper.vm.hasInput = true
+
+    await wrapper.vm.onSubmit()
+    await flushPromises()
+
+    const roi = submitRoi.mock.calls[0][1]
+    expect(roi.type).toBe('brush_mask')
+    expect(roi.mask_png_base64).toBe('data')
+  })
+})
+
+// ------------------------------------------------------ 판독 전 질환명 비노출
+describe('질환명 공개 시점', () => {
+  const GLIOMA = {
+    ...CASE_WITH_SLICES,
+    case_id: 'glioma_06',
+    disease: 'glioma',
+    slices: [],
+    representative_slice: null,
+  }
+  const GRADED = {
+    case_id: 'glioma_06',
+    grade: 'match',
+    dice: 1,
+    answer_type: 'no_abnormality',
+    evaluation: { reference_empty: true },
+    explanation: {},
+  }
+  const header = (w) => w.find('.case-head').text()
+
+  it('제출 전에는 질환명·질환이 든 case_id 를 보이지 않고, 사전에도 질환을 넘기지 않는다', async () => {
+    getCase.mockResolvedValue(GLIOMA)
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(header(wrapper)).not.toContain('glioma')
+    expect(header(wrapper)).not.toContain('교종')
+    expect(wrapper.find('h1').text()).toBe('판독 케이스')
+    expect(header(wrapper)).toContain('뇌 MRI') // 부위는 보여도 된다
+    const glossary = wrapper.findComponent(stubs.GlossaryPanel)
+    expect(glossary.props('disease')).toBe(null)
+    expect(glossary.props('diseaseLabel')).toBe('')
+  })
+
+  it('제출하면 결과 단계에서 질환명과 case_id 를 공개하고 채점 흐름은 그대로다', async () => {
+    getCase.mockResolvedValue(GLIOMA)
+    submitRoi.mockResolvedValue(GRADED)
+    const wrapper = mountView()
+    await flushPromises()
+    wrapper.vm.roiCanvas = { clear: vi.fn() }
+
+    await wrapper.find('button.no-abnormality').trigger('click')
+    await wrapper.find('button.submit-inline').trigger('click')
+    await flushPromises()
+
+    // (라우트 목의 caseId 는 VS-SEG-202 로 고정이라 roi 만 확인한다)
+    expect(submitRoi.mock.calls[0][1]).toEqual({ type: 'no_abnormality', points: [] })
+    expect(wrapper.find('h1').text()).toBe('glioma_06')
+    // 브라우저는 연속 공백을 하나로 그린다 — 화면에 보이는 대로 비교한다
+    expect(header(wrapper).replace(/\s+/g, ' ')).toContain('교종 · 문제 풀이')
+    expect(wrapper.find('.result-stub').exists()).toBe(true)
+  })
+
+  it('질환 코드가 없는 case_id 는 제출 전에도 그대로 보인다', async () => {
+    const wrapper = mountView() // VS-SEG-202 / vestibular_schwannoma
+    await flushPromises()
+
+    expect(wrapper.find('h1').text()).toBe('VS-SEG-202')
+    expect(header(wrapper)).not.toContain('전정신경초종')
+  })
+})

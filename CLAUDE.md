@@ -48,8 +48,11 @@
     모델을 바꾸면 반드시 `alembic revision --autogenerate` 로 마이그레이션을 만든다.
   - 실제 케이스 등록: `python -m scripts.import_cases <manifest>` — 영상·기준마스크·해설을 함께 등록.
     실제 데이터 파일은 커밋하지 않는다 (`backend/data/`, `app/static/cases/` gitignore).
-  - 테스트: 백엔드 pytest **1092개** (`cd backend && pytest`) — **SQLite·PostgreSQL 양쪽에서 통과**
-    (`scripts/verify_postgres.py --with-tests`). 프론트 vitest **214개** (`cd frontend && npm test`).
+  - 테스트: 백엔드 pytest **1103개** (`cd backend && pytest`) — **SQLite·PostgreSQL 양쪽에서 통과**
+    (`scripts/verify_postgres.py --with-tests`, 일회용 컨테이너에서만).
+    `MEDISCAN_TEST_DATABASE_URL` 을 **빈 값으로 넘기지 않는다** — 임시 DB 대신 `backend/mediscan.db` 를 쓰게 되고
+    테스트 정리 픽스처가 그 DB 의 사용자 데이터를 지운다 (2026-09-23 실제로 일어났다).
+    프론트 vitest **232개** (`cd frontend && npm test`).
     브라우저 검증은 `tools/browser-verify/` — E2E 7종(user-flow / slice-navigation /
     consent-and-sns / screenshot-all / error-paths / case-review / admin-ux)
     + 접근성 점검(`a11y-audit`) + 좁은 화면 점검(`responsive-check`).
@@ -59,10 +62,33 @@
     회원 탈퇴(화면 포함)까지 구현됐다.
   - 운영: `/admin/cases` 최소 CMS (활성·비활성 / 난이도 / 전문가 소견). 최초 운영자는
     `scripts/grant_admin.py` 로만 지정한다. 백업은 `scripts/backup_db.py`.
-  - 로컬 개발 포트: backend **:8010**, frontend **:5173**. 영상 URL 은 요청 주소 기준으로 생성된다.
-- **실데이터 = 뇌 MRI 전정신경초종(VS-SEG)**. 흉부 X-ray 합성 케이스(CXR-000x)는 파이프라인 검증용
+  - 로컬 개발 포트: frontend **:5173**, backend **:8010**, ai-service **:8000**. 영상 URL 은 요청 주소 기준으로 생성된다.
+  - Docker: `docker compose --env-file .env.docker up` 으로 세 서비스가 뜬다.
+    **Windows 볼륨 마운트에서는 Vite 가 파일 변경을 감지하지 못할 수 있다** — 프론트 파일을 고친 뒤
+    화면이 그대로면 `docker compose --env-file .env.docker restart frontend`.
+- **현재 서비스 데이터 = 뇌 MRI 5질환 통합 YOLO26s 데모 케이스 15개** (Docker DB 기준).
+  전정신경초종 / 교종 / 뇌전이 / 허혈성 뇌졸중 / 다발성경화증 × 3 (`service_inference_5disease`).
+  - **양성 10 / 음성 5.** 양성은 통합 데이터셋의 GT polygon 을 그린 기준 마스크, 음성은 GT 라벨이
+    비어 있어 **동일 크기의 완전히 빈 기준 마스크**를 쓴다. 등록: `register-brain5-demo_FIXED.ps1`
+    (`scripts/register_brain5_demo_cases.py`, dry-run 후 등록). case_id 는 AI sidecar 와 같다.
+  - **"병변 없음"은 학습자가 명시적으로 고르는 답이다** (`roi.type: "no_abnormality"`).
+    ROI 를 안 그렸다는 사실만으로 병변 없음이 되지 않는다(빈 캔버스 제출은 400).
+    판정: 빈 기준 + 병변 없음 = `match`/1.0, 빈 기준 + ROI = `mismatch`,
+    양성 + 병변 없음 = `mismatch`(놓친 부분 100%), 양성 + ROI = 기존 Dice 채점 (api-spec 2-3).
+  - **`cases.reference_is_empty` 안전장치**: 빈 기준 마스크는 이 플래그가 켜진 케이스에서만 채점 기준이 된다.
+    플래그 없이 비어 있거나(깨진 export) 플래그가 켜졌는데 병변이 있으면 422 로 채점하지 않는다.
+    이 값은 제출 전 응답에 나가지 않는다(그 자체가 정답).
+  - **판독 제출 전에는 질환명을 보이지 않는다** — 목록·판독 화면·사전 모두. 질환 코드가 든 case_id
+    (`glioma_06`)는 중립 라벨로 바꾼다 — 판독 헤더는 "판독 케이스", 그 밖의 학습자 화면(목록·홈·대시보드·
+    복습노트·진행현황)은 `labels.caseDisplayLabel` 로 case_id 끝 번호를 쓴 "케이스 06". 결과·해설 단계에서 공개한다.
+    **URL(`/cases/glioma_06`)의 raw case_id 는 이번 버전에서 유지한다** (라우팅 변경 없음).
+    API 의 `disease`/`case_id` 는 그대로다 (표시만 제어).
+  - AI 참고(ai-service :8000, YOLO26s)는 **채점 후에 따로** 불러와 보여줄 뿐 채점에 쓰이지 않는다.
+    음성 5개는 AI 검출 0건이며 그대로 표시된다.
+- **이전 실데이터 파이프라인 = 뇌 MRI 전정신경초종(VS-SEG)** — 아래 6케이스는 현재 Docker DB 에 등록돼 있지 않다.
+  흉부 X-ray 합성 케이스(CXR-000x)는 파이프라인 검증용
   fixture 였고 **서비스에서 제거**했다 (지금은 테스트 안에서만 만들어 쓴다).
-  - 등록 완료 6케이스: VS-SEG-202/203/207/211/212(검출 양호) + 204(모델 미검출).
+  - 이 파이프라인으로 등록했던 6케이스: VS-SEG-202/203/207/211/212(검출 양호) + 204(모델 미검출).
     케이스 = volume 1개이고, 화면 표시·채점은 **대표 slice**(병변 면적 최대)로 한다.
     slice 별 자산은 `case_slices` 에 있고 **원본 slice_index 를 그대로 보존**한다(2.5D 확장 대비).
   - DICOM -> npy -> 육안 검수 -> PNG 자산 -> 등록 **4단계로 분리**해 진행한다. 중간에 사람이
@@ -146,7 +172,7 @@ medscannote/
     alembic/            마이그레이션 — **스키마의 기준은 create_all 이 아니라 마이그레이션이다**
     scripts/            실데이터 파이프라인 CLI (export / 검수 / 자산생성 / 등록 / 점검 / 삭제)
     data/               실데이터 작업 폴더 (gitignore, manifest.example.json 만 커밋)
-  frontend/           Vue 3 + Vite. 화면 0~7 + 계정(/account)·운영자(/admin/cases). vitest 59개
+  frontend/           Vue 3 + Vite. 화면 0~7 + 계정(/account)·운영자(/admin/cases). vitest 232개
   models/
     brain_mri_vs/      전정신경초종 추론 wrapper (inference.py) — **연결됨**(volume 입력,
                        미리 계산한 sidecar 를 참고 정보로만 서비스)

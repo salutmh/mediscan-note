@@ -95,7 +95,9 @@ def test_response_uses_reference_mask_contract(user_a):
         "review_area_ratio",
         "validation_status",
     }
-    assert set(body["evaluation"]) == {"method", "is_provisional", "thresholds"}
+    # v0.9: 빈 기준 마스크 케이스인지 (채점 후에만 공개)
+    assert set(body["evaluation"]) == {"method", "is_provisional", "thresholds", "reference_empty"}
+    assert body["evaluation"]["reference_empty"] is False
     assert body["ai_prediction"] is None  # 체크포인트가 없으므로 참고 정보도 없다
     assert "ai_mask_url" not in body, "v0.2 필드가 남아 있으면 안 된다"
     assert "model_version" not in body, "채점 응답의 최상위 model_version 은 v0.3 에서 제거됐다"

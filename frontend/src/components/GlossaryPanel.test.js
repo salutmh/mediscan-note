@@ -90,6 +90,7 @@ describe('비어 있거나 실패했을 때', () => {
     await flushPromises()
 
     expect(getGlossary).not.toHaveBeenCalled()
-    expect(wrapper.text()).toContain('준비된 용어가 없습니다')
+    // 판독 화면은 제출 전에 질환을 넘기지 않는다(정답 힌트) — 없는 이유를 사실대로 말한다
+    expect(wrapper.text()).toContain('제출 후 학습 해설과 함께 확인할 수 있습니다')
   })
 })

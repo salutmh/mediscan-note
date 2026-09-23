@@ -21,6 +21,10 @@ export const DISEASE_LABEL = {
   consolidation: '폐경화',
   nodule: '결절',
   pleural_effusion: '흉수',
+  glioma: '교종',
+  brain_metastasis: '뇌전이',
+  ischemic_stroke: '허혈성 뇌졸중',
+  multiple_sclerosis: '다발성경화증',
 }
 
 /**
@@ -52,6 +56,31 @@ export function bodyPartLabel(code) {
 
 export function diseaseLabel(code) {
   return DISEASE_LABEL[code] ?? code
+}
+
+/**
+ * case_id 에 질환 코드가 들어 있는가 (예: `glioma_06`).
+ *
+ * **제출 전에는 질환명이 곧 정답 힌트다.** 그런 case_id 는 판독 전 화면에서 그대로 보여주지 않고
+ * 중립 라벨로 바꾼다 (CaseListView / ReadingView). API 의 case_id 자체는 바꾸지 않는다.
+ */
+export function caseIdRevealsDisease(caseId, disease = null) {
+  const id = String(caseId ?? '').toLowerCase()
+  if (!id) return false
+  return [disease, ...Object.keys(DISEASE_LABEL)]
+    .filter(Boolean)
+    .some((code) => id.includes(String(code).toLowerCase()))
+}
+
+/**
+ * 학습자 화면에 보일 케이스 이름. 질환 코드가 든 case_id 는 **끝 번호로 만든 중립 라벨**
+ * (`glioma_06` -> "케이스 06")로 바꾼다. 번호를 case_id 에서 뽑으므로 목록·홈·대시보드·
+ * 복습노트·진행현황 어디서나 같은 케이스는 같은 이름이다. 링크(router param)는 원래 case_id 를 쓴다.
+ */
+export function caseDisplayLabel(caseId, disease = null) {
+  if (!caseIdRevealsDisease(caseId, disease)) return caseId
+  const digits = String(caseId).match(/(\d+)(?!.*\d)/)?.[1]
+  return digits ? `케이스 ${digits.padStart(2, '0')}` : '케이스'
 }
 
 export function gradeLabel(code) {

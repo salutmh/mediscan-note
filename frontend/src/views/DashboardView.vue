@@ -15,7 +15,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { getDashboard, listCases } from '../api/endpoints'
-import { gradeBadge } from '../labels'
+import { caseDisplayLabel, gradeBadge } from '../labels'
 
 const data = ref(null)
 const cases = ref([])
@@ -203,7 +203,7 @@ function whenLabel(iso) {
           한 케이스를 풀고 나면 여기에 케이스별 일치도가 쌓입니다.
         </p>
         <RouterLink class="btn primary start-btn" :to="`/cases/${data.next_up.case_id}`">
-          {{ data.next_up.case_id }} 판독하기 →
+          {{ caseDisplayLabel(data.next_up.case_id) }} 판독하기 →
         </RouterLink>
       </article>
 
@@ -221,7 +221,7 @@ function whenLabel(iso) {
         <ul class="bars">
           <li v-for="row in caseScores" :key="row.case_id" class="bar-row">
             <RouterLink class="bar-name" :to="`/cases/${row.case_id}`">
-              {{ row.case_id }}
+              {{ caseDisplayLabel(row.case_id) }}
             </RouterLink>
             <div class="bar-track">
               <!-- 막대는 단일 계열이라 범례가 없다. 값은 끝에 직접 적는다. -->
@@ -260,7 +260,7 @@ function whenLabel(iso) {
               <td class="when">{{ whenLabel(item.submitted_at) }}</td>
               <td>
                 <RouterLink class="activity-case" :to="`/cases/${item.case_id}`">
-                  {{ item.case_id }}
+                  {{ caseDisplayLabel(item.case_id) }}
                 </RouterLink>
               </td>
               <td class="num tnum">

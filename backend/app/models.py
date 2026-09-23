@@ -101,6 +101,11 @@ class Case(Base):
     representative_slice: Mapped[int | None] = mapped_column(Integer, default=None)
     # 채점 기준이 되는 마스크 경로. 화면 3 오버레이에 그대로 내려주고, 2단계에서 실제 채점에도 쓴다.
     reference_mask_url: Mapped[str | None] = mapped_column(String(255), default=None)
+    # 기준 마스크가 **의도적으로 비어 있는** 케이스 (전문가 기준상 표시된 병변 없음).
+    # 등록할 때 명시적으로 켠다. 꺼진 상태에서 빈 마스크가 나오면 export 가 잘못된 것일 수
+    # 있으므로 "병변 없음 케이스"로 조용히 바꾸지 않고 채점 불가로 둔다 (grading.py).
+    # **학습자 응답(케이스 상세)에 내보내지 않는다** — 그 자체가 정답이다.
+    reference_is_empty: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     # 좌표 기반 임시 채점용 기준 영역 {cx, cy, r} (원본 픽셀 좌표).
     # 2단계에서 reference_mask_url 의 마스크에서 직접 계산하도록 대체된다 — grading.py 참고.
     reference_shape: Mapped[dict | None] = mapped_column(JSON, default=None)

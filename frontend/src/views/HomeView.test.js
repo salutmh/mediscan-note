@@ -179,3 +179,24 @@ describe('의료 내용을 만들지 않는다', () => {
     }
   })
 })
+
+describe('raw case_id 비노출', () => {
+  it('질환 코드가 든 case_id 는 "케이스 NN" 으로 보이고, 링크는 원래 case_id 로 간다', async () => {
+    const wrapper = await render({
+      ...ACTIVE,
+      next_up: { ...EMPTY.next_up, case_id: 'glioma_06', disease: 'glioma' },
+      recent_activity: [{ ...ACTIVE.recent_activity[0], case_id: 'brain_metastasis_09' }],
+      latest_improvement: { ...ACTIVE.latest_improvement, case_id: 'ischemic_stroke_12' },
+    })
+    const text = wrapper.text()
+    for (const raw of ['glioma', 'brain_metastasis', 'ischemic_stroke', '교종', '뇌전이']) {
+      expect(text).not.toContain(raw)
+    }
+    expect(text).toContain('케이스 06')
+    expect(text).toContain('케이스 09')
+    expect(text).toContain('케이스 12')
+    const targets = wrapper.findAllComponents(RouterLinkStub).map((l) => JSON.stringify(l.props('to')))
+    expect(targets.some((t) => t.includes('glioma_06'))).toBe(true)
+    expect(targets.some((t) => t.includes('brain_metastasis_09'))).toBe(true)
+  })
+})

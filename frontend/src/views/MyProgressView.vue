@@ -13,7 +13,7 @@
  */
 import { computed, onMounted, ref } from 'vue'
 import { listCases, listWrongNotes } from '../api/endpoints'
-import { bodyPartLabel, gradeLabel } from '../labels'
+import { bodyPartLabel, caseDisplayLabel, gradeLabel } from '../labels'
 
 const cases = ref([])
 const wrongNotes = ref([])
@@ -218,7 +218,7 @@ onMounted(async () => {
           <tbody>
             <tr v-for="row in history" :key="row.caseId">
               <th scope="row">
-                <RouterLink :to="`/cases/${row.caseId}`">{{ row.caseId }}</RouterLink>
+                <RouterLink :to="`/cases/${row.caseId}`">{{ caseDisplayLabel(row.caseId) }}</RouterLink>
               </th>
               <td class="num tnum">{{ row.attempts }}</td>
               <td class="num tnum">{{ row.first != null ? row.first + '%' : '—' }}</td>

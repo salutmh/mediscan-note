@@ -5,7 +5,8 @@
  */
 import { computed, onMounted, ref } from 'vue'
 import { listCases } from '../api/endpoints'
-import { bodyPartLabel, diseaseLabel } from '../labels'
+import { getAiCases } from '../api/medicalAiApi'
+import { bodyPartLabel, caseDisplayLabel } from '../labels'
 import ScoreBar from '../components/ScoreBar.vue'
 
 const selected = ref('')
@@ -13,6 +14,9 @@ const cases = ref([])
 const allCases = ref([]) // 필터 탭을 만들기 위한 전체 목록 (부위 필터 없이 한 번 받는다)
 const loading = ref(false)
 const errorMessage = ref('')
+
+// 5질환 통합 YOLO의 사전 계산 AI 참고 결과가 있는 케이스 ID
+const aiCaseIds = ref(new Set())
 
 /**
  * 부위 탭은 **실제로 케이스가 있는 부위만** 만든다.
@@ -76,12 +80,25 @@ const soleReadyPart = computed(() =>
   readyParts.value.length === 1 && pendingParts.value.length ? readyParts.value[0] : null,
 )
 
+async function loadAiCaseIds() {
+  try {
+    const aiData = await getAiCases()
+    aiCaseIds.value = new Set((aiData.cases ?? []).map((c) => c.case_id))
+  } catch {
+    aiCaseIds.value = new Set()
+  }
+}
+
 async function load() {
   loading.value = true
   errorMessage.value = ''
   try {
     const data = await listCases(selected.value || undefined)
     cases.value = data.cases ?? []
+
+    // AI sidecar는 참고용이다. **기다리지 않는다** — ai-service 가 느리거나 죽어 있어도
+    // 학습 목록은 바로 떠야 한다. 배지만 나중에 붙는다.
+    loadAiCaseIds()
     // 필터가 걸리지 않은 응답일 때만 탭 기준 목록을 갱신한다
     if (!selected.value) allCases.value = cases.value
   } catch (e) {
@@ -136,12 +153,21 @@ function statusOf(c) {
 
 const query = ref('')
 
+/**
+ * 카드에 보일 이름. **판독 전 화면이라 질환명을 보이지 않는다** — case_id 에 질환 코드가
+ * 들어 있으면(`glioma_06`) 중립 라벨("케이스 06")을 쓴다 (labels.caseDisplayLabel — 홈·복습노트와 같은 이름).
+ * 검색도 이 라벨로만 한다 (case_id 로 검색되면 "glioma" 를 쳐서 질환을 알아낼 수 있다).
+ */
+function displayName(c) {
+  return caseDisplayLabel(c.case_id, c.disease)
+}
+
 const visibleCases = computed(() => {
   let list = cases.value
   if (difficulty.value) list = list.filter((c) => c.difficulty === difficulty.value)
   if (status.value) list = list.filter((c) => statusOf(c) === status.value)
   const q = query.value.trim().toLowerCase()
-  if (q) list = list.filter((c) => c.case_id.toLowerCase().includes(q))
+  if (q) list = list.filter((c) => displayName(c).toLowerCase().includes(q))
   return list
 })
 
@@ -201,7 +227,7 @@ function onThumbError(event) {
     </div>
     <label class="search">
       <span class="sr-only">케이스 검색</span>
-      <input v-model="query" type="search" placeholder="케이스 ID 검색" />
+      <input v-model="query" type="search" placeholder="케이스 검색" />
     </label>
   </div>
 
@@ -277,7 +303,7 @@ function onThumbError(event) {
     <li v-for="c in visibleCases" :key="c.case_id">
       <RouterLink :to="{ name: 'reading', params: { caseId: c.case_id } }" class="card case-card">
         <div class="thumb">
-          <img :src="c.thumbnail_url" :alt="`${c.case_id} 썸네일`" @error="onThumbError" />
+          <img :src="c.thumbnail_url" :alt="`${displayName(c)} 썸네일`" @error="onThumbError" />
           <span class="badges">
             <span v-if="c.has_matched" class="badge float match">학습완료</span>
             <span v-if="c.needs_review" class="badge float mismatch">복습필요</span>
@@ -286,15 +312,13 @@ function onThumbError(event) {
               {{ DIFFICULTY_LABEL[c.difficulty] }}
             </span>
             <span v-if="c.gradable === false" class="badge float dim">채점 준비중</span>
+            <span v-if="aiCaseIds.has(c.case_id)" class="badge float ai-ref">AI 참고 있음</span>
           </span>
         </div>
         <div class="body">
-          <strong class="case-id">{{ c.case_id }}</strong>
-          <p class="muted meta">
-            {{ bodyPartLabel(c.body_part) }}
-            <span class="dot">·</span>
-            {{ diseaseLabel(c.disease) }}
-          </p>
+          <strong class="case-id">{{ displayName(c) }}</strong>
+          <!-- 질환명은 판독 전 힌트가 되므로 부위만 보인다 (결과·해설에서 공개) -->
+          <p class="muted meta">{{ bodyPartLabel(c.body_part) }}</p>
 
           <!-- **진행 상태.** 한 번도 안 풀었으면 progress 가 null 이고,
                0% 대신 안내 문구를 보여준다 — 0점과 미시도는 다른 상태다. -->
@@ -598,6 +622,12 @@ a.case-card:hover {
 
 .badge.float.dim {
   opacity: 0.85;
+}
+
+.badge.float.ai-ref {
+  background: rgba(16, 74, 110, 0.88);
+  border-color: rgba(255, 255, 255, 0.28);
+  color: #fff;
 }
 
 .body {

@@ -14,6 +14,7 @@ import ResultCompare from '../components/ResultCompare.vue'
 import ExplanationPanel from '../components/ExplanationPanel.vue'
 import GlossaryPanel from '../components/GlossaryPanel.vue'
 import { ApiError } from '../api/client'
+import { assetUrl, getAiCase } from '../api/medicalAiApi'
 import {
   getCase,
   listCases,
@@ -23,7 +24,7 @@ import {
   submitRoi,
 } from '../api/endpoints'
 import { useActiveTime } from '../useActiveTime'
-import { bodyPartLabel, diseaseLabel } from '../labels'
+import { bodyPartLabel, caseIdRevealsDisease, diseaseLabel } from '../labels'
 
 const route = useRoute()
 
@@ -36,6 +37,15 @@ const detailMissing = ref(false) // 케이스 상세를 찾지 못해 기본 캔
 
 const roiCanvas = ref(null)
 const hasInput = ref(false)
+/**
+ * "병변 없음" 답 (계약 v0.9).
+ * **칠하지 않았다는 사실만으로 병변 없음이 되지 않는다** — 학습자가 이 버튼으로 골라야 한다.
+ * 다시 칠하기 시작하면 선택이 풀린다 (onRoiChange). 한 답에 두 가지가 섞이지 않게 한다.
+ */
+const noAbnormality = ref(false)
+// "병변 없음"을 고르면서 칠하던 영역을 지웠을 때 한 번 알려준다 (되돌리는 방법 포함)
+const roiClearedForNoAbnormality = ref(false)
+const canSubmit = computed(() => hasInput.value || noAbnormality.value)
 // 시안 07 의 우측 사전 패널. 닫아 두면 영상에 더 집중할 수 있으므로 접을 수 있게 둔다.
 const glossaryOpen = ref(true)
 // 판독 캔버스를 펼쳐 둘지. 제출 전에는 항상 펼쳐져 있고, 제출하면 접힌다 (onSubmit 참고).
@@ -84,8 +94,53 @@ const phase = ref('idle') // 'idle' | 'submitting' | 'done'
 const result = ref(null)
 const submitError = ref('')
 const submittedMaskDataUrl = ref(null)
+const aiReference = ref(null)
+const aiReferenceLoading = ref(false)
+const showAiOverlay = ref(true)
+
+const aiOverlayUrl = computed(() =>
+  assetUrl(aiReference.value?.ai_prediction?.overlay_url),
+)
+const aiOriginalUrl = computed(() =>
+  assetUrl(aiReference.value?.source_image_url),
+)
+const aiDisplayedImage = computed(() =>
+  showAiOverlay.value && aiOverlayUrl.value ? aiOverlayUrl.value : aiOriginalUrl.value,
+)
+
+function aiPercent(value) {
+  if (value == null) return null
+  return `${(Number(value) * 100).toFixed(1)}%`
+}
+
+async function loadAiReference() {
+  aiReference.value = null
+  aiReferenceLoading.value = true
+  try {
+    aiReference.value = await getAiCase(caseId.value)
+  } catch {
+    // 현재 학습 케이스와 sidecar case_id가 일치하지 않으면 AI 참고 패널만 생략한다.
+    aiReference.value = null
+  } finally {
+    aiReferenceLoading.value = false
+  }
+}
+
 
 const locked = computed(() => phase.value !== 'idle')
+/**
+ * **제출 전에는 질환명을 보이지 않는다** — 판독 전에 알면 "찾는" 훈련이 아니라 답을 알고 칠하는 일이 된다.
+ * 채점이 끝나면(결과·해설 단계) 공개한다. API 의 disease / case_id 는 그대로 둔다.
+ */
+const diseaseRevealed = computed(() => phase.value === 'done')
+const displayCaseId = computed(() => {
+  const detail = caseDetail.value
+  if (!detail) return ''
+  if (diseaseRevealed.value || !caseIdRevealsDisease(detail.case_id, detail.disease)) {
+    return detail.case_id
+  }
+  return '판독 케이스'
+})
 // 기준 마스크가 없는 케이스는 채점할 수 없다 (api-spec v0.4) — 제출 자체를 막는다
 const gradable = computed(() => caseDetail.value?.gradable !== false)
 const meta = computed(() => meta_(caseDetail.value))
@@ -140,6 +195,7 @@ async function load() {
   caseDetail.value = null
   loadError.value = ''
   detailMissing.value = false
+  aiReference.value = null
   resetSubmission()
   try {
     const data = await getCase(caseId.value)
@@ -170,28 +226,51 @@ function resetSubmission() {
   phase.value = 'idle'
   nextTarget.value = null
   viewerOpen.value = true
+  noAbnormality.value = false
+  roiClearedForNoAbnormality.value = false
 }
 
 function onRoiChange(state) {
   hasInput.value = state.hasInput
+  // 다시 칠하기 시작하면 "병변 없음" 선택을 푼다 (Ctrl+Z 로 지운 영역을 되살린 경우도 같다)
+  if (state.hasInput && noAbnormality.value) {
+    noAbnormality.value = false
+    roiClearedForNoAbnormality.value = false
+  }
+}
+
+function toggleNoAbnormality() {
+  if (locked.value) return
+  if (noAbnormality.value) {
+    noAbnormality.value = false
+    roiClearedForNoAbnormality.value = false
+    return
+  }
+  // 칠해 둔 영역과 "병변 없음"은 함께 답할 수 없다 — 영역을 지우고 그 사실을 알린다
+  roiClearedForNoAbnormality.value = hasInput.value
+  if (hasInput.value) roiCanvas.value?.clear()
+  noAbnormality.value = true
 }
 
 async function onSubmit() {
-  if (!hasInput.value || locked.value) return
+  if (!canSubmit.value || locked.value) return
   // 제출은 "대표 slice 에 대한 내 답"이다. 다른 slice 를 보던 중이었다면 대표로 되돌린다 —
   // 그래야 아래 결과 오버레이(대표 slice 기준)와 화면이 어긋나지 않는다.
   goToRepresentative()
   phase.value = 'submitting'
   submitError.value = ''
   try {
-    const roi = {
-      // 판독훈련은 브러시로 칠한 영역만 받는다 (api-spec v0.4 ROI 입력 표)
-      type: 'brush_mask',
-      points: roiCanvas.value.getPoints(),
-      mask_png_base64: roiCanvas.value.getMaskBase64(),
-    }
+    const roi = noAbnormality.value
+      ? // 명시적으로 고른 "병변 없음" — 마스크를 보내지 않는다 (api-spec v0.9)
+        { type: 'no_abnormality', points: [] }
+      : {
+          // 판독훈련은 브러시로 칠한 영역만 받는다 (api-spec v0.4 ROI 입력 표)
+          type: 'brush_mask',
+          points: roiCanvas.value.getPoints(),
+          mask_png_base64: roiCanvas.value.getMaskBase64(),
+        }
     // 결과 비교 화면에서 내 ROI 를 그대로 겹쳐 보여주기 위해 제출한 마스크를 붙잡아 둔다.
-    submittedMaskDataUrl.value = roiCanvas.value.getMaskDataUrl()
+    submittedMaskDataUrl.value = noAbnormality.value ? null : roiCanvas.value.getMaskDataUrl()
     // 이 케이스를 보고 있던 시간. 운영자 화면의 "평균 소요 시간"이 이 값으로 채워진다
     // (지금까지는 아무도 보내지 않아 항상 비어 있었다).
     const seconds = activeTime.elapsedSeconds()
@@ -199,6 +278,8 @@ async function onSubmit() {
       ? await retryWrongNote(caseId.value, roi, seconds)
       : await submitRoi(caseId.value, roi, seconds)
     phase.value = 'done'
+    // 채점은 전문가 기준 마스크 결과로 끝낸 뒤, 같은 case_id의 AI 결과가 있으면 참고 패널만 불러온다.
+    await loadAiReference()
     // 제출하고 나면 **결과가 주인공이다.** 판독 캔버스는 이미 잠겨 있고, 아래 결과 비교가
     // 같은 slice 를 내 표시·기준 마스크와 겹쳐서 다시 보여준다. 접어 두지 않으면
     // 정작 보려고 제출한 결과가 1,000px 아래로 밀린다 (예전에 실제로 그랬다).
@@ -283,9 +364,11 @@ onBeforeRouteUpdate((to) => {
         <span class="eyebrow">CASE SOLVING</span>
         <span v-if="caseDetail.body_part" class="crumb-path">
           {{ bodyPartLabel(caseDetail.body_part) }}
-          <span class="dot">·</span>
-          {{ diseaseLabel(caseDetail.disease) }}
-          <span class="dot">·</span>
+          <template v-if="diseaseRevealed && caseDetail.disease">
+            <span class="dot">·</span>
+            {{ diseaseLabel(caseDetail.disease) }}
+          </template>
+          {{ ' ' }}<span class="dot">·</span>
           문제 풀이
         </span>
       </p>
@@ -293,7 +376,7 @@ onBeforeRouteUpdate((to) => {
       <div class="case-line">
         <div class="case-id-block">
           <span class="case-kicker">CASE</span>
-          <h1>{{ caseDetail.case_id }}</h1>
+          <h1>{{ displayCaseId }}</h1>
           <span v-if="isRetry" class="badge partial_match">재도전</span>
         </div>
         <RouterLink :to="isRetry ? '/wrong-notes' : '/cases'" class="btn back">
@@ -304,6 +387,7 @@ onBeforeRouteUpdate((to) => {
       <!-- 과제 안내다. **영상 소견이 아니라 우리가 쓰는 조작 안내**라서 지어낸 의학 내용이 아니다. -->
       <p class="case-task">
         제시된 영상에서 이상으로 판단되는 부위를 표시한 뒤 제출하세요.
+        표시할 병변이 없다고 판단되면 <strong>병변 없음</strong>을 선택해 제출하세요.
         전문가가 검수한 기준 마스크와 비교해 얼마나 겹쳤는지 알려드립니다.
       </p>
     </header>
@@ -338,11 +422,22 @@ onBeforeRouteUpdate((to) => {
           <template #bar-action>
             <button
               v-if="phase !== 'done'"
+              class="no-abnormality"
+              :class="{ selected: noAbnormality }"
+              type="button"
+              :aria-pressed="noAbnormality"
+              :disabled="!gradable || locked"
+              @click="toggleNoAbnormality"
+            >
+              {{ noAbnormality ? '✓ 병변 없음' : '병변 없음' }}
+            </button>
+            <button
+              v-if="phase !== 'done'"
               class="primary submit-inline"
-              :disabled="!hasInput || !gradable || phase === 'submitting'"
+              :disabled="!canSubmit || !gradable || phase === 'submitting'"
               @click="onSubmit"
             >
-              {{ phase === 'submitting' ? '채점 중...' : '제출' }}
+              {{ phase === 'submitting' ? '채점 중...' : noAbnormality ? '병변 없음으로 제출' : '제출' }}
             </button>
             <span v-else class="badge match">제출 완료</span>
           </template>
@@ -355,8 +450,15 @@ onBeforeRouteUpdate((to) => {
         <p v-if="submitError" class="error">{{ submitError }}</p>
         <!-- **비활성 버튼만 두고 이유를 말하지 않으면 막힌 이유를 알 수 없다.**
              제출이 도구 막대로 올라가면서 예전 우측 패널에 있던 이 안내가 사라졌었다. -->
-        <p v-if="gradable && !hasInput && phase === 'idle'" class="muted submit-hint">
-          영역을 먼저 칠해야 제출할 수 있습니다.
+        <p v-if="gradable && !canSubmit && phase === 'idle'" class="muted submit-hint">
+          영역을 칠하거나, 표시할 병변이 없다고 판단되면 '병변 없음'을 선택해야 제출할 수 있습니다.
+        </p>
+        <p v-if="noAbnormality && phase === 'idle'" class="notice submit-hint">
+          '병변 없음'을 선택했습니다 — 표시한 영역 없이 답을 제출합니다.
+          <template v-if="roiClearedForNoAbnormality">
+            칠해 둔 영역은 지웠습니다. <kbd>Ctrl</kbd>+<kbd>Z</kbd> 로 되살리면 '병변 없음' 선택이 해제됩니다.
+          </template>
+          <template v-else>다시 칠하기 시작하면 선택이 해제됩니다.</template>
         </p>
 
         <div v-if="hasSlices" class="slices">
@@ -417,10 +519,11 @@ onBeforeRouteUpdate((to) => {
            예전에는 이 칸에 같은 버튼이 한 벌 더 있었고, 800px 짜리 캔버스 옆에서
            **오른쪽 칸의 90% 가 비어 있었다.** -->
       <aside v-if="phase !== 'done'" class="side">
+        <!-- 이 칸은 제출 전에만 있다 — 질환별 용어·영상 특징은 곧 정답 힌트라 질환을 넘기지 않는다 -->
         <GlossaryPanel
           v-if="glossaryOpen"
-          :disease="caseDetail.disease"
-          :disease-label="diseaseLabel(caseDetail.disease)"
+          :disease="null"
+          disease-label=""
           @close="glossaryOpen = false"
         />
         <button v-else class="wide reopen-glossary" @click="glossaryOpen = true">
@@ -457,6 +560,70 @@ onBeforeRouteUpdate((to) => {
         class="stack"
         :explanation="result.explanation"
       />
+
+      <section v-if="aiReferenceLoading" class="card stack ai-reference">
+        <p class="muted">AI 참고 결과를 불러오는 중...</p>
+      </section>
+
+      <section v-else-if="aiReference" class="card stack ai-reference">
+        <div class="ai-reference-head">
+          <div>
+            <p class="ai-kicker">AI REFERENCE</p>
+            <h2>AI 참고 결과</h2>
+            <p class="muted">
+              AI 결과는 채점에 사용하지 않습니다. 위의 전문가 기준 마스크 채점 결과를 먼저 확인한 뒤 참고하세요.
+            </p>
+          </div>
+          <button
+            v-if="aiOverlayUrl"
+            class="sm"
+            type="button"
+            @click="showAiOverlay = !showAiOverlay"
+          >
+            {{ showAiOverlay ? '원본 보기' : 'AI 오버레이 보기' }}
+          </button>
+        </div>
+
+        <div v-if="aiDisplayedImage" class="ai-reference-image">
+          <img :src="aiDisplayedImage" alt="AI 참고 결과 영상" />
+        </div>
+
+        <div class="ai-reference-summary">
+          <span>
+            모델: <strong>{{ aiReference.ai_prediction?.model_name || '통합 YOLO segmentation' }}</strong>
+          </span>
+          <span>
+            검출: <strong>{{ aiReference.ai_prediction?.prediction_count ?? 0 }}개</strong>
+          </span>
+        </div>
+
+        <p v-if="!aiReference.ai_prediction?.prediction_count" class="muted">
+          이 영상에서 AI 가 검출한 영역이 없습니다 (0건). AI 결과는 참고용이며 채점과 무관합니다.
+        </p>
+
+        <ul v-if="aiReference.ai_prediction?.predictions?.length" class="ai-prediction-list">
+          <li
+            v-for="prediction in aiReference.ai_prediction.predictions"
+            :key="prediction.prediction_id"
+          >
+            <div>
+              <strong>{{ prediction.class_name }}</strong>
+              <span v-if="prediction.confidence_score != null" class="muted">
+                모델 confidence score {{ aiPercent(prediction.confidence_score) }}
+              </span>
+            </div>
+            <img
+              v-if="prediction.mask_url"
+              :src="assetUrl(prediction.mask_url)"
+              alt="AI 예측 마스크"
+            />
+          </li>
+        </ul>
+
+        <p class="ai-policy">
+          채점 기준: 전문가 기준 마스크 · AI 사용 여부: 참고용만 사용
+        </p>
+      </section>
 
       <!-- 시안 08 처럼 **결과를 다 읽은 자리에서도** 다음 행동을 고를 수 있게 한다.
            오른쪽 패널은 화면 위쪽에 있어서, 해설까지 내려온 사람에게는 보이지 않는다. -->
@@ -498,6 +665,96 @@ onBeforeRouteUpdate((to) => {
   text-align: center;
 }
 
+
+.ai-reference {
+  padding: var(--sp-5);
+}
+
+.ai-reference-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  flex-wrap: wrap;
+}
+
+.ai-reference-head h2 {
+  margin: 2px 0 4px;
+  font-size: 20px;
+  color: var(--navy-700);
+}
+
+.ai-kicker {
+  margin: 0;
+  color: var(--brand-600);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+
+.ai-reference-image {
+  margin-top: var(--sp-4);
+  overflow: hidden;
+  border-radius: var(--r-md);
+  background: var(--viewer-bg);
+  text-align: center;
+}
+
+.ai-reference-image img {
+  display: block;
+  width: 100%;
+  max-height: 620px;
+  object-fit: contain;
+}
+
+.ai-reference-summary {
+  display: flex;
+  gap: var(--sp-4);
+  flex-wrap: wrap;
+  margin-top: var(--sp-4);
+  font-size: 13px;
+}
+
+.ai-prediction-list {
+  list-style: none;
+  padding: 0;
+  margin: var(--sp-4) 0 0;
+  display: grid;
+  gap: var(--sp-2);
+}
+
+.ai-prediction-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+}
+
+.ai-prediction-list li > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.ai-prediction-list img {
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+  border-radius: var(--r-sm);
+  background: var(--viewer-bg);
+}
+
+.ai-policy {
+  margin: var(--sp-4) 0 0;
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--line);
+  color: var(--ink-muted);
+  font-size: 12px;
+}
+
 /* 결과를 다 읽은 뒤의 행동 (시안 08 하단 버튼 줄) */
 .bottom-actions {
   display: flex;
@@ -533,6 +790,14 @@ onBeforeRouteUpdate((to) => {
 }
 
 /* 도구 막대 안의 제출 버튼 (시안 07) */
+/* "병변 없음"은 제출과 다른 **답의 종류**다 — 기본 버튼 모양으로 두고 고르면 채워진다 */
+.no-abnormality.selected {
+  background: var(--brand-50, #e8f3f4);
+  border-color: var(--brand-600, #1f7a82);
+  color: var(--brand-700, #185f65);
+  font-weight: 700;
+}
+
 .submit-inline {
   min-height: 32px;
   padding: 6px 18px;

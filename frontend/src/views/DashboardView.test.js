@@ -207,3 +207,49 @@ describe('실패와 로딩', () => {
     expect(wrapper.text()).toContain('서버에 연결하지 못했습니다')
   })
 })
+
+// 이 화면은 RouterLink 를 vue-router(목)에서 import 한다 — 전역 stub 이 아니라 그 컴포넌트를 찾는다
+const { RouterLink: MockedRouterLink } = await import('vue-router')
+
+describe('raw case_id 비노출', () => {
+  const links = (w) => w.findAllComponents(MockedRouterLink).map((l) => String(l.props('to')))
+
+  it('시작 안내·케이스별 막대·최근 기록에 질환이 든 case_id 를 쓰지 않는다', async () => {
+    getDashboard.mockResolvedValue({
+      ...ACTIVE,
+      recent_activity: [{ ...ACTIVE.recent_activity[0], case_id: 'glioma_06' }],
+    })
+    listCases.mockResolvedValue({
+      // 막대는 2개 이상일 때만 그린다
+      cases: [
+        { ...CASES.cases[0], case_id: 'brain_metastasis_09', disease: 'brain_metastasis' },
+        CASES.cases[1],
+      ],
+    })
+    const wrapper = mountView()
+    await flushPromises()
+
+    const text = wrapper.text()
+    expect(text).not.toContain('glioma')
+    expect(text).not.toContain('brain_metastasis')
+    expect(text).toContain('케이스 06')
+    expect(text).toContain('케이스 09')
+    expect(links(wrapper)).toContain('/cases/glioma_06')
+    expect(links(wrapper)).toContain('/cases/brain_metastasis_09')
+  })
+
+  it('시작 안내 버튼도 중립 라벨을 쓴다', async () => {
+    getDashboard.mockResolvedValue({
+      ...EMPTY,
+      has_any_activity: false,
+      next_up: { case_id: 'multiple_sclerosis_15', reason: 'not_started' },
+    })
+    const wrapper = mountView()
+    await flushPromises()
+
+    const start = wrapper.find('.start-card')
+    expect(start.text()).toContain('케이스 15 판독하기')
+    expect(start.text()).not.toContain('multiple_sclerosis')
+    expect(links(wrapper)).toContain('/cases/multiple_sclerosis_15')
+  })
+})

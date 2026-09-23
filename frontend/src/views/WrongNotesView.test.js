@@ -143,3 +143,17 @@ describe('일치했지만 넓게 칠한 케이스', () => {
     expect(wrapper.find('.badge.float').text()).not.toBe('넓게 표시')
   })
 })
+
+describe('raw case_id 비노출', () => {
+  it('카드 제목·썸네일 대체 텍스트에 질환이 든 case_id 를 쓰지 않고, 이동은 원래 case_id 로 한다', async () => {
+    listWrongNotes.mockResolvedValue({ items: [item({ case_id: 'glioma_05', disease: 'glioma' })] })
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(wrapper.find('.case-id').text()).toBe('케이스 05')
+    expect(wrapper.text()).not.toContain('glioma')
+    expect(wrapper.find('img').attributes('alt')).toBe('케이스 05 썸네일')
+    const targets = wrapper.findAll('a').map((a) => a.attributes('data-to') ?? '')
+    expect(targets.some((t) => t.includes('glioma_05'))).toBe(true)
+  })
+})

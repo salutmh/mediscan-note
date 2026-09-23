@@ -7,7 +7,7 @@
  */
 import { computed, onMounted, ref } from 'vue'
 import { listWrongNotes } from '../api/endpoints'
-import { bodyPartLabel, gradeBadge, gradeLabel } from '../labels'
+import { bodyPartLabel, caseDisplayLabel, gradeBadge, gradeLabel } from '../labels'
 
 const items = ref([])
 const loading = ref(true)
@@ -93,7 +93,7 @@ onMounted(async () => {
   <ul v-else class="grid">
     <li v-for="item in visible" :key="item.case_id" class="card note-card">
       <div class="thumb">
-        <img v-if="item.thumbnail_url" :src="item.thumbnail_url" :alt="`${item.case_id} 썸네일`" />
+        <img v-if="item.thumbnail_url" :src="item.thumbnail_url" :alt="`${caseDisplayLabel(item.case_id)} 썸네일`" />
         <!-- grade 가 match 인 항목이 이 목록에 있을 수 있다 (과대 표시).
              등급 뱃지만 두면 "일치인데 왜 여기 있지?"가 되므로 이유를 대신 보여준다. -->
         <span v-if="item.review_reason === 'over_marked'" class="badge float partial_match">
@@ -103,7 +103,7 @@ onMounted(async () => {
       </div>
 
       <div class="note-body">
-        <strong class="case-id">{{ item.case_id }}</strong>
+        <strong class="case-id">{{ caseDisplayLabel(item.case_id) }}</strong>
         <p class="muted note-meta">
           {{ bodyPartLabel(item.body_part) }}
           <span class="dot">·</span>

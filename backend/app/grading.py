@@ -17,6 +17,8 @@ import logging
 import math
 from pathlib import Path
 
+import numpy as np
+
 from app import config, explanations, feedback, inference, masks, model_predictions, scoring_config
 from app.static_files import resolve_local_path
 
@@ -31,6 +33,11 @@ PARTIAL_DICE = scoring_config.DEFAULT_PARTIAL_DICE
 
 METHOD_REFERENCE = "reference_mask"
 METHOD_APPROX = "coordinate_approx"
+
+# 답의 종류. ROI 를 그리지 않았다는 사실만으로 "병변 없음"으로 보지 않는다 —
+# 학습자가 명시적으로 골라야 한다 (roi.type == "no_abnormality").
+ANSWER_ROI = "roi"
+ANSWER_NO_ABNORMALITY = "no_abnormality"
 
 
 APPROX_ENV = "MEDISCAN_ALLOW_APPROX_GRADING"
@@ -74,6 +81,13 @@ def is_gradable(case) -> bool:
 
 
 def _load_reference(case):
+    """채점에 쓸 기준 마스크. 채점할 수 없으면 None.
+
+    빈 마스크는 **케이스가 명시적으로 reference_is_empty 일 때만** 채점 기준으로 인정한다.
+    플래그 없이 비어 있으면 export 가 깨졌을 수 있다 — 그걸 "병변 없음 케이스"로
+    조용히 바꾸면 학습자가 잘못된 기준으로 채점된다. 반대로 플래그가 켜졌는데 마스크에
+    병변이 있어도 등록이 어긋난 것이므로 채점하지 않는다.
+    """
     path = reference_mask_path(case)
     if path is None:
         return None
@@ -82,7 +96,15 @@ def _load_reference(case):
     except masks.MaskError:
         logger.warning("기준 마스크를 읽지 못함: %s", case.reference_mask_url)
         return None
-    return mask if mask.any() else None
+    expected_empty = bool(getattr(case, "reference_is_empty", False))
+    if bool(mask.any()) == expected_empty:
+        logger.warning(
+            "기준 마스크 내용이 reference_is_empty=%s 와 맞지 않아 채점하지 않음: %s",
+            expected_empty,
+            case.case_id,
+        )
+        return None
+    return mask
 
 
 # --------------------------------------------------- AI 예측 (참고 정보 전용)
@@ -219,25 +241,49 @@ def evaluate_submission(case, roi: dict) -> dict:
             return _grade_by_points(case, roi)
         raise NotGradable("이 케이스는 채점 기준(기준 마스크)이 아직 등록되지 않았습니다.")
 
-    raw = roi.get("mask_png_base64")
-    if not raw:
-        raise InvalidRoi("표시한 영역(mask_png_base64)이 필요합니다.")
-    try:
-        user_mask = masks.from_base64(raw)
-    except masks.MaskError as exc:
-        raise InvalidRoi(f"표시한 영역을 읽을 수 없습니다: {exc}") from exc
-    if not user_mask.any():
-        raise InvalidRoi("표시한 영역이 비어 있습니다.")
+    answer_type = ANSWER_NO_ABNORMALITY if roi.get("type") == ANSWER_NO_ABNORMALITY else ANSWER_ROI
+    reference_empty = not reference.any()
 
-    # 보정 없이 그대로 비교한다 (fill_holes 미적용)
-    dice, iou = masks.dice_iou(user_mask, reference)
-    score = masks.location_score(user_mask, reference)
+    if answer_type == ANSWER_NO_ABNORMALITY:
+        # "병변 없음"은 마스크가 없는 답이다. 영역을 함께 보내면 어느 쪽이 답인지 모호하다.
+        raw = roi.get("mask_png_base64")
+        if raw:
+            try:
+                marked = masks.from_base64(raw).any()
+            except masks.MaskError:
+                marked = False
+            if marked:
+                raise InvalidRoi("'병변 없음' 답에는 표시한 영역을 함께 보낼 수 없습니다.")
+        user_mask = np.zeros(reference.shape, dtype=bool)
+    else:
+        raw = roi.get("mask_png_base64")
+        if not raw:
+            raise InvalidRoi("표시한 영역(mask_png_base64)이 필요합니다.")
+        try:
+            user_mask = masks.from_base64(raw)
+        except masks.MaskError as exc:
+            raise InvalidRoi(f"표시한 영역을 읽을 수 없습니다: {exc}") from exc
+        # 아무것도 칠하지 않은 캔버스를 "병변 없음"으로 간주하지 않는다 — 명시적으로 골라야 한다
+        if not user_mask.any():
+            raise InvalidRoi("표시한 영역이 비어 있습니다. 병변이 없다고 판단했다면 '병변 없음'을 선택하세요.")
+
+    if reference_empty or answer_type == ANSWER_NO_ABNORMALITY:
+        # 한쪽이라도 비면 Dice 분모가 0 이 되거나(둘 다 빔) 의미가 뒤틀린다.
+        # 경우를 명시적으로 나눠서 판정한다 — 기준 마스크만 본다.
+        dice, iou, score, spatial = _grade_empty_branch(user_mask, reference, answer_type)
+    else:
+        # 보정 없이 그대로 비교한다 (fill_holes 미적용)
+        dice, iou = masks.dice_iou(user_mask, reference)
+        score = masks.location_score(user_mask, reference)
+        # geometry 로만 만든 학습 피드백. 채점에 관여하지 않고 설명에만 쓰인다.
+        spatial = feedback.build(user_mask, reference)
 
     return {
         "grade": _grade_from_dice(dice),
         "dice": round(dice, 4),
         "iou": round(iou, 4),
         "location_score": score,
+        "answer_type": answer_type,
         "reference_mask_url": case.reference_mask_url,
         "evaluation": {
             "method": METHOD_REFERENCE,
@@ -245,9 +291,82 @@ def evaluate_submission(case, roi: dict) -> dict:
             # 어떤 임계값으로 판정했는지와 그 값의 검증 상태를 함께 내려보낸다.
             # 화면에서 "확정된 의학 기준"으로 읽히면 안 되기 때문이다.
             "thresholds": scoring_config.thresholds(),
+            # 이 케이스의 전문가 기준 마스크에 표시된 병변이 없는지. 채점 **후에만** 공개된다.
+            "reference_empty": reference_empty,
         },
-        # geometry 로만 만든 학습 피드백. 채점에 관여하지 않고 설명에만 쓰인다.
-        "spatial_feedback": feedback.build(user_mask, reference),
+        "spatial_feedback": spatial,
         "ai_prediction": ai_prediction(case, reference),
         "explanation": explanations.build(case),
+    }
+
+
+def _grade_empty_branch(user_mask, reference, answer_type: str):
+    """기준 마스크나 답이 비어 있는 경우의 판정. (dice, iou, location_score, spatial_feedback)
+
+    | 기준 마스크 | 답           | 결과                              |
+    |-------------|--------------|-----------------------------------|
+    | 빔          | 병변 없음    | 일치 (1.0) — 놓친 0%, 과하게 0%   |
+    | 빔          | 영역 표시    | 다름 (0.0) — 표시 전부가 기준 밖  |
+    | 병변 있음   | 병변 없음    | 다름 (0.0) — 기준 영역 100% 놓침  |
+
+    AI 예측은 여기 들어오지 않는다. 문구는 "이 케이스의 전문가 기준 마스크"에 대해서만
+    말하고 "정상"·"질환 없음" 같은 판단을 하지 않는다.
+    """
+    user_area = int(masks.align(user_mask, reference.shape).sum())
+    ref_area = int(reference.sum())
+    base = {
+        "centroid_distance_px": None,
+        "centroid_distance_normalized": None,
+        "user_area_px": user_area,
+        "reference_area_px": ref_area,
+    }
+
+    if ref_area == 0 and answer_type == ANSWER_NO_ABNORMALITY:
+        message = "전문가 기준 정답에서도 표시된 병변이 없습니다."
+        metrics = {
+            **base,
+            # 기준 영역도, 표시한 영역도 없다 — 나눌 대상이 없으므로 비율은 null 이다.
+            # "놓친 것 / 넘친 것이 없다"는 사실은 아래 두 값으로 명시한다.
+            "gt_coverage": None,
+            "user_precision": None,
+            "area_ratio": None,
+            "over_segmentation_ratio": 0.0,
+            "under_segmentation_ratio": 0.0,
+        }
+        items = [("NO_ABNORMALITY_MATCHED", message)]
+        return 1.0, 1.0, 100, _spatial(message, items, metrics)
+
+    if ref_area == 0:
+        message = "이 학습 케이스의 전문가 기준 마스크에는 표시된 병변이 없는데, 영역을 표시했습니다."
+        metrics = {
+            **base,
+            "gt_coverage": None,
+            # 표시한 영역 전부가 기준 밖이다
+            "user_precision": 0.0,
+            "area_ratio": None,
+            "over_segmentation_ratio": None,
+            "under_segmentation_ratio": 0.0,
+        }
+        items = [("MARKED_ON_EMPTY_REFERENCE", message)]
+        return 0.0, 0.0, 0, _spatial(message, items, metrics)
+
+    message = "전문가 기준 영역을 놓쳤습니다. 이 학습 케이스의 전문가 기준 마스크에는 표시된 병변 영역이 있습니다."
+    metrics = {
+        **base,
+        "gt_coverage": 0.0,
+        "user_precision": None,
+        "area_ratio": 0.0,
+        "over_segmentation_ratio": 0.0,
+        "under_segmentation_ratio": 1.0,
+    }
+    items = [("MISSED_REFERENCE", message)]
+    return 0.0, 0.0, 0, _spatial(message, items, metrics)
+
+
+def _spatial(message: str, items, metrics: dict) -> dict:
+    return {
+        "source": "geometry",
+        "primary_message": message,
+        "items": [{"code": code, "message": msg} for code, msg in items],
+        "metrics": metrics,
     }

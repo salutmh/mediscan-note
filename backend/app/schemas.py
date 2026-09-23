@@ -374,6 +374,8 @@ class Evaluation(BaseModel):
     method: Literal["reference_mask", "coordinate_approx"]
     is_provisional: bool = False
     thresholds: Optional[ScoringThresholds] = None
+    # 전문가 기준 마스크에 표시된 병변이 없는 케이스인지. 채점 후에만 공개된다.
+    reference_empty: bool = False
 
 
 class SpatialFeedbackMetrics(BaseModel):
@@ -433,6 +435,8 @@ class EvaluationResult(BaseModel):
     dice: float
     iou: float
     location_score: int
+    # 답의 종류: roi(영역 표시) | no_abnormality(학습자가 명시적으로 고른 "병변 없음")
+    answer_type: Literal["roi", "no_abnormality"] = "roi"
     # 채점 기준이 된 전문가 검수 마스크 (v0.2 의 ai_mask_url 을 이름만 바로잡은 것)
     reference_mask_url: Optional[str] = None
     evaluation: Evaluation

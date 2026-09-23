@@ -15,7 +15,7 @@ import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { getDashboard } from '../api/endpoints'
 import { authState } from '../stores/auth'
-import { bodyPartLabel, diseaseLabel, gradeBadge } from '../labels'
+import { bodyPartLabel, caseDisplayLabel, diseaseLabel, gradeBadge } from '../labels'
 
 const data = ref(null)
 const loading = ref(true)
@@ -107,7 +107,7 @@ function whenLabel(iso) {
 
           <!-- **이유 없는 추천은 신뢰받지 못한다.** 시안에는 없지만 남긴다. -->
           <p v-if="data.next_up" class="hero-next">
-            다음 케이스 <strong>{{ data.next_up.case_id }}</strong>
+            다음 케이스 <strong>{{ caseDisplayLabel(data.next_up.case_id) }}</strong>
             <span class="dot">·</span> {{ nextReason }}
           </p>
         </div>
@@ -265,7 +265,7 @@ function whenLabel(iso) {
       <article class="card" :class="{ quiet: !improvement }">
         <h2 class="card-title">최근 재도전</h2>
           <div v-if="improvement" class="improve">
-            <p class="improve-case">{{ improvement.case_id }}</p>
+            <p class="improve-case">{{ caseDisplayLabel(improvement.case_id) }}</p>
             <div class="improve-compare">
               <div class="improve-step">
                 <span class="improve-when">이전</span>
@@ -320,7 +320,7 @@ function whenLabel(iso) {
               <td class="when">{{ whenLabel(item.submitted_at) }}</td>
               <td>
                 <RouterLink class="activity-case" :to="`/cases/${item.case_id}`">
-                  {{ item.case_id }}
+                  {{ caseDisplayLabel(item.case_id) }}
                 </RouterLink>
               </td>
               <td class="num tnum">

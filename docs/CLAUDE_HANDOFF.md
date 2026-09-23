@@ -9,13 +9,15 @@
 
 | 항목 | 값 |
 |---|---|
-| 최종 갱신 | 2026-09-16 |
-| 현재 커밋 | `fdb0723` (**로컬 4개 미push** — 승인 대기) |
+| 최종 갱신 | 2026-09-23 |
+| 현재 커밋 | `d43ec75` (origin/main 과 동일) + **"병변 없음"·5질환 15케이스 작업 미커밋** |
 | 현재 브랜치 | `main` |
 | 원격 | `https://github.com/salutmh/mediscan-note.git` (Public) |
 | 현재 모드 | **지속 자율 개발 루프** (Phase 1~8 은 최초 백로그였고 전부 완료) |
 | STATUS | `IN_PROGRESS` — 사이클마다 제품 재평가 → 최고가치 작업 선정 |
-| 마지막 전체 검증 | 백엔드 **1092 passed** (SQLite·PostgreSQL 양쪽) / 프론트 **214 passed** / E2E 5종 / 접근성·좁은화면 점검 0건 / `verify_cases` 6케이스 |
+| 마지막 전체 검증 | 백엔드 **1103 passed** (SQLite·PostgreSQL 양쪽 — PG 는 일회용 컨테이너, 마이그레이션 왕복 포함) / 프론트 **232 passed** / 빌드 통과 / Docker 수동 흐름 확인 (2026-09-23) |
+| 현재 데이터 | **뇌 MRI 5질환 통합 YOLO26s 데모 15케이스 — 양성 10 / 음성 5** (Docker DB) |
+| 서비스 포트 | frontend **5173** / backend **8010** / ai-service **8000** (`docker compose --env-file .env.docker`) |
 
 > **push 는 매번 사용자 승인이 필요하다.**
 > force push / rebase / reset --hard / history rewrite 는 하지 않는다.
@@ -54,6 +56,29 @@
 ---
 
 ## 3. 완료된 작업
+
+### 2026-09-23 — "병변 없음" 답 + 5질환 15케이스 + 판독 전 질환명 비노출 (미커밋)
+
+- **데이터**: `service_inference_5disease` 15개를 모두 학습 케이스로 등록했다 (양성 10 / 음성 5).
+  음성은 GT 라벨이 비어 있어 **동일 크기의 완전히 빈 기준 마스크**를 만든다 — AI 예측(0건)을
+  기준으로 쓴 것이 아니다. 등록: `register-brain5-demo_FIXED.ps1` (dry-run 후 등록, 재실행 안전).
+- **"병변 없음"은 명시적으로 고르는 답이다** (`roi.type: "no_abnormality"`). 빈 캔버스는 여전히 400.
+  칠하던 영역이 있으면 지우고 알리며, 다시 칠하면(또는 Ctrl+Z) 선택이 풀린다.
+  판정은 `grading._grade_empty_branch` 에 명시적으로 나눴다 (0으로 나누지 않는다):
+  빈 기준+병변 없음 = match/1.0, 빈 기준+ROI = mismatch, 양성+병변 없음 = mismatch(놓친 100%),
+  양성+ROI = 기존 Dice 그대로. 응답에 `answer_type`, `evaluation.reference_empty` 추가 (api-spec 2-3).
+- **`cases.reference_is_empty` 안전장치** (마이그레이션 `a3c1e5b7d9f2`): 빈 마스크는 이 플래그가
+  켜진 케이스에서만 채점 기준이다. 플래그와 마스크 내용이 어긋나면 422 — 깨진 export 가
+  조용히 "병변 없음 케이스"가 되지 않게 한다. 제출 전 응답에는 나가지 않는다.
+- **AI prediction 은 여전히 채점에 쓰이지 않는다** — 채점 후 ai-service 에서 따로 불러와 보여줄 뿐이다.
+- **판독 전 질환명 비노출**: 목록 카드·판독 헤더·사전에서 질환명을 뺐다. 질환 코드가 든 case_id
+  (`glioma_06`)는 "케이스 06"(case_id 끝 번호, `labels.caseDisplayLabel`) / 판독 헤더 "판독 케이스"로 바꾸고,
+  검색도 보이는 이름으로만 한다. 홈·대시보드·복습노트·진행현황도 같은 라벨을 쓴다 (링크는 원래 case_id).
+  결과 단계에서 case_id·질환명을 공개한다. API 는 그대로다.
+  **대가**: 판독 중 사전이 질환별 용어·영상 특징을 보여주던 기능은 꺼졌다 (그 자체가 힌트였다).
+- 케이스 목록이 ai-service 응답을 **기다리지 않게** 했다 (느리면 목록까지 늦게 떴고, 테스트 15개가 실패했다).
+- "expert ground truth" 같은 영어 표현을 사용자 화면에서 "전문가 기준 마스크"로 바꿨다.
+- Docker: Windows 볼륨에서는 Vite 가 파일 변경을 못 볼 수 있다 → `docker compose --env-file .env.docker restart frontend`.
 
 ### 2026-09-16 — UI 재작업 + **사용자로 직접 써 보고 나온 것들** (커밋 4개, 미push)
 
@@ -1418,6 +1443,18 @@ cd backend && alembic revision --autogenerate -m "<설명>"
 ---
 
 ## 13. NEXT STEP — 다음 세션이 가장 먼저 할 일
+
+> **0순위 — 2026-09-23 에서 넘어온 것**
+>
+> - [ ] "병변 없음"·15케이스·질환명 비노출 작업이 **미커밋**이다 (사용자 승인 대기).
+> - [ ] **URL 에 case_id 가 그대로 있다** (`/cases/glioma_06`) — 주소창·링크 hover 로 질환을 알 수 있다.
+>       막으려면 라우팅/ID 체계를 바꿔야 해서 이번에는 표시만 막았다.
+> - [ ] 학습 선택(`/learn`)은 학습자가 **질환을 직접 고르는** 흐름이라 질환명이 보인다 — 설계 판단 필요.
+> - [ ] **로컬 개발 DB(`backend/mediscan.db`)의 사용자 데이터가 지워졌다 (2026-09-23).**
+>       `MEDISCAN_TEST_DATABASE_URL=`(빈 값)으로 pytest 를 돌려 conftest 가 임시 DB 대신 기본 경로를 썼고,
+>       테스트 정리 픽스처가 users/submissions/consents/learning_events 를 비웠다. 케이스 6개·slice 는 그대로다.
+>       백업이 없어 복구하지 못했다. **테스트는 이 변수를 아예 넘기지 않고 돌린다.** Docker DB 는 영향 없음.
+> - [ ] 판독 중 사전이 비어 있다 — 질환을 모르는 상태에서 쓸 **공통 용어**가 필요하면 콘텐츠를 따로 만든다.
 
 > **0순위 — 이번 세션에서 넘어온 것 (2026-09-16)**
 >

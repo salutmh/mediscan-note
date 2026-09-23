@@ -188,3 +188,86 @@ describe('과대 표시 안내', () => {
     expect(wrapper.find('.over-marked').exists()).toBe(false)
   })
 })
+
+// ------------------------------------------------------------ 병변 없음 (v0.9)
+describe('"병변 없음" 답 / 빈 기준 마스크', () => {
+  const metrics = (m) => ({
+    source: 'geometry',
+    primary_message: m.message,
+    items: [{ code: m.code, message: m.message }],
+    metrics: {
+      gt_coverage: null,
+      user_precision: null,
+      area_ratio: null,
+      centroid_distance_px: null,
+      user_area_px: 0,
+      reference_area_px: 0,
+      ...m.metrics,
+    },
+  })
+  const percents = (wrapper) =>
+    wrapper.findAll('.breakdown-value').map((el) => Number.parseInt(el.text(), 10))
+
+  it('기준 마스크 빔 + 병변 없음 -> 기준과 일치 100%, 놓친 0%, 과하게 0%', () => {
+    const wrapper = mountWith(null, {
+      grade: 'match',
+      dice: 1,
+      iou: 1,
+      location_score: 100,
+      answer_type: 'no_abnormality',
+      evaluation: { method: 'reference_mask', is_provisional: false, reference_empty: true },
+      spatial_feedback: metrics({
+        code: 'NO_ABNORMALITY_MATCHED',
+        message: '전문가 기준 정답에서도 표시된 병변이 없습니다.',
+        metrics: { over_segmentation_ratio: 0, under_segmentation_ratio: 0 },
+      }),
+    })
+    const text = wrapper.text()
+    expect(text).toContain('기준과 일치')
+    expect(text).toContain('전문가 기준 정답에서도 표시된 병변이 없습니다.')
+    expect(wrapper.find('.headline-num').text()).toBe('100')
+    expect(percents(wrapper)).toEqual([100, 0, 0])
+    // 진단처럼 읽히는 말을 쓰지 않는다
+    expect(text).not.toContain('정상')
+  })
+
+  it('기준 마스크 빔 + 영역 표시 -> 기준과 다름, 과하게 표시 100%', () => {
+    const wrapper = mountWith(null, {
+      grade: 'mismatch',
+      dice: 0,
+      answer_type: 'roi',
+      evaluation: { method: 'reference_mask', is_provisional: false, reference_empty: true },
+      spatial_feedback: metrics({
+        code: 'MARKED_ON_EMPTY_REFERENCE',
+        message: '이 학습 케이스의 전문가 기준 마스크에는 표시된 병변이 없는데, 영역을 표시했습니다.',
+        metrics: { user_precision: 0, under_segmentation_ratio: 0, user_area_px: 900 },
+      }),
+    })
+    expect(wrapper.text()).toContain('기준과 다름')
+    expect(percents(wrapper)).toEqual([0, 0, 100])
+  })
+
+  it('기준 마스크 있음 + 병변 없음 -> 기준과 다름, 놓친 부분 100%', () => {
+    const wrapper = mountWith(null, {
+      grade: 'mismatch',
+      dice: 0,
+      answer_type: 'no_abnormality',
+      evaluation: { method: 'reference_mask', is_provisional: false, reference_empty: false },
+      spatial_feedback: metrics({
+        code: 'MISSED_REFERENCE',
+        message: '전문가 기준 영역을 놓쳤습니다. 이 학습 케이스의 전문가 기준 마스크에는 표시된 병변 영역이 있습니다.',
+        metrics: {
+          gt_coverage: 0,
+          area_ratio: 0,
+          over_segmentation_ratio: 0,
+          under_segmentation_ratio: 1,
+          reference_area_px: 3200,
+        },
+      }),
+    })
+    const text = wrapper.text()
+    expect(text).toContain('기준과 다름')
+    expect(text).toContain('전문가 기준 영역을 놓쳤습니다.')
+    expect(percents(wrapper)).toEqual([0, 100, 0])
+  })
+})

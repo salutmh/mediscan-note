@@ -354,3 +354,44 @@ describe('학습 상태 필터', () => {
     expect(wrapper.findAll('.case-id')).toHaveLength(3)
   })
 })
+
+// ------------------------------------------------------ 판독 전 질환명 비노출
+describe('판독 전 질환명 힌트', () => {
+  it('질환명을 카드에 쓰지 않고, 질환 코드가 든 case_id 는 중립 라벨로 바꾼다', async () => {
+    listCases.mockResolvedValue({
+      cases: [
+        { ...brainCase('brain_metastasis_09'), disease: 'brain_metastasis' },
+        { ...brainCase('glioma_06'), disease: 'glioma' },
+        brainCase('VS-SEG-202'),
+      ],
+    })
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    const text = wrapper.text()
+    for (const hint of ['glioma', '교종', 'brain_metastasis', '뇌전이', '전정신경초종']) {
+      expect(text).not.toContain(hint)
+    }
+    // 번호는 case_id 끝 번호다 — 홈·복습노트 등 다른 화면과 같은 이름이 된다
+    expect(wrapper.findAll('.case-id').map((e) => e.text())).toEqual([
+      '케이스 09',
+      '케이스 06',
+      'VS-SEG-202', // 질환 코드가 없는 ID 는 그대로 둔다
+    ])
+    // 썸네일 대체 텍스트로도 새지 않는다
+    expect(wrapper.findAll('img').map((i) => i.attributes('alt')).join(' ')).not.toContain('glioma')
+  })
+
+  it('검색으로 질환을 알아낼 수 없다 (case_id 가 아니라 보이는 이름으로만 찾는다)', async () => {
+    listCases.mockResolvedValue({ cases: [{ ...brainCase('glioma_06'), disease: 'glioma' }] })
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.find('.search input').setValue('glioma')
+    expect(wrapper.findAll('.case-id')).toHaveLength(0)
+    await wrapper.find('.search input').setValue('케이스 06')
+    expect(wrapper.findAll('.case-id')).toHaveLength(1)
+  })
+})

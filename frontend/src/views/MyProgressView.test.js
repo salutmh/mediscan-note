@@ -113,3 +113,24 @@ describe('오해를 막는 문구', () => {
     expect(wrapper.text()).toContain('취소되지 않습니다')
   })
 })
+
+describe('raw case_id 비노출', () => {
+  it('학습 이력 표에 질환이 든 case_id 대신 "케이스 NN" 을 쓰고 링크는 그대로다', async () => {
+    listCases.mockResolvedValue({
+      cases: [
+        caseOf({
+          case_id: 'glioma_06',
+          disease: 'glioma',
+          progress: { attempts: 1, first_dice: 0, latest_dice: 0, best_dice: 0, latest_grade: 'mismatch' },
+        }),
+      ],
+    })
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(wrapper.text()).not.toContain('glioma')
+    expect(wrapper.text()).toContain('케이스 06')
+    const targets = wrapper.findAllComponents(stubs.RouterLink).map((l) => String(l.props('to')))
+    expect(targets).toContain('/cases/glioma_06')
+  })
+})
