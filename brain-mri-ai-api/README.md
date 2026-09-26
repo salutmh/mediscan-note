@@ -44,13 +44,29 @@ GPU가 없어도 CPU로 동작합니다 (이미지 1장당 약 0.2~2초).
 ## 2. 모델 파일 위치
 
 가중치 파일 `best.pt`(약 92MB)는 저장소에 **포함되어 있지 않습니다.**
-전달받은 `best.pt`를 아래 위치에 넣으세요.
+GitHub Release에서 내려받아 아래 위치에 넣으세요.
+
+- Release 페이지: https://github.com/salutmh/mediscan-note/releases/tag/brain-mri-ai-api-v0.1.0
+- 직접 다운로드: https://github.com/salutmh/mediscan-note/releases/download/brain-mri-ai-api-v0.1.0/best.pt
 
 ```
 brain-mri-ai-api/
   weights/
-    best.pt   ← 여기
+    best.pt   ← 여기 (파일명 그대로 best.pt)
 ```
+
+명령으로 받으려면 (프로젝트 루트 `brain-mri-ai-api/` 에서):
+
+```bash
+# Windows PowerShell
+Invoke-WebRequest -Uri https://github.com/salutmh/mediscan-note/releases/download/brain-mri-ai-api-v0.1.0/best.pt -OutFile weights\best.pt
+
+# macOS / Linux
+curl -L -o weights/best.pt https://github.com/salutmh/mediscan-note/releases/download/brain-mri-ai-api-v0.1.0/best.pt
+```
+
+받은 파일이 맞는지 확인하려면 MD5가 `5ab0561235ab4aeb27f11ce2a1afb4da`, 크기가 92,393,497 bytes 인지 보면 됩니다.
+Release 태그는 `brain-mri-ai-api-v0.1.0`, 모델은 YOLO26s-Seg 5질환 통합 모델(v0.1.0)입니다.
 
 다른 위치에 두고 싶으면 `.env`에서 `MODEL_PATH`로 지정합니다.
 
