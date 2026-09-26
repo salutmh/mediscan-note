@@ -1,0 +1,36 @@
+# secrets / local config
+.env
+.env.*
+!.env.example
+
+# python
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+build/
+dist/
+
+# model weights (92MB, GitHub Release / 별도 배포 — README 참고)
+weights/*.pt
+weights/*.pth
+weights/*.onnx
+!weights/.gitkeep
+
+# test / runtime artifacts
+runs/
+*.log
+tmp/
+*.tmp
+tests/_tmp*/
+
+# editors / os
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
